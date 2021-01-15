@@ -18,7 +18,13 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
       continue;
     AliasResult anders_aa_result = andersAA->query(*inst_mem_loc, *tmp_inst_mem_loc);
     if (anders_aa_result != NoAlias)
-      g.connectNodesByVal(inst, *inst_iter, EdgeType::DATA_ALIAS) ;
+    {
+      Node* src = g.getNode(inst);
+      Node* dst = g.getNode(*inst_iter);
+      if (src == nullptr || dst == nullptr)
+        continue;
+      src->addNeighbor(*dst, EdgeType::DATA_ALIAS);
+    }
   }
   return;
 }
@@ -28,7 +34,11 @@ void pdg::DataDependencyGraph::addDefUseEdges(Instruction &inst)
   ProgramGraph &g = ProgramGraph::getInstance();
   for (auto user : inst.users())
   {
-    g.connectNodesByVal(inst, *user, EdgeType::DATA_DEF_USE);
+    Node *src = g.getNode(inst);
+    Node *dst = g.getNode(*user);
+    if (src == nullptr || dst == nullptr)
+      continue;
+    src->addNeighbor(*dst, EdgeType::DATA_DEF_USE);
   }
 }
 
@@ -43,7 +53,11 @@ void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
     {
       if (isa<LoadInst>(user))
       {
-        g.connectNodesByVal(*si, *user, EdgeType::DATA_RAW);
+        Node *src = g.getNode(*si);
+        Node *dst = g.getNode(*user);
+        if (src == nullptr || dst == nullptr)
+          continue;
+        src->addNeighbor(*dst, EdgeType::DATA_RAW);
       }
     }
   }

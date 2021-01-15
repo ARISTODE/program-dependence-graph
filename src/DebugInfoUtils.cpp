@@ -13,6 +13,29 @@ bool pdg::dbgutils::isStructType(DIType &dt)
   return (dt.getTag() == dwarf::DW_TAG_structure_type);
 }
 
+bool pdg::dbgutils::isUnionType(DIType& dt)
+{
+  return (dt.getTag() == dwarf::DW_TAG_union_type);
+}
+
+bool pdg::dbgutils::isStructPointerType(DIType &dt)
+{
+  if (isPointerType(dt))
+  {
+    DIType *lowest_di_type = getLowestDIType(dt);
+    if (lowest_di_type == nullptr)
+      return false;
+    if (isStructType(*lowest_di_type))
+      return true;
+  }
+  return false;
+}
+
+bool pdg::dbgutils::isProjectableType(DIType &dt)
+{
+  return (isStructType(dt) || isUnionType(dt));
+}
+
 // ===== derived types related operations =====
 DIType *pdg::dbgutils::getBaseDIType(DIType &dt)
 {
@@ -75,27 +98,76 @@ std::string pdg::dbgutils::getSourceLevelVariableName(DINode &di_node)
 std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt)
 {
   auto type_tag = dt.getTag();
+  if (!type_tag)
+    return "";
   switch (type_tag)
   {
+  case dwarf::DW_TAG_pointer_type:
+  {
+    // errs() << "1\n";
+    auto base_type = getBaseDIType(dt);
+    if (!base_type)
+      return "nullptr";
+    return getSourceLevelTypeName(*base_type) + "*";
+  }
+  case dwarf::DW_TAG_member:
+  {
+    // errs() << "2\n";
+    auto base_type = getBaseDIType(dt);
+    if (!base_type)
+      return "null";
+    std::string base_type_name = getSourceLevelTypeName(*base_type);
+    if (base_type_name == "struct")
+      base_type_name = "struct " + dt.getName().str();
+    return base_type_name;
+  }
+  // assert(!type_name.empty() && !var_name.empty() && "cannot generation idl from empty var/type name!");
   case dwarf::DW_TAG_structure_type:
+  {
+    // errs() << "3\n";
     return "struct " + dt.getName().str();
+  }
   case dwarf::DW_TAG_array_type:
   {
-    DICompositeType *dct = cast<DICompositeType>(&dt);
-    auto elements = dct->getElements();
-    if (elements.size() == 1)
-    {
-      // TODO: compute the array size based on new api
-      // DISubrange *di_subr = cast<DISubrange>(elements[0]);
-      // int count = di_subr->getCount().first->getSExtValue();
-      std::string base_type_name = getSourceLevelTypeName(*getBaseDIType(dt));
-      return "array<" + base_type_name + ", " + "0" + ">";
-    }
+    // DICompositeType *dct = cast<DICompositeType>(&dt);
+    // auto elements = dct->getElements();
+    // if (elements.size() == 1)
+    // {
+    //   // TODO: compute the array size based on new api
+    //   DISubrange *di_subr = cast<DISubrange>(elements[0]);
+    //   int count = di_subr->getCount().first->getSExtValue();
+    //   auto lowest_di_type = getLowestDIType(dt);
+    //   if (!lowest_di_type) 
+    //     return "";
+    //   std::string base_type_name = getSourceLevelTypeName(*lowest_di_type);
+    //   return "array<" + base_type_name + ", " + "0" + ">";
+    // }
     return "array";
+  }
+  case dwarf::DW_TAG_const_type:
+  {
+    auto base_type = getBaseDIType(dt);
+    if (!base_type)
+      return "const nullptr";
+    return "const " + getSourceLevelTypeName(*base_type);
   }
   default:
     return dt.getName().str();
-    break;
   }
   return "";
+}
+
+// compute di type for value
+DIType *pdg::dbgutils::getGlobalVarDIType(GlobalVariable &gv)
+{
+  SmallVector<DIGlobalVariableExpression *, 5> GVs;
+  gv.getDebugInfo(GVs);
+  if (GVs.size() == 0)
+    return nullptr;
+  for (auto GV : GVs)
+  {
+    DIGlobalVariable *digv = GV->getVariable();
+    return digv->getType();
+  }
+  return nullptr;
 }

@@ -42,14 +42,19 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
     Value* arg_alloca_inst = getArgAllocaInst(*arg);
     if (di_local_var == nullptr || arg_alloca_inst == nullptr)
       continue;
-    Tree *arg_tree = new Tree();
-    TreeNode *root_node = new TreeNode(*arg, di_local_var->getType(), 0, nullptr, arg_tree);
+    Tree *arg_formal_in_tree = new Tree();
+    TreeNode *root_node = new TreeNode(*arg, di_local_var->getType(), 0, nullptr, arg_formal_in_tree, GraphNodeType::FORMAL_IN);
     root_node->setDILocalVariable(*di_local_var);
     root_node->addAddrVar(*arg_alloca_inst);
-    arg_tree->setRootNode(*root_node);
-    arg_tree->build();
-    _arg_formal_tree_map.insert(std::make_pair(arg, arg_tree));
-    // arg_tree->print();
+    arg_formal_in_tree->setRootNode(*root_node);
+    arg_formal_in_tree->build();
+    _arg_formal_in_tree_map.insert(std::make_pair(arg, arg_formal_in_tree));
+    
+    // build formal_out tree by copying fromal_in tree
+    Tree* arg_formal_out_tree = new Tree(*arg_formal_in_tree);
+    arg_formal_out_tree->setTreeNodeType(GraphNodeType::FORMAL_OUT);
+    arg_formal_out_tree->build();
+    _arg_formal_out_tree_map.insert(std::make_pair(arg, arg_formal_out_tree));
   }
 }
 
@@ -60,6 +65,7 @@ DILocalVariable *pdg::FunctionWrapper::getArgDILocalVar(Argument &arg)
     DILocalVariable *di_local_var = dbg_declare_inst->getVariable();
     if (!di_local_var)
       continue;
+    // if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
     if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
       return di_local_var;
   }
@@ -82,8 +88,19 @@ Value *pdg::FunctionWrapper::getArgAllocaInst(Argument &arg)
   return nullptr;
 }
 
-pdg::Tree *pdg::FunctionWrapper::getTreeByArg(Argument& arg)
+pdg::Tree *pdg::FunctionWrapper::getArgFormalInTree(Argument& arg)
 {
-  assert(_arg_formal_tree_map.find(&arg) != _arg_formal_tree_map.end() && "cannot find formal tree for arg");
-  return _arg_formal_tree_map[&arg];
+  auto iter = _arg_formal_in_tree_map.find(&arg);
+  if (iter == _arg_formal_in_tree_map.end())
+    return nullptr;
+  // assert(iter != _arg_formal_in_tree_map.end() && "cannot find formal tree for arg");
+  return _arg_formal_in_tree_map[&arg];
+}
+
+pdg::Tree *pdg::FunctionWrapper::getArgFormalOutTree(Argument& arg)
+{
+  auto iter = _arg_formal_out_tree_map.find(&arg);
+  if (iter == _arg_formal_out_tree_map.end())
+    return nullptr;
+  return _arg_formal_out_tree_map[&arg];
 }

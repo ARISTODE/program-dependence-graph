@@ -2,9 +2,10 @@
 
 using namespace llvm;
 
-pdg::TreeNode::TreeNode(const TreeNode &tree_node)
+pdg::TreeNode::TreeNode(const TreeNode &tree_node) : Node(tree_node)
 {
   _di_type = tree_node.getDIType();
+  setNodeType(tree_node.getNodeType());
 }
 
 int pdg::TreeNode::expandNode()
@@ -19,37 +20,28 @@ int pdg::TreeNode::expandNode()
   if (dbgutils::isPointerType(*_di_type))
   {
     DIType* pointed_obj_dt = dbgutils::getLowestDIType(*_di_type);
-    TreeNode *new_child_node = new TreeNode(*_arg, pointed_obj_dt, _depth + 1, this, _tree);
+    TreeNode *new_child_node = new TreeNode(*_arg, pointed_obj_dt, _depth + 1, this, _tree, getNodeType());
     new_child_node->computeDerivedAddrVarsFromParent();
     _children.push_back(new_child_node);
+    this->addNeighbor(*new_child_node, EdgeType::PARAMETER_FIELD);
     return 1;
   }
-  // TODO: should probably change to aggregate type later
+  // TODO: should change to aggregate type later
   if (dbgutils::isStructType(*_di_type))
   {
     auto di_node_arr = dyn_cast<DICompositeType>(_di_type)->getElements();
     for (unsigned i = 0; i < di_node_arr.size(); i++)
     {
       DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
-      TreeNode *new_child_node = new TreeNode(*_arg, field_di_type, _depth + 1, this, _tree);
+      TreeNode *new_child_node = new TreeNode(*_arg, field_di_type, _depth + 1, this, _tree, getNodeType());
+      new_child_node->computeDerivedAddrVarsFromParent();
       _children.push_back(new_child_node);
+      this->addNeighbor(*new_child_node, EdgeType::PARAMETER_FIELD);
     }
     return di_node_arr.size();
   }
 
   return 0;
-}
-
-bool pdg::TreeNode::isNodeBitOffsetMatchGepBitOffset(StructType &struct_ty, GetElementPtrInst &gep)
-{
-  Module &module = *(gep.getFunction()->getParent());
-  uint64_t gep_bit_offset = pdgutils::getGEPOffsetInBits(module, struct_ty, gep);
-  if (_di_type == nullptr || gep_bit_offset == INT_MIN)
-    return false;
-  uint64_t node_bit_offset = _di_type->getOffsetInBits();
-  if (gep_bit_offset == node_bit_offset)
-    return true;
-  return false;
 }
 
 void pdg::TreeNode::computeDerivedAddrVarsFromParent()
@@ -67,16 +59,21 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
       }
       if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
       {
-        StructType *struct_ty = pdgutils::getStructTypeFromGEP(*gep);
-        if (struct_ty == nullptr)
-          continue;
-        if (isNodeBitOffsetMatchGepBitOffset(*struct_ty, *gep))
-        {
+        if (pdgutils::isGEPOffsetMatchDIOffset(*_di_type, *gep))
           _addr_vars.insert(gep);
-        }
       }
     }
   }
+}
+
+//  ====== Tree =======
+
+pdg::Tree::Tree(const Tree& src_tree)
+{
+  TreeNode* src_tree_root_node = src_tree.getRootNode();
+  TreeNode* new_root_node = new TreeNode(*src_tree_root_node);
+  _root_node = new_root_node;
+  _size = 1;
 }
 
 void pdg::Tree::print()

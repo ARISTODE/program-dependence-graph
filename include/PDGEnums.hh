@@ -12,8 +12,10 @@ namespace pdg
     DATA_RAW,
     DATA_READ,
     DATA_ALIAS,
-    DATA_CALL_PARA,
-    PARAMETER,
+    DATA_RET,
+    PARAMETER_IN,
+    PARAMETER_OUT,
+    PARAMETER_FIELD,
     GLOBAL_DEP,
     VAL_DEP
   };
@@ -26,11 +28,15 @@ namespace pdg
     ACTUAL_IN,
     ACTUAL_OUT,
     RETURN,
-    ARG_ALLOC,
-    PARAMETER_FIELD,
-    ENTRY,
+    FUNC_ENTRY,
     GLOBAL_VALUE,
     CALL
+  };
+
+  enum class AccessTag
+  {
+    DATA_READ,
+    DATA_WRITE
   };
 }
 

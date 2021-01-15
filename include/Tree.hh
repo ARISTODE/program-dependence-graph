@@ -2,13 +2,16 @@
 #define TREE_H_
 #include "LLVMEssentials.hh"
 #include "DebugInfoUtils.hh"
+#include "PDGNode.hh"
+#include "PDGEnums.hh"
 #include "PDGUtils.hh"
+#include <set>
 
 namespace pdg
 {
   class Tree;
 
-  class TreeNode
+  class TreeNode : public Node
   {
     private:
       Tree* _tree;
@@ -19,9 +22,11 @@ namespace pdg
       std::vector<TreeNode *> _children;
       llvm::Argument *_arg;
       std::unordered_set<llvm::Value *> _addr_vars;
+      std::set<AccessTag> _acc_tag_set;
 
     public:
-      TreeNode(llvm::Argument &arg, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree)
+      TreeNode(const TreeNode& tree_node); 
+      TreeNode(llvm::Argument &arg, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type) : Node(node_type)
       {
         _arg = &arg;
         _di_type = di_type;
@@ -29,7 +34,6 @@ namespace pdg
         _parent_node = parent_node;
         _tree = tree;
       }
-      TreeNode(const TreeNode& tree_node);
       int expandNode(); // build child nodes and connect with them
       void setDIType(llvm::DIType *di_type) { _di_type = di_type; }
       llvm::DIType *getDIType() const { return _di_type; }
@@ -42,8 +46,11 @@ namespace pdg
       std::unordered_set<llvm::Value *> &getAddrVars() { return _addr_vars; }
       void computeDerivedAddrVarsFromParent();
       TreeNode *getParentNode() { return _parent_node; }
-      bool isNodeBitOffsetMatchGepBitOffset(llvm::StructType &struct_ty, llvm::GetElementPtrInst &gep);
       Tree *getTree() { return _tree; }
+      void addAccessTag(AccessTag acc_tag) { _acc_tag_set.insert(acc_tag); }
+      std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
+      bool isRootNode() {return _parent_node == nullptr;}
+      int numOfChild() { return _children.size(); }
   };
 
   class Tree
@@ -54,7 +61,10 @@ namespace pdg
 
   public:
     Tree() = default;
+    Tree(const Tree &src_tree);
     void setRootNode(TreeNode &root_node) { _root_node = &root_node; }
+    void setTreeNodeType(GraphNodeType node_type) { _root_node->setNodeType(node_type); }
+    TreeNode *getRootNode() const { return _root_node; }
     int size() { return _size; }
     void setSize(int size) { _size = size; }
     void increaseTreeSize() { _size++; }
