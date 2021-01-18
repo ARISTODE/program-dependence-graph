@@ -43,18 +43,24 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
     if (di_local_var == nullptr || arg_alloca_inst == nullptr)
       continue;
     Tree *arg_formal_in_tree = new Tree();
-    TreeNode *root_node = new TreeNode(*arg, di_local_var->getType(), 0, nullptr, arg_formal_in_tree, GraphNodeType::FORMAL_IN);
-    root_node->setDILocalVariable(*di_local_var);
-    root_node->addAddrVar(*arg_alloca_inst);
-    arg_formal_in_tree->setRootNode(*root_node);
+    TreeNode *formal_in_root_node = new TreeNode(*arg, di_local_var->getType(), 0, nullptr, arg_formal_in_tree, GraphNodeType::FORMAL_IN);
+    formal_in_root_node->setDILocalVariable(*di_local_var);
+    formal_in_root_node->addAddrVar(*arg_alloca_inst);
+    arg_formal_in_tree->setRootNode(*formal_in_root_node);
     arg_formal_in_tree->build();
     _arg_formal_in_tree_map.insert(std::make_pair(arg, arg_formal_in_tree));
-    
     // build formal_out tree by copying fromal_in tree
-    Tree* arg_formal_out_tree = new Tree(*arg_formal_in_tree);
-    arg_formal_out_tree->setTreeNodeType(GraphNodeType::FORMAL_OUT);
-    arg_formal_out_tree->build();
-    _arg_formal_out_tree_map.insert(std::make_pair(arg, arg_formal_out_tree));
+
+    Tree* formal_out_tree = new Tree(*arg_formal_in_tree);
+    TreeNode* formal_out_root_node = formal_out_tree->getRootNode();
+    // copy address variables
+    for (auto addr_var : formal_in_root_node->getAddrVars())
+    {
+      formal_out_root_node->addAddrVar(*addr_var);
+    }
+    formal_out_tree->setTreeNodeType(GraphNodeType::FORMAL_OUT);
+    formal_out_tree->build();
+    _arg_formal_out_tree_map.insert(std::make_pair(arg, formal_out_tree));
   }
 }
 

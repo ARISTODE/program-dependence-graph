@@ -17,17 +17,20 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
   while (actual_arg_iter != _arg_list.end())
   {
     Tree* arg_formal_in_tree = callee_fw.getArgFormalInTree(**formal_arg_iter);
-    // build actual in tree
+    // build actual in tree, copying the formal_in tree structure at the moment
     Tree* arg_actual_in_tree = new Tree(*arg_formal_in_tree);
     arg_actual_in_tree->setTreeNodeType(GraphNodeType::ACTUAL_IN);
+    TreeNode* actual_in_root_node = arg_actual_in_tree->getRootNode();
+    actual_in_root_node->addAddrVar(**actual_arg_iter);
     arg_actual_in_tree->build();
     _arg_actual_in_tree_map.insert(std::make_pair(*actual_arg_iter, arg_actual_in_tree));
     // build actual out tree
     Tree* arg_actual_out_tree = new Tree(*arg_formal_in_tree);
     arg_actual_out_tree->setTreeNodeType(GraphNodeType::ACTUAL_OUT);
+    TreeNode* actual_out_root_node = arg_actual_in_tree->getRootNode();
+    actual_out_root_node->addAddrVar(**actual_arg_iter);
     arg_actual_out_tree->build();
     _arg_actual_out_tree_map.insert(std::make_pair(*actual_arg_iter, arg_actual_out_tree));
-
     actual_arg_iter++;
     formal_arg_iter++;
   }

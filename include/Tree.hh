@@ -26,17 +26,11 @@ namespace pdg
 
     public:
       TreeNode(const TreeNode& tree_node); 
-      TreeNode(llvm::Argument &arg, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type) : Node(node_type)
-      {
-        _arg = &arg;
-        _di_type = di_type;
-        _depth = depth;
-        _parent_node = parent_node;
-        _tree = tree;
-      }
+      TreeNode(llvm::Argument &arg, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type);
       int expandNode(); // build child nodes and connect with them
       void setDIType(llvm::DIType *di_type) { _di_type = di_type; }
       llvm::DIType *getDIType() const { return _di_type; }
+      llvm::Argument *getArg() const { return _arg; }
       llvm::DILocalVariable *getDILocalVar() { return _di_local_var; }
       void insertChildNode(TreeNode *new_child_node) { _children.push_back(new_child_node); }
       void setParentTreeNode(TreeNode *parent_node) { _parent_node = parent_node; }
@@ -51,6 +45,8 @@ namespace pdg
       std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
       bool isRootNode() {return _parent_node == nullptr;}
       int numOfChild() { return _children.size(); }
+      bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
+      bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
   };
 
   class Tree

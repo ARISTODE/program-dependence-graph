@@ -2,10 +2,21 @@
 
 using namespace llvm;
 
-pdg::TreeNode::TreeNode(const TreeNode &tree_node) : Node(tree_node)
+pdg::TreeNode::TreeNode(const TreeNode &tree_node) : Node(tree_node.getNodeType())
 {
+  _arg = tree_node.getArg();
   _di_type = tree_node.getDIType();
   setNodeType(tree_node.getNodeType());
+}
+
+pdg::TreeNode::TreeNode(Argument &arg, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
+{
+  _arg = &arg;
+  _di_type = di_type;
+  _depth = depth;
+  _parent_node = parent_node;
+  _tree = tree;
+  setFunc(*arg.getParent());
 }
 
 int pdg::TreeNode::expandNode()

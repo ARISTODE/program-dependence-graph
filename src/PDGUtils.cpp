@@ -129,3 +129,45 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
   }
   return false;
 }
+
+// ==== inst iterator related funcs =====
+
+inst_iterator pdg::pdgutils::getInstIter(Instruction &i)
+{
+  Function* f = i.getFunction();
+  for (auto inst_iter = inst_begin(f); inst_iter != inst_end(f); inst_iter++)
+  {
+    if (&*inst_iter == &i)
+      return inst_iter;
+  }
+  return inst_end(f);
+}
+
+std::set<Instruction *> pdg::pdgutils::getInstructionBeforeInst(Instruction &i)
+{
+  Function* f = i.getFunction();
+  auto stop = getInstIter(i);
+  std::set<Instruction*> insts_before;
+  for (auto inst_iter = inst_begin(f); inst_iter != inst_end(f); inst_iter++)
+  {
+    if (inst_iter == stop)
+      return insts_before;
+    insts_before.insert(&*inst_iter);
+  }
+  return insts_before;
+}
+
+std::set<Instruction *> pdg::pdgutils::getInstructionAfterInst(Instruction &i)
+{
+  Function* f = i.getFunction();
+  std::set<Instruction*> insts_after;
+  auto start = getInstIter(i);
+  if (start == inst_end(f))
+    return  insts_after;
+  start++;
+  for (auto inst_iter = start; inst_iter != inst_end(f); inst_iter++)
+  {
+    insts_after.insert(&*inst_iter);
+  }
+  return insts_after;
+}

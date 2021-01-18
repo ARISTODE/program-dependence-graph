@@ -14,8 +14,11 @@ void pdg::ProgramGraph::build(Module &M)
       Node *n = new Node(*inst_iter, GraphNodeType::INST);
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
+      addNode(*n);
     }
     func_w->buildFormalTreeForArgs();
+    addFormalTreeNodesToGraph(*func_w);
+    addNode(*func_w->getEntryNode());
     _func_wrapper_map.insert(std::make_pair(&F, func_w));
   }
 
@@ -24,9 +27,12 @@ void pdg::ProgramGraph::build(Module &M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
-    FunctionWrapper *func_w = new FunctionWrapper(&F);
-    auto call_insts_in_func = func_w->getCallInsts();
-    for (auto ci : call_insts_in_func)
+    if (!hasFuncWrapper(F))
+      continue;
+    
+    FunctionWrapper *func_w = getFuncWrapper(F);
+    auto call_insts = func_w->getCallInsts();
+    for (auto ci : call_insts)
     {
       auto called_func = pdgutils::getCalledFunc(*ci);
       if (called_func == nullptr)
@@ -149,4 +155,32 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node *n)
 
   // default
   return nullptr;
+}
+
+void pdg::ProgramGraph::addTreeNodesToGraph(pdg::Tree &tree)
+{
+  TreeNode* root_node = tree.getRootNode();
+  std::queue<TreeNode*> node_queue;
+  node_queue.push(root_node);
+  while (!node_queue.empty())
+  {
+    TreeNode* current_node = node_queue.front();
+    node_queue.pop();
+    addNode(*current_node);
+    for (auto child_node : current_node->getChildNodes())
+    {
+      node_queue.push(child_node);
+    }
+  }
+}
+
+void pdg::ProgramGraph::addFormalTreeNodesToGraph(FunctionWrapper &func_w)
+{
+  for (auto arg : func_w.getArgList())
+  {
+    Tree* formal_in_tree = func_w.getArgFormalInTree(*arg);
+    Tree* formal_out_tree = func_w.getArgFormalOutTree(*arg);
+    addTreeNodesToGraph(*formal_in_tree);
+    addTreeNodesToGraph(*formal_out_tree);
+  }
 }

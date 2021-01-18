@@ -1,6 +1,7 @@
 #include "LLVMEssentials.hh"
 #include "PDGNode.hh"
 #include <vector>
+#include <set>
 #include <unordered_set>
 #include <unordered_map>
 #include <queue>
@@ -17,5 +18,8 @@ namespace pdg
     llvm::Function* getCalledFunc(llvm::CallInst &call_inst);
     bool hasReadAccess(llvm::Value &v);
     bool hasWriteAccess(llvm::Value &v);
-  } // namespace utils
-}
+    llvm::inst_iterator getInstIter(llvm::Instruction &i);
+    std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
+    std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
+  } // namespace pdgutils
+} // namespace pdg

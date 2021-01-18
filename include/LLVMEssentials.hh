@@ -10,4 +10,6 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/GraphWriter.h"
+#include "llvm/ADT/GraphTraits.h"
 #endif
