@@ -180,6 +180,8 @@ void pdg::ProgramGraph::addFormalTreeNodesToGraph(FunctionWrapper &func_w)
   {
     Tree* formal_in_tree = func_w.getArgFormalInTree(*arg);
     Tree* formal_out_tree = func_w.getArgFormalOutTree(*arg);
+    if (!formal_in_tree || !formal_out_tree)
+      return;
     addTreeNodesToGraph(*formal_in_tree);
     addTreeNodesToGraph(*formal_out_tree);
   }

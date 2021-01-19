@@ -18,7 +18,6 @@ namespace pdg
     public:
       CallWrapper(llvm::CallInst& ci)
       {
-        assert(ci.getCalledFunction() != nullptr);
         _call_inst = &ci;
         _called_func = pdgutils::getCalledFunc(ci);
         for (auto arg_iter = ci.arg_begin(); arg_iter != ci.arg_end(); arg_iter++)

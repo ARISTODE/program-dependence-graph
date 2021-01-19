@@ -139,6 +139,12 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
   for (auto arg : func_w->getArgList())
   {
     Tree* formal_in_tree = func_w->getArgFormalInTree(*arg);
+    if (!formal_in_tree)
+    {
+      // errs() << "[WARNING]: empty formal tree for func " << F.getName() << "\n";
+      return;
+    }
+
     Tree* formal_out_tree = func_w->getArgFormalOutTree(*arg);
     entry_node->addNeighbor(*formal_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
     entry_node->addNeighbor(*formal_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);
@@ -156,12 +162,20 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
     if (_PDG->hasCallWrapper(*call_inst))
     {
       auto call_w = getCallWrapper(*call_inst);
+      if (!call_w)
+        continue;
       auto call_site_node = _PDG->getNode(*call_inst);
       if (!call_site_node)
         continue;
+     
       for (auto arg : call_w->getArgList())
       {
         Tree* actual_in_tree = call_w->getArgActualInTree(*arg);
+        if (!actual_in_tree)
+        {
+          // errs() << "[WARNING]: empty actual tree for callsite " << *call_inst << "\n";
+          return;
+        }
         Tree* actual_out_tree = call_w->getArgActualOutTree(*arg);
         call_site_node->addNeighbor(*actual_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
         call_site_node->addNeighbor(*actual_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);

@@ -14,9 +14,12 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
   // iterate through actual param list and construct actual tree by copying formal tree
   auto actual_arg_iter = _arg_list.begin();
   auto formal_arg_iter = formal_arg_list.begin();
+  
   while (actual_arg_iter != _arg_list.end())
   {
     Tree* arg_formal_in_tree = callee_fw.getArgFormalInTree(**formal_arg_iter);
+    if (!arg_formal_in_tree) // in some case, not each parameter has tree, for example, a function with structure parameter
+      break;
     // build actual in tree, copying the formal_in tree structure at the moment
     Tree* arg_actual_in_tree = new Tree(*arg_formal_in_tree);
     arg_actual_in_tree->setBaseVal(**actual_arg_iter);
