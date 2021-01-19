@@ -43,3 +43,69 @@ opt -load libpdg.so -dot-pdg < test.bc
 **\-dot-\*:** for visualization. (dot)
 
 For those large software, generating a visualizable PDG is not easy. Graphviz often fails to generate the .dot file for a program with more than 1000 lines of C code. Fortunately, we rarely need such a large .dot file but only do kinds of analyses on the PDG, which is always in memory.
+
+
+
+## Use Guide
+
+We can use the current PDG as a required pass through following steps:
+
+### Compile PDG
+
+1. download PDG repo: git clone https://github.com/ARISTODE/program-dependence-graph.git
+2. cd program-dependence-graph
+3. make
+
+### Use PDG as a required Pass
+Using cmake, add 
+```
+include_directories(program_dependence_graph/include)
+add_subdirectory(program_dependence_graph)
+```
+
+Then, add 
+```
+AU.addRequired<ProgramDependencyGraph>();
+```
+in your pass's **getAnalysisUsage** method (legacy pass manager).
+
+### Useful APIs
+
+**Query the reachability of two nodes:**
+
+```
+ProgramGraph *g = getAnalysis<ProgramDependencyGraph>()->getPDG();
+
+Value* src;
+Value* dst;
+
+pdg::Node* src_node = g->getNode(*src);
+pdg::Node* dst_node = g->getNode(*dst);
+
+if (g->canReach(src_node, dst_node)) 
+{
+  // do something...
+}
+
+```
+
+
+**Traverse the PDG with path constrains**
+This method is useful to traverse the graph through certain edge types. In the example, we put the edge types we want to exclude in the set **exclude_edges**. Then, pass that as an argument to the **canReach** function.
+
+```
+ProgramGraph *g = getAnalysis<ProgramDependencyGraph>()->getPDG();
+
+Value* src;
+Value* dst;
+
+pdg::Node* src_node = g->getNode(*src);
+pdg::Node* dst_node = g->getNode(*dst);
+
+std::set<pdg::EdgeType> exclude_edges;
+
+if (g->canReach(src_node, dst_node, exclude_edges)) 
+{
+  // do something...
+}
+```
