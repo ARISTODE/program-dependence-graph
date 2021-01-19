@@ -84,7 +84,7 @@ pdg::Tree::Tree(const Tree& src_tree)
   TreeNode* src_tree_root_node = src_tree.getRootNode();
   TreeNode* new_root_node = new TreeNode(*src_tree_root_node);
   _root_node = new_root_node;
-  _size = 1;
+  _size = 0;
 }
 
 void pdg::Tree::print()

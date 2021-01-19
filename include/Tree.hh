@@ -41,6 +41,7 @@ namespace pdg
       void computeDerivedAddrVarsFromParent();
       TreeNode *getParentNode() { return _parent_node; }
       Tree *getTree() { return _tree; }
+      int getDepth() { return _depth; }
       void addAccessTag(AccessTag acc_tag) { _acc_tag_set.insert(acc_tag); }
       std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
       bool isRootNode() {return _parent_node == nullptr;}
@@ -52,11 +53,13 @@ namespace pdg
   class Tree
   {
   private:
+    llvm::Value* _base_val;
     TreeNode *_root_node;
     int _size;
 
   public:
     Tree() = default;
+    Tree(llvm::Value &v) { _base_val = &v; }
     Tree(const Tree &src_tree);
     void setRootNode(TreeNode &root_node) { _root_node = &root_node; }
     void setTreeNodeType(GraphNodeType node_type) { _root_node->setNodeType(node_type); }
@@ -66,6 +69,8 @@ namespace pdg
     void increaseTreeSize() { _size++; }
     void print();
     void build();
+    llvm::Value *getBaseVal() { return _base_val; }
+    void setBaseVal(llvm::Value &v) { _base_val = &v; }
   };
 } // namespace pdg
 

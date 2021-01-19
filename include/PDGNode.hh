@@ -52,6 +52,7 @@ namespace pdg
     EdgeSet::iterator end() { return _out_edge_set.end(); }
     EdgeSet::const_iterator begin() const { return _out_edge_set.begin(); }
     EdgeSet::const_iterator end() const { return _out_edge_set.end(); }
+    virtual ~Node() = default;
 
   protected:
     llvm::Value *_val;
@@ -105,6 +106,11 @@ namespace pdg
     bool operator==(const this_type &r) const
     {
       return !(operator!=(r));
+    }
+
+    EdgeType getEdgeType()
+    {
+      return (*_edge_iter)->getEdgeType();
     }
   };
 

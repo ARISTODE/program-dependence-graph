@@ -28,6 +28,7 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
 void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {
   AU.addRequired<DataDependencyGraph>();
+  AU.addRequired<ControlDependencyGraph>();
   AU.setPreservesAll();
 }
 
@@ -127,9 +128,11 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
 // ===== connect dependencies =====
 void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
 {
-  //getAnalysis<ControlDependencyGraph>(F); // add data dependencies for nodes in F
   // add data dependency edges
   getAnalysis<DataDependencyGraph>(F); // add data dependencies for nodes in F
+  // add control dependency edges
+  // TODO: Figure out why control pass will run automatically.
+  // getAnalysis<ControlDependencyGraph>(F); // add data dependencies for nodes in F
   // connect formal tree with address variables
   FunctionWrapper* func_w = getFuncWrapper(F);
   Node* entry_node = func_w->getEntryNode();
@@ -247,7 +250,7 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actual_i
       if (!_PDG->hasNode(*addr_var))
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
-      current_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
+      addr_var_node->addNeighbor(*current_node, EdgeType::PARAMETER_IN);
     }
 
     for (auto child_node : current_node->getChildNodes())
@@ -260,7 +263,7 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actual_i
 void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actual_out_tree, CallInst &ci)
 {
   TreeNode *root_node = actual_out_tree.getRootNode();
-  std::set<Instruction*> insts_after_ci = pdgutils::getInstructionAfterInst(ci);
+  std::set<Instruction *> insts_after_ci = pdgutils::getInstructionAfterInst(ci);
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
   while (!node_queue.empty())

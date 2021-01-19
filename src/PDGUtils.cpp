@@ -123,7 +123,7 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
   {
     if (auto si = dyn_cast<StoreInst>(user))
     {
-      if (si->getPointerOperand() == &v)
+      if (!isa<Argument>(si->getValueOperand()) && si->getPointerOperand() == &v)
         return true;
     }
   }

@@ -1,9 +1,8 @@
 #include "DataDependencyGraph.hh"
 
-using namespace llvm;
-
 char pdg::DataDependencyGraph::ID = 0;
 
+using namespace llvm;
 void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
@@ -66,7 +65,6 @@ void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
 bool pdg::DataDependencyGraph::runOnFunction(Function &F)
 {
   andersAA = &getAnalysis<CFLAndersAAWrapperPass>().getResult();
-
   for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
   {
     addDefUseEdges(*inst_iter);
