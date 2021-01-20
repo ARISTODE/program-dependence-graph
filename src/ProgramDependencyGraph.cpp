@@ -305,5 +305,42 @@ void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actual_
   }
 }
 
+// ===== Graph Traverse Pass =====
+
+// DFS search
+bool pdg::ProgramDependencyGraph::canReach(pdg::Node &src, pdg::Node &dst)
+{
+  // TODO: prune by call graph rechability, improve traverse efficiency
+  if (canReach(src, dst, {}))
+    return true;
+  return false;
+}
+
+bool pdg::ProgramDependencyGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types)
+{
+  std::set<Node *> visited;
+  std::stack<Node *> node_stack;
+  node_stack.push(&src);
+
+  while (!node_stack.empty())
+  {
+    auto current_node = node_stack.top();
+    node_stack.pop();
+    if (visited.find(current_node) != visited.end())
+      continue;
+    visited.insert(current_node);
+    if (current_node == &dst)
+      return true;
+    for (auto out_edge : current_node->getOutEdgeSet())
+    {
+      // exclude path
+      if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
+        continue;
+      node_stack.push(out_edge->getDstNode());
+    }
+  }
+  return false;
+}
+
 static RegisterPass<pdg::ProgramDependencyGraph>
     PDG("pdg", "Program Dependency Graph Construction", false, true);

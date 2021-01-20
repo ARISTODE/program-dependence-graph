@@ -1,5 +1,5 @@
 #include "LLVMEssentials.hh"
-#include "PDGNode.hh"
+#include "Tree.hh"
 #include <vector>
 #include <set>
 #include <unordered_set>
@@ -21,5 +21,7 @@ namespace pdg
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
+    std::set<llvm::Value *> computeAddrTakenVarsFromAlloc(llvm::AllocaInst &ai);
+    void printTreeNodesLabel(Node* n, llvm::raw_string_ostream &OS, std::string tree_node_type_str);
   } // namespace pdgutils
 } // namespace pdg

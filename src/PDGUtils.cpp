@@ -171,3 +171,23 @@ std::set<Instruction *> pdg::pdgutils::getInstructionAfterInst(Instruction &i)
   }
   return insts_after;
 }
+
+std::set<Value *> pdg::pdgutils::computeAddrTakenVarsFromAlloc(AllocaInst &ai)
+{
+  std::set<Value *> addr_taken_vars;
+  for (auto user : ai.users())
+  {
+    if (isa<LoadInst>(user))
+      addr_taken_vars.insert(user);
+  }
+  return addr_taken_vars;
+}
+
+void pdg::pdgutils::printTreeNodesLabel(Node *node, raw_string_ostream &OS, std::string tree_node_type_str)
+{
+  TreeNode *n = dynamic_cast<TreeNode *>(node);
+  int tree_node_depth = n->getDepth();
+  DIType *node_di_type = n->getDIType();
+  std::string field_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
+  OS << tree_node_type_str << " | " << tree_node_depth << " | " << field_type_name;
+}

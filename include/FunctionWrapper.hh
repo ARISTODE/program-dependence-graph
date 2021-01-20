@@ -39,7 +39,7 @@ namespace pdg
     void buildFormalTreeForArgs();
     llvm::DIType *getArgDIType(llvm::Argument &arg);
     llvm::DILocalVariable *getArgDILocalVar(llvm::Argument &arg);
-    llvm::Value *getArgAllocaInst(llvm::Argument &arg);
+    llvm::AllocaInst *getArgAllocaInst(llvm::Argument &arg);
     Tree *getArgFormalInTree(llvm::Argument &arg);
     Tree *getArgFormalOutTree(llvm::Argument &arg);
     std::map<llvm::Argument *, Tree *> &getArgFormalInTreeMap() { return _arg_formal_in_tree_map; }

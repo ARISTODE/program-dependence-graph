@@ -59,10 +59,18 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 {
   if (_parent_node == nullptr)
     return;
-  auto parent_node_addr_vars = _parent_node->getAddrVars();
-  for (auto parent_node_addr_var : parent_node_addr_vars)
+  std::unordered_set<llvm::Value *> base_node_addr_vars;
+  // handle struct pointer
+  auto grand_parent_node = _parent_node->getParentNode();
+  // TODO: now hanlde struct specifically, but should also verify on other aggregate pointer types
+  if (dbgutils::isStructType(*_parent_node->getDIType()) && dbgutils::isStructPointerType(*grand_parent_node->getDIType()))
+    base_node_addr_vars = grand_parent_node->getAddrVars();
+  else
+    base_node_addr_vars = _parent_node->getAddrVars();
+
+  for (auto base_node_addr_var :base_node_addr_vars)
   {
-    for (auto user : parent_node_addr_var->users())
+    for (auto user : base_node_addr_var->users())
     {
       if (LoadInst* li = dyn_cast<LoadInst>(user))
       {

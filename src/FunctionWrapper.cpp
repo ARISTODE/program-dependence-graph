@@ -39,7 +39,7 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
   for (auto arg : _arg_list)
   {
     DILocalVariable* di_local_var = getArgDILocalVar(*arg);
-    Value* arg_alloca_inst = getArgAllocaInst(*arg);
+    AllocaInst* arg_alloca_inst = getArgAllocaInst(*arg);
     if (di_local_var == nullptr || arg_alloca_inst == nullptr)
     {
       errs() << "empty di local var: " << _func->getName().str() << (di_local_var == nullptr) << " - " << (arg_alloca_inst == nullptr) << "\n";
@@ -48,7 +48,11 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
     Tree *arg_formal_in_tree = new Tree(*arg);
     TreeNode *formal_in_root_node = new TreeNode(*arg, di_local_var->getType(), 0, nullptr, arg_formal_in_tree, GraphNodeType::FORMAL_IN);
     formal_in_root_node->setDILocalVariable(*di_local_var);
-    formal_in_root_node->addAddrVar(*arg_alloca_inst);
+    auto addr_taken_vars = pdgutils::computeAddrTakenVarsFromAlloc(*arg_alloca_inst);
+    for (auto addr_taken_var : addr_taken_vars)
+    {
+      formal_in_root_node->addAddrVar(*addr_taken_var);
+    }
     arg_formal_in_tree->setRootNode(*formal_in_root_node);
     arg_formal_in_tree->build();
     _arg_formal_in_tree_map.insert(std::make_pair(arg, arg_formal_in_tree));
@@ -82,7 +86,7 @@ DILocalVariable *pdg::FunctionWrapper::getArgDILocalVar(Argument &arg)
   return nullptr;
 }
 
-Value *pdg::FunctionWrapper::getArgAllocaInst(Argument &arg)
+AllocaInst *pdg::FunctionWrapper::getArgAllocaInst(Argument &arg)
 {
   for (auto dbg_declare_inst : _dbg_declare_insts)
   {
@@ -92,7 +96,7 @@ Value *pdg::FunctionWrapper::getArgAllocaInst(Argument &arg)
     if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
     {
       if (AllocaInst* ai = dyn_cast<AllocaInst>(dbg_declare_inst->getVariableLocation()))
-        return dbg_declare_inst->getVariableLocation();
+        return ai;
     }
   }
   return nullptr;

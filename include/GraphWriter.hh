@@ -37,19 +37,24 @@ namespace llvm
         return "<<ENTRY>> " + func->getName().str();
       case pdg::GraphNodeType::FORMAL_IN:
       {
-        pdg::TreeNode* n = dynamic_cast<pdg::TreeNode*>(node);
-        int tree_node_depth = n->getDepth();
-        DIType *node_di_type = n->getDIType();
-        std::string field_type_name = pdg::dbgutils::getSourceLevelTypeName(*node_di_type);
-        OS << "FORMAL_IN: " << tree_node_depth << " " << field_type_name;
+        pdg::pdgutils::printTreeNodesLabel(node, OS, "FORMAL_IN");
         return OS.str();
       }
       case pdg::GraphNodeType::FORMAL_OUT:
-        return "FORMAL_OUT";
+      {
+        pdg::pdgutils::printTreeNodesLabel(node, OS, "FORMAL_OUT");
+        return OS.str();
+      }
       case pdg::GraphNodeType::ACTUAL_IN:
-        return "ACTUAL_IN";
+      {
+        pdg::pdgutils::printTreeNodesLabel(node, OS, "ACTUAL_IN");
+        return OS.str();
+      }
       case pdg::GraphNodeType::ACTUAL_OUT:
-        return "ACTUAL_OUT";
+      {
+        pdg::pdgutils::printTreeNodesLabel(node, OS, "ACTUAL_OUT");
+        return OS.str();
+      }
       case pdg::GraphNodeType::INST:
       {
         if (Instruction *i = dyn_cast<Instruction>(node_val))
