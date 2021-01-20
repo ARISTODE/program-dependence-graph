@@ -15,7 +15,7 @@ namespace pdg
   class Node
   {
   public:
-    typedef std::set<Edge *> EdgeSet;
+    using EdgeSet = std::set<Edge *>;
     using iterator = EdgeIterator<Node>;
     using const_iterator = EdgeIterator<Node>;
 
@@ -42,7 +42,7 @@ namespace pdg
     void setNodeType(GraphNodeType node_type) { _node_type = node_type; }
     GraphNodeType getNodeType() const { return _node_type; }
     bool isVisited() { return _is_visited; }
-    llvm::Function *getFunc() { return _func; }
+    llvm::Function *getFunc() const { return _func; }
     void setFunc(llvm::Function &f) { _func = &f; }
     llvm::Value *getValue() { return _val; }
     llvm::DIType *getDIType() { return _node_di_type; }

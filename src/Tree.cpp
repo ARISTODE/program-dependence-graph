@@ -4,19 +4,18 @@ using namespace llvm;
 
 pdg::TreeNode::TreeNode(const TreeNode &tree_node) : Node(tree_node.getNodeType())
 {
-  _arg = tree_node.getArg();
+  _func = tree_node.getFunc();
   _di_type = tree_node.getDIType();
-  setNodeType(tree_node.getNodeType());
+  _node_type = tree_node.getNodeType();
 }
 
-pdg::TreeNode::TreeNode(Argument &arg, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
+pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
 {
-  _arg = &arg;
   _di_type = di_type;
   _depth = depth;
   _parent_node = parent_node;
   _tree = tree;
-  setFunc(*arg.getParent());
+  _func = &f;
 }
 
 int pdg::TreeNode::expandNode()
@@ -31,7 +30,7 @@ int pdg::TreeNode::expandNode()
   if (dbgutils::isPointerType(*_di_type))
   {
     DIType* pointed_obj_dt = dbgutils::getLowestDIType(*_di_type);
-    TreeNode *new_child_node = new TreeNode(*_arg, pointed_obj_dt, _depth + 1, this, _tree, getNodeType());
+    TreeNode *new_child_node = new TreeNode(*_func, pointed_obj_dt, _depth + 1, this, _tree, getNodeType());
     new_child_node->computeDerivedAddrVarsFromParent();
     _children.push_back(new_child_node);
     this->addNeighbor(*new_child_node, EdgeType::PARAMETER_FIELD);
@@ -44,7 +43,7 @@ int pdg::TreeNode::expandNode()
     for (unsigned i = 0; i < di_node_arr.size(); i++)
     {
       DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
-      TreeNode *new_child_node = new TreeNode(*_arg, field_di_type, _depth + 1, this, _tree, getNodeType());
+      TreeNode *new_child_node = new TreeNode(*_func, field_di_type, _depth + 1, this, _tree, getNodeType());
       new_child_node->computeDerivedAddrVarsFromParent();
       _children.push_back(new_child_node);
       this->addNeighbor(*new_child_node, EdgeType::PARAMETER_FIELD);

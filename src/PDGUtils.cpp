@@ -191,3 +191,11 @@ void pdg::pdgutils::printTreeNodesLabel(Node *node, raw_string_ostream &OS, std:
   std::string field_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
   OS << tree_node_type_str << " | " << tree_node_depth << " | " << field_type_name;
 }
+
+std::string pdg::pdgutils::stripFuncNameVersionNumber(std::string func_name)
+{
+  auto deli_pos = func_name.find('.');
+  if (deli_pos == std::string::npos)
+    return func_name;
+  return func_name.substr(0, deli_pos);
+}

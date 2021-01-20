@@ -5,6 +5,13 @@ using namespace llvm;
 
 char pdg::ProgramDependencyGraph::ID = 0;
 
+void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
+{
+  AU.addRequired<DataDependencyGraph>();
+  AU.addRequired<ControlDependencyGraph>();
+  AU.setPreservesAll();
+}
+
 bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
 {
   auto start = std::chrono::high_resolution_clock::now();
@@ -23,13 +30,6 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
   errs() << "building PDG takes: " <<  duration.count() << "\n";
   return false;
-}
-
-void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
-{
-  AU.addRequired<DataDependencyGraph>();
-  AU.addRequired<ControlDependencyGraph>();
-  AU.setPreservesAll();
 }
 
 void pdg::ProgramDependencyGraph::connectInTrees(Tree* src_tree, Tree* dst_tree, EdgeType edge_type)
@@ -92,6 +92,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     return;
   call_site_node->addNeighbor(*func_entry_node, EdgeType::CALL);
 
+  // step 2: connect actual in -> formal in, formal out -> actual out
   auto actual_arg_list = cw.getArgList();
   auto formal_arg_list = fw.getArgList();
   assert(actual_arg_list.size() == formal_arg_list.size() && "cannot connect tree edges due to inequal arg num! (connectCallerandCallee)");
@@ -110,6 +111,17 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     auto formal_out_tree = fw.getArgFormalOutTree(*formal_arg);
     _PDG->addTreeNodesToGraph(*actual_out_tree);
     connectOutTrees(formal_out_tree, actual_out_tree, EdgeType::PARAMETER_OUT);
+  }
+
+  // step3: connect return value actual in -> formal in, formal out -> actual out
+  if (!fw.hasNullRetVal() && !cw.hasNullRetVal())
+  {
+    Tree *ret_formal_in_tree = fw.getRetFormalInTree();
+    Tree *ret_formal_out_tree = fw.getRetFormalOutTree();
+    Tree *ret_actual_in_tree = cw.getRetActualInTree();
+    Tree *ret_actual_out_tree = cw.getRetActualOutTree();
+    connectInTrees(ret_actual_in_tree, ret_formal_in_tree, EdgeType::PARAMETER_IN);
+    connectInTrees(ret_actual_out_tree, ret_formal_out_tree, EdgeType::PARAMETER_OUT);
   }
 
   // step4: connect return value of callee to the call site
@@ -151,6 +163,12 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
     connectFormalInTreeWithAddrVars(*formal_in_tree);
     connectFormalOutTreeWithAddrVars(*formal_out_tree);
   }
+
+  if (!func_w->hasNullRetVal())
+  {
+    connectFormalInTreeWithAddrVars(*func_w->getRetFormalInTree());
+    connectFormalOutTreeWithAddrVars(*func_w->getRetFormalOutTree());
+  }
 }
 
 void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
@@ -182,7 +200,15 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
         connectActualInTreeWithAddrVars(*actual_in_tree, *call_inst);
         connectActualOutTreeWithAddrVars(*actual_out_tree, *call_inst);
       }
-
+      // connect return trees
+      // TODO: should change the name here. for return value, we should only connect
+      // the tree node with vars after the call instruction
+      if (!call_w->hasNullRetVal())
+      {
+        connectActualOutTreeWithAddrVars(*call_w->getRetActualInTree(), *call_inst);
+        connectActualOutTreeWithAddrVars(*call_w->getRetActualOutTree(), *call_inst);
+      }
+      
       auto called_func_w = getFuncWrapper(*call_w->getCalledFunc());
       connectCallerAndCallee(*call_w, *called_func_w);
     }

@@ -12,6 +12,8 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
     return;
   for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); inst_iter++)
   {
+    if (&inst == &*inst_iter)
+      continue;
     auto tmp_inst_mem_loc = MemoryLocation::getOrNone(&*inst_iter);
     if (!tmp_inst_mem_loc)
       continue;

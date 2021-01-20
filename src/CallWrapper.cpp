@@ -41,6 +41,28 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
   }
 }
 
+void pdg::CallWrapper::buildActualTreesForRetVal(FunctionWrapper &callee_fw)
+{
+  Tree *ret_formal_in_tree = callee_fw.getRetFormalInTree();
+  if (!ret_formal_in_tree)
+    return;
+  // build actual in tree, copying the formal_in tree structure at the moment
+  Tree *ret_actual_in_tree = new Tree(*ret_formal_in_tree);
+  ret_actual_in_tree->setTreeNodeType(GraphNodeType::ACTUAL_IN);
+  TreeNode *ret_actual_in_root_node = ret_actual_in_tree->getRootNode();
+  ret_actual_in_root_node->addAddrVar(*_call_inst);
+  ret_actual_in_tree->build();
+  _ret_val_actual_in_tree = ret_actual_in_tree;
+
+  // build actual out tree
+  Tree *ret_actual_out_tree = new Tree(*ret_formal_in_tree);
+  ret_actual_out_tree->setTreeNodeType(GraphNodeType::ACTUAL_OUT);
+  TreeNode *ret_actual_out_root_node = ret_actual_out_tree->getRootNode();
+  ret_actual_out_root_node->addAddrVar(*_call_inst);
+  ret_actual_out_tree->build();
+  _ret_val_actual_out_tree = ret_actual_out_tree;
+}
+
 pdg::Tree *pdg::CallWrapper::getArgActualInTree(Value &actual_arg)
 {
   auto iter = _arg_actual_in_tree_map.find(&actual_arg);

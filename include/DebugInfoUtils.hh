@@ -15,6 +15,7 @@ namespace pdg
     llvm::DIType *getBaseDIType(llvm::DIType &dt);
     llvm::DIType *stripAttributes(llvm::DIType &dt);
     llvm::DIType *getGlobalVarDIType(llvm::GlobalVariable &gv);
+    llvm::DIType *getFuncRetDIType(llvm::Function &F);
     std::string getSourceLevelVariableName(llvm::DINode &dt);
     std::string getSourceLevelTypeName(llvm::DIType &dt);
   } // namespace dbgutils

@@ -13,24 +13,12 @@ namespace pdg
 
   class TreeNode : public Node
   {
-    private:
-      Tree* _tree;
-      TreeNode* _parent_node;
-      int _depth;
-      llvm::DILocalVariable* _di_local_var;
-      llvm::DIType* _di_type;
-      std::vector<TreeNode *> _children;
-      llvm::Argument *_arg;
-      std::unordered_set<llvm::Value *> _addr_vars;
-      std::set<AccessTag> _acc_tag_set;
-
     public:
       TreeNode(const TreeNode& tree_node); 
-      TreeNode(llvm::Argument &arg, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type);
+      TreeNode(llvm::Function &f, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type);
       int expandNode(); // build child nodes and connect with them
       void setDIType(llvm::DIType *di_type) { _di_type = di_type; }
       llvm::DIType *getDIType() const { return _di_type; }
-      llvm::Argument *getArg() const { return _arg; }
       llvm::DILocalVariable *getDILocalVar() { return _di_local_var; }
       void insertChildNode(TreeNode *new_child_node) { _children.push_back(new_child_node); }
       void setParentTreeNode(TreeNode *parent_node) { _parent_node = parent_node; }
@@ -48,15 +36,20 @@ namespace pdg
       int numOfChild() { return _children.size(); }
       bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
+
+    private:
+      Tree *_tree;
+      TreeNode *_parent_node;
+      int _depth;
+      llvm::DILocalVariable *_di_local_var;
+      llvm::DIType *_di_type;
+      std::vector<TreeNode *> _children;
+      std::unordered_set<llvm::Value *> _addr_vars;
+      std::set<AccessTag> _acc_tag_set;
   };
 
   class Tree
   {
-  private:
-    llvm::Value* _base_val;
-    TreeNode *_root_node;
-    int _size;
-
   public:
     Tree() = default;
     Tree(llvm::Value &v) { _base_val = &v; }
@@ -71,6 +64,11 @@ namespace pdg
     void build();
     llvm::Value *getBaseVal() { return _base_val; }
     void setBaseVal(llvm::Value &v) { _base_val = &v; }
+
+  private:
+    llvm::Value* _base_val;
+    TreeNode *_root_node;
+    int _size;
   };
 } // namespace pdg
 

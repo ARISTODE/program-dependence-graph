@@ -15,6 +15,9 @@ namespace pdg
       std::vector<llvm::Value *> _arg_list;
       std::map<llvm::Value *, Tree *> _arg_actual_in_tree_map;
       std::map<llvm::Value *, Tree *> _arg_actual_out_tree_map;
+      Tree * _ret_val_actual_in_tree;
+      Tree * _ret_val_actual_out_tree;
+
     public:
       CallWrapper(llvm::CallInst& ci)
       {
@@ -26,11 +29,15 @@ namespace pdg
         }
       }
       void buildActualTreeForArgs(FunctionWrapper &callee_fw);
+      void buildActualTreesForRetVal(FunctionWrapper &callee_fw);
       llvm::CallInst *getCallInst() { return _call_inst; }
       llvm::Function *getCalledFunc() { return _called_func; }
       std::vector<llvm::Value *> &getArgList() { return _arg_list; }
       Tree *getArgActualInTree(llvm::Value &actual_arg);
       Tree *getArgActualOutTree(llvm::Value &actual_arg);
+      Tree *getRetActualInTree() { return _ret_val_actual_in_tree; }
+      Tree *getRetActualOutTree() { return _ret_val_actual_out_tree; }
+      bool hasNullRetVal() { return (_ret_val_actual_in_tree == nullptr); }
   };
 }
 

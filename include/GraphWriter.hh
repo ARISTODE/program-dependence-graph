@@ -76,9 +76,11 @@ namespace llvm
       switch (edge_type)
       {
       case pdg::EdgeType::CONTROL:
-        return "label=\"{c}\"";
+        return "";
       case pdg::EdgeType::DATA_DEF_USE:
         return "style=dotted,label = \"{DEF_USE}\" ";
+      case pdg::EdgeType::DATA_ALIAS:
+        return "style=dotted,label = \"{alias}\" ";
       case pdg::EdgeType::PARAMETER_IN:
         return "style=dashed, color=\"blue\"";
       case pdg::EdgeType::PARAMETER_OUT:

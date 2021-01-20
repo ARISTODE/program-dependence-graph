@@ -8,11 +8,6 @@ namespace pdg
 {
   class DataAccessAnalysis : public llvm::ModulePass 
   {
-    private:
-      llvm::Module * _module;
-      ProgramGraph *PDG;
-      std::ofstream idl_file;
-
     public: 
       static char ID;
       DataAccessAnalysis() : llvm::ModulePass(ID) {};
@@ -28,6 +23,11 @@ namespace pdg
       void generateRpcForFunc(llvm::Function &F);
       void generateIDLFromArgTree(Tree *arg_tree);
       void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &projection_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+
+    private:
+      llvm::Module *_module;
+      ProgramGraph *PDG;
+      std::ofstream idl_file;
   };
 }
 

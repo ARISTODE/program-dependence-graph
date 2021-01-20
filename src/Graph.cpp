@@ -17,6 +17,7 @@ void pdg::ProgramGraph::build(Module &M)
       addNode(*n);
     }
     func_w->buildFormalTreeForArgs();
+    func_w->buildFormalTreesForRetVal();
     addFormalTreeNodesToGraph(*func_w);
     addNode(*func_w->getEntryNode());
     _func_wrapper_map.insert(std::make_pair(&F, func_w));
@@ -42,6 +43,7 @@ void pdg::ProgramGraph::build(Module &M)
       CallWrapper *cw = new CallWrapper(*ci);
       FunctionWrapper* callee_fw = getFuncWrapper(*called_func);
       cw->buildActualTreeForArgs(*callee_fw);
+      cw->buildActualTreesForRetVal(*callee_fw);
       _call_wrapper_map.insert(std::make_pair(ci, cw));
     }
   }

@@ -171,3 +171,25 @@ DIType *pdg::dbgutils::getGlobalVarDIType(GlobalVariable &gv)
   }
   return nullptr;
 }
+
+DIType *pdg::dbgutils::getFuncRetDIType(Function &F)
+{
+  SmallVector<std::pair<unsigned, MDNode *>, 4> MDs;
+  F.getAllMetadata(MDs);
+  for (auto &MD : MDs)
+  {
+    MDNode *N = MD.second;
+    if (DISubprogram *subprogram = dyn_cast<DISubprogram>(N))
+    {
+      auto *sub_routine = subprogram->getType();
+      const auto &type_ref = sub_routine->getTypeArray();
+      if (F.arg_size() >= type_ref.size())
+        break;
+      // const auto &ArgTypeRef = TypeRef[0];
+      // DIType *Ty = ArgTypeRef->resolve();
+      // return Ty;
+      return type_ref[0];
+    }
+  }
+  return nullptr;
+}
