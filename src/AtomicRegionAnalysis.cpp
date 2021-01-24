@@ -6,16 +6,25 @@ using namespace llvm;
 
 void pdg::AtomicRegionAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 {
+  AU.addRequired<SharedDataAnalysis>();
   AU.setPreservesAll();
 }
 
 bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
 {
+  _SDA = &getAnalysis<SharedDataAnalysis>();
+  _warning_cs_count = 0;
+  _warning_atomic_op_count = 0;
+  _cs_warning_count = 0;
   setupLockMap();
   computeCriticalSections(M);
   computeAtomicOperations(M);
-  dumpCS();
-  dumpAtomicOps();
+  // dumpCS();
+  // dumpAtomicOps();
+  computeWarningCS();
+  computeWarningAtomicOps();
+  errs() << "CS Warning: " << _warning_cs_count << "/" << _critical_sections.size() << "\n";
+  errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << "/" << _atomic_operations.size() << "\n";
   return false;
 }
 
@@ -76,6 +85,106 @@ void pdg::AtomicRegionAnalysis::computeAtomicOperations(Module &M)
   }
 }
 
+std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicRegionAnalysis::CSPair cs_pair)
+{
+  Instruction* lock_inst = cs_pair.first;
+  Instruction* unlock_inst = cs_pair.second;
+  assert(lock_inst->getFunction() == unlock_inst->getFunction() && "error analyzing cs span for multiple functions");
+
+  Function *f = lock_inst->getFunction();
+  auto cs_begin_iter = inst_begin(f);
+  while (&*cs_begin_iter != lock_inst)
+    cs_begin_iter++;
+  auto cs_end_iter = inst_begin(f);
+  while (&*cs_end_iter != unlock_inst)
+    cs_end_iter++;
+
+  std::set<Instruction *> ret;
+  cs_begin_iter++;
+  if (cs_begin_iter == inst_end(f))
+    return ret;
+
+  while (cs_begin_iter != cs_end_iter)
+  {
+    ret.insert(&*cs_begin_iter);
+    cs_begin_iter++;
+  }
+  return ret;
+}
+
+void pdg::AtomicRegionAnalysis::computeWarningCS()
+{
+  ProgramGraph* G = _SDA->getPDG();
+  for (auto cs_pair : _critical_sections)
+  {
+    bool cs_warning = false;
+    auto insts_in_cs = computeInstsInCS(cs_pair);
+    for (auto inst : insts_in_cs)
+    {
+      std::set<std::string> modified_names;
+      bool is_addr_var = false;
+      bool is_shared = false;
+      Node *inst_node = G->getNode(*inst);
+      for (auto in_edge : inst_node->getInEdgeSet())
+      {
+        if (in_edge->getEdgeType() == EdgeType::VAL_DEP)
+        {
+          is_addr_var = true;
+          TreeNode* tree_node = static_cast<TreeNode*>(in_edge->getSrcNode());
+          if (_SDA->isSharedFieldID(pdgutils::computeTreeNodeID(*tree_node)))
+            is_shared = true;
+          if (!tree_node->getDIType())
+            continue;
+          modified_names.insert(dbgutils::getSourceLevelVariableName(*tree_node->getDIType()));
+        }
+        if (is_addr_var && is_shared)
+          break;
+      }
+      if (!is_addr_var || !is_shared)
+        continue;
+      if (pdgutils::hasWriteAccess(*inst))
+      {
+        _cs_warning_count++;
+        cs_warning = true;
+        printWarningCS(cs_pair, *inst, modified_names);
+      }
+    }
+    if(cs_warning)
+      _warning_cs_count++;
+  }
+}
+
+void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
+{
+  ProgramGraph* PDG = _SDA->getPDG();
+  for (auto atomic_op : _atomic_operations)
+  {
+    auto modified_var = atomic_op->getOperand(0);
+    Node* n = PDG->getNode(*modified_var);
+    if (!n)
+      continue;
+    bool is_shared = false;
+    std::set<std::string> modified_names;
+    for (auto in_edge : n->getInEdgeSet())
+    {
+      if (in_edge->getEdgeType() != EdgeType::VAL_DEP)
+        continue;
+      TreeNode* tree_node = static_cast<TreeNode*>(in_edge->getSrcNode());
+      if (_SDA->isSharedFieldID(pdgutils::computeTreeNodeID(*tree_node)))
+        is_shared = true;
+      if (!tree_node->getDIType())
+        continue;
+      modified_names.insert(dbgutils::getSourceLevelVariableName(*tree_node->getDIType()));
+    }
+
+    if (is_shared)
+    {
+      _warning_atomic_op_count++;
+      printWarningAtomicOp(*atomic_op, modified_names);
+    }
+  }
+}
+
 bool pdg::AtomicRegionAnalysis::isLockInst(Instruction &i)
 {
   if (CallInst *ci = dyn_cast<CallInst>(&i))
@@ -126,6 +235,35 @@ bool pdg::AtomicRegionAnalysis::isAtomicOperation(Instruction &i)
     }
   }
   return false;
+}
+
+void pdg::AtomicRegionAnalysis::printWarningCS(pdg::AtomicRegionAnalysis::CSPair cs_pair, Instruction &i, std::set<std::string> &modified_names)
+{
+  auto lock_inst = cs_pair.first;
+  Function* f = lock_inst->getFunction();
+  errs() << " ============  CS Warning [ " << _warning_cs_count << " ] ============\n";
+  errs() << "Function: " << f->getName() << "\n";
+  errs() << "cs begin: " << *cs_pair.first << "\n";
+  errs() << "cs end: " << *cs_pair.second << "\n";
+  errs() << "modified var: " << i << "\n";
+  for (auto field_name : modified_names)
+  {
+    errs() << "modified name: " << field_name << "\n";
+  }
+  errs() << " =====================================\n";
+}
+
+void pdg::AtomicRegionAnalysis::printWarningAtomicOp(llvm::Instruction &i, std::set<std::string> &modified_names)
+{
+  Function *f = i.getFunction();
+  errs() << " ============  Atomic Ops Warning [ " << _warning_cs_count << " ] ============\n";
+  errs() << "Function: " << f->getName() << "\n";
+  errs() << "modified var: " << i << "\n";
+  for (auto field_name : modified_names)
+  {
+    errs() << "modified name: " << field_name << "\n";
+  }
+  errs() << " =====================================\n";
 }
 
 void pdg::AtomicRegionAnalysis::dumpCS()

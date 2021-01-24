@@ -199,3 +199,23 @@ std::string pdg::pdgutils::stripFuncNameVersionNumber(std::string func_name)
     return func_name;
   return func_name.substr(0, deli_pos);
 }
+
+std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
+{
+  std::string parent_type_name = "";
+  std::string node_field_name = "";
+  TreeNode* parent_node = tree_node.getParentNode();
+  if (parent_node != nullptr)
+  {
+    DIType *parent_di_type = dbgutils::stripMemberTag(*parent_node->getDIType());
+    if (!parent_di_type)
+      parent_type_name = dbgutils::getSourceLevelTypeName(*parent_di_type);
+  }
+
+  if (!tree_node.getDIType())
+    return parent_type_name;
+  DIType* node_di_type = dbgutils::stripAttributes(*tree_node.getDIType());
+  node_field_name = dbgutils::getSourceLevelVariableName(*node_di_type);
+  
+  return (parent_type_name + node_field_name);
+}

@@ -21,9 +21,11 @@ namespace pdg
 
     Node(GraphNodeType node_type)
     {
+      _val = nullptr;
       _node_type = node_type;
       _is_visited = false;
       _func = nullptr;
+      _node_di_type = nullptr;
     }
     Node(llvm::Value &v, GraphNodeType node_type)
     {
@@ -34,6 +36,7 @@ namespace pdg
         _func = nullptr;
       _node_type = node_type;
       _is_visited = false;
+      _node_di_type = nullptr;
     }
     void addInEdge(Edge &e) { _in_edge_set.insert(&e); }
     void addOutEdge(Edge &e) { _out_edge_set.insert(&e); }
@@ -45,15 +48,15 @@ namespace pdg
     llvm::Function *getFunc() const { return _func; }
     void setFunc(llvm::Function &f) { _func = &f; }
     llvm::Value *getValue() { return _val; }
-    llvm::DIType *getDIType() { return _node_di_type; }
+    llvm::DIType *getDIType() const { return _node_di_type; }
     void setDIType(llvm::DIType &di_type) { _node_di_type = &di_type; }
     void addNeighbor(Node &neighbor, EdgeType edge_type);
     EdgeSet::iterator begin() { return _out_edge_set.begin(); }
     EdgeSet::iterator end() { return _out_edge_set.end(); }
     EdgeSet::const_iterator begin() const { return _out_edge_set.begin(); }
     EdgeSet::const_iterator end() const { return _out_edge_set.end(); }
-    std::set<Node*> getOutNeighbors();
-    std::set<Node*> getInNeighbors();
+    std::set<Node *> getOutNeighbors();
+    std::set<Node *> getInNeighbors();
     virtual ~Node() = default;
 
   protected:

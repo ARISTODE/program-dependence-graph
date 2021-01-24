@@ -60,7 +60,7 @@ namespace pdg
     int numEdge() { return _edge_set.size(); }
     int numNode() { return _val_node_map.size(); }
     void bindDITypeToNodes(llvm::Module &M);
-    llvm::DIType* computeNodeDIType(Node* n);
+    llvm::DIType* computeNodeDIType(Node &n);
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
 

@@ -74,6 +74,8 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
     {
       auto addr = dbg_declare_inst->getVariableLocation();
       Node *addr_node = getNode(*addr);
+      if (!addr_node)
+        continue;
       auto DLV = dbg_declare_inst->getVariable(); // di local variable instance
       assert(DLV != nullptr && "cannot find DILocalVariable Node for computing DIType");
       DIType *var_di_type = DLV->getType();
@@ -86,35 +88,41 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
     {
       Instruction &i = *inst_iter;
       Node* n = getNode(i);
-      DIType* node_di_type = computeNodeDIType(n);
+      assert(n != nullptr && "cannot compute node di type for null node!\n");
+      DIType* node_di_type = computeNodeDIType(*n);
       n->setDIType(*node_di_type);
     }
   }
 }
 
-DIType *pdg::ProgramGraph::computeNodeDIType(Node *n)
+DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 {
   // TODO: global variable
 
   // local variable 
-  Function* func = n->getFunc();
+  Function* func = n.getFunc();
   if (!func)
     return nullptr;
-  Value* val = n->getValue();
-  if (!val) return nullptr;
+  Value *val = n.getValue();
+  if (!val)
+    return nullptr;
 
   // alloc inst
   if (isa<AllocaInst>(val))
-    return n->getDIType();
+    return n.getDIType();
   // load inst
   if (LoadInst *li = dyn_cast<LoadInst>(val))
   {
     if (Instruction *load_addr = dyn_cast<Instruction>(li->getPointerOperand()))
     {
       Node* load_addr_node = getNode(*load_addr);
+      if (!load_addr_node)
+        return nullptr;
       DIType* load_addr_di_type = load_addr_node->getDIType();
+      if (!load_addr_di_type)
+        return nullptr;
       // DIType* retDIType = DIUtils::stripAttributes(sourceInstDIType);
-      DIType *loaded_val_di_type = dbgutils::getLowestDIType(*load_addr_di_type);
+      DIType *loaded_val_di_type = dbgutils::getBaseDIType(*load_addr_di_type);
       return loaded_val_di_type;
     }
 
@@ -123,7 +131,7 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node *n)
       DIType *global_var_di_type = dbgutils::getGlobalVarDIType(*gv);
       if (!global_var_di_type)
         return nullptr;
-      return dbgutils::getLowestDIType(*global_var_di_type);
+      return dbgutils::getBaseDIType(*global_var_di_type);
     }
   }
   // gep inst
@@ -131,20 +139,27 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node *n)
   {
     Value* base_addr = gep->getPointerOperand();
     Node* base_addr_node = getNode(*base_addr);
+    if (!base_addr_node)
+      return nullptr;
     DIType* base_addr_di_type = base_addr_node->getDIType();
     if (!base_addr_di_type)
       return nullptr;
-    bool is_struct_or_struct_ptr = dbgutils::isStructType(*base_addr_di_type) || dbgutils::isStructPointerType(*base_addr_di_type);
-    if (!is_struct_or_struct_ptr)
-      return nullptr;
+
     DIType* base_addr_lowest_di_type = dbgutils::getLowestDIType(*base_addr_di_type);
-    auto di_node_arr = dyn_cast<DICompositeType>(base_addr_lowest_di_type)->getElements();
-    for (unsigned i = 0; i < di_node_arr.size(); ++i)
+    if (!base_addr_lowest_di_type)
+      return nullptr;
+    if (!dbgutils::isStructType(*base_addr_lowest_di_type))
+      return nullptr;
+    if (auto dict = dyn_cast<DICompositeType>(base_addr_lowest_di_type))
     {
-      DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
-      assert(field_di_type != nullptr && "fail to retrive field di type (computeNodeDIType)");
-      if (pdgutils::isGEPOffsetMatchDIOffset(*field_di_type, *gep))
-        return field_di_type;
+      auto di_node_arr = dict->getElements();
+      for (unsigned i = 0; i < di_node_arr.size(); ++i)
+      {
+        DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
+        assert(field_di_type != nullptr && "fail to retrive field di type (computeNodeDIType)");
+        if (pdgutils::isGEPOffsetMatchDIOffset(*field_di_type, *gep))
+          return field_di_type;
+      }
     }
   }
   // cast inst
@@ -152,6 +167,8 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node *n)
   {
     Value *casted_val = cast_inst->getOperand(0);
     Node* casted_val_node = getNode(*casted_val);
+    if (!casted_val_node)
+      return nullptr;
     return casted_val_node->getDIType();
   }
 

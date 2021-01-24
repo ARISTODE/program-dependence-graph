@@ -85,6 +85,8 @@ namespace llvm
         return "style=dashed, color=\"blue\"";
       case pdg::EdgeType::PARAMETER_OUT:
         return "style=dashed, color=\"blue\"";
+      case pdg::EdgeType::DATA_RAW:
+        return "style=dotted,label = \"{RAW}\" ";
       case pdg::EdgeType::CALL:
         return "style=dashed, color=\"red\", label =\"{CALL}\"";
       default:

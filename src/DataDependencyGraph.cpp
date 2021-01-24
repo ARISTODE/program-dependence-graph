@@ -17,7 +17,7 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
     auto tmp_inst_mem_loc = MemoryLocation::getOrNone(&*inst_iter);
     if (!tmp_inst_mem_loc)
       continue;
-    AliasResult anders_aa_result = andersAA->query(*inst_mem_loc, *tmp_inst_mem_loc);
+    AliasResult anders_aa_result = _anders_aa->query(*inst_mem_loc, *tmp_inst_mem_loc);
     if (anders_aa_result != NoAlias)
     {
       Node* src = g.getNode(inst);
@@ -45,28 +45,29 @@ void pdg::DataDependencyGraph::addDefUseEdges(Instruction &inst)
 
 void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
 {
+  if (!isa<LoadInst>(&inst))
+    return;
+
   ProgramGraph &g = ProgramGraph::getInstance();
-  // TODO: use memory SSA or memdep analysis to figure out more accurate RAW dependencies
-  if (StoreInst *si = dyn_cast<StoreInst>(&inst))
-  {
-    Value* pointer_val = si->getPointerOperand();
-    for (auto user : pointer_val->users())
-    {
-      if (isa<LoadInst>(user))
-      {
-        Node *src = g.getNode(*si);
-        Node *dst = g.getNode(*user);
-        if (src == nullptr || dst == nullptr)
-          continue;
-        src->addNeighbor(*dst, EdgeType::DATA_RAW);
-      }
-    }
-  }
+  auto dep_res = _mem_dep_res->getDependency(&inst);
+  auto dep_inst = dep_res.getInst();
+
+  if (!dep_inst)
+    return;
+  if (!isa<StoreInst>(dep_inst))
+    return;
+
+  Node *src = g.getNode(inst);
+  Node *dst = g.getNode(*dep_inst);
+  if (src == nullptr || dst == nullptr)
+    return;
+  src->addNeighbor(*dst, EdgeType::DATA_RAW);
 }
 
 bool pdg::DataDependencyGraph::runOnFunction(Function &F)
 {
-  andersAA = &getAnalysis<CFLAndersAAWrapperPass>().getResult();
+  _anders_aa = &getAnalysis<CFLAndersAAWrapperPass>().getResult();
+  _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>().getMemDep();
   for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
   {
     addDefUseEdges(*inst_iter);
@@ -79,6 +80,7 @@ bool pdg::DataDependencyGraph::runOnFunction(Function &F)
 void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {
   AU.addRequired<CFLAndersAAWrapperPass>();
+  AU.addRequired<MemoryDependenceWrapperPass>();
   AU.setPreservesAll();
 }
 

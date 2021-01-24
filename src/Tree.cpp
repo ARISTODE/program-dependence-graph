@@ -5,13 +5,21 @@ using namespace llvm;
 pdg::TreeNode::TreeNode(const TreeNode &tree_node) : Node(tree_node.getNodeType())
 {
   _func = tree_node.getFunc();
-  _di_type = tree_node.getDIType();
+  _node_di_type = tree_node.getDIType();
   _node_type = tree_node.getNodeType();
+}
+
+pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
+{
+  _node_di_type = di_type;
+  _depth = depth;
+  _parent_node = parent_node;
+  _tree = tree;
 }
 
 pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
 {
-  _di_type = di_type;
+  _node_di_type = di_type;
   _depth = depth;
   _parent_node = parent_node;
   _tree = tree;
@@ -21,15 +29,17 @@ pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *paren
 int pdg::TreeNode::expandNode()
 {
   // expand debugging information here
-  if (_di_type == nullptr)
+  if (_node_di_type == nullptr)
     return 0;
+  DIType* dt = dbgutils::stripAttributes(*_node_di_type);
+  dt = dbgutils::stripMemberTag(*dt);
   // iterate through all the child nodes, build a tree node for each of them.
-  if (!dbgutils::isPointerType(*_di_type) && !dbgutils::isStructType(*_di_type))
+  if (!dbgutils::isPointerType(*dt) && !dbgutils::isStructType(*dt))
     return 0;
 
-  if (dbgutils::isPointerType(*_di_type))
+  if (dbgutils::isPointerType(*dt))
   {
-    DIType* pointed_obj_dt = dbgutils::getLowestDIType(*_di_type);
+    DIType* pointed_obj_dt = dbgutils::getLowestDIType(*dt);
     TreeNode *new_child_node = new TreeNode(*_func, pointed_obj_dt, _depth + 1, this, _tree, getNodeType());
     new_child_node->computeDerivedAddrVarsFromParent();
     _children.push_back(new_child_node);
@@ -37,9 +47,9 @@ int pdg::TreeNode::expandNode()
     return 1;
   }
   // TODO: should change to aggregate type later
-  if (dbgutils::isStructType(*_di_type))
+  if (dbgutils::isStructType(*dt))
   {
-    auto di_node_arr = dyn_cast<DICompositeType>(_di_type)->getElements();
+    auto di_node_arr = dyn_cast<DICompositeType>(dt)->getElements();
     for (unsigned i = 0; i < di_node_arr.size(); i++)
     {
       DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
@@ -56,28 +66,30 @@ int pdg::TreeNode::expandNode()
 
 void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 {
-  if (_parent_node == nullptr)
+  if (!_parent_node)
+    return;
+  if (!_node_di_type)
     return;
   std::unordered_set<llvm::Value *> base_node_addr_vars;
   // handle struct pointer
   auto grand_parent_node = _parent_node->getParentNode();
   // TODO: now hanlde struct specifically, but should also verify on other aggregate pointer types
-  if (dbgutils::isStructType(*_parent_node->getDIType()) && dbgutils::isStructPointerType(*grand_parent_node->getDIType()))
+  if (grand_parent_node != nullptr && dbgutils::isStructType(*_parent_node->getDIType()) && dbgutils::isStructPointerType(*grand_parent_node->getDIType()))
     base_node_addr_vars = grand_parent_node->getAddrVars();
   else
     base_node_addr_vars = _parent_node->getAddrVars();
-
+  
   for (auto base_node_addr_var :base_node_addr_vars)
   {
     for (auto user : base_node_addr_var->users())
     {
+      // handle load instruction
       if (LoadInst* li = dyn_cast<LoadInst>(user))
-      {
         _addr_vars.insert(li);
-      }
+      // handle gep instruction
       if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
       {
-        if (pdgutils::isGEPOffsetMatchDIOffset(*_di_type, *gep))
+        if (pdgutils::isGEPOffsetMatchDIOffset(*_node_di_type, *gep))
           _addr_vars.insert(gep);
       }
     }

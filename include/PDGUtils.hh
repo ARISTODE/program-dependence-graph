@@ -8,6 +8,8 @@
 
 namespace pdg
 {
+  class TreeNode;
+
   namespace pdgutils
   {
     llvm::StructType *getStructTypeFromGEP(llvm::GetElementPtrInst &gep);
@@ -24,5 +26,6 @@ namespace pdg
     std::set<llvm::Value *> computeAddrTakenVarsFromAlloc(llvm::AllocaInst &ai);
     void printTreeNodesLabel(Node* n, llvm::raw_string_ostream &OS, std::string tree_node_type_str);
     std::string stripFuncNameVersionNumber(std::string func_name);
+    std::string computeTreeNodeID(TreeNode &tree_node);
   } // namespace pdgutils
 } // namespace pdg

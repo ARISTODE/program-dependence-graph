@@ -4,6 +4,12 @@ using namespace llvm;
 
 char pdg::DataAccessAnalysis::ID = 0;
 
+void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
+{
+  AU.addRequired<ProgramDependencyGraph>();
+  AU.setPreservesAll();
+}
+
 bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 {
   auto start = std::chrono::high_resolution_clock::now();
@@ -38,12 +44,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
   errs() << "data analysis pass takes: " << duration.count() << "\n";
   return false;
-}
-
-void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
-{
-  AU.addRequired<ProgramDependencyGraph>();
-  AU.setPreservesAll();
 }
 
 std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Value &val)

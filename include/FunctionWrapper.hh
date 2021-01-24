@@ -8,21 +8,6 @@ namespace pdg
 {
   class FunctionWrapper
   {
-  private:
-    Node* _entry_node;
-    llvm::Function *_func;
-    std::vector<llvm::AllocaInst *> _alloca_insts;
-    std::vector<llvm::DbgDeclareInst *> _dbg_declare_insts;
-    std::vector<llvm::LoadInst *> _load_insts;
-    std::vector<llvm::StoreInst *> _store_insts;
-    std::vector<llvm::CallInst *> _call_insts;
-    std::vector<llvm::ReturnInst *> _return_insts;
-    std::vector<llvm::Argument *> _arg_list;
-    std::map<llvm::Argument *, Tree *> _arg_formal_in_tree_map;
-    std::map<llvm::Argument *, Tree *> _arg_formal_out_tree_map;
-    Tree *_ret_val_formal_in_tree;
-    Tree *_ret_val_formal_out_tree;
-
   public:
     FunctionWrapper(llvm::Function *func)
     {
@@ -56,6 +41,22 @@ namespace pdg
     std::vector<llvm::ReturnInst *> &getReturnInsts() { return _return_insts; }
     std::vector<llvm::Argument *> &getArgList() { return _arg_list; }
     bool hasNullRetVal() { return (_ret_val_formal_in_tree == nullptr); }
+
+  private:
+    Node *_entry_node;
+    llvm::Function *_func;
+    std::vector<llvm::AllocaInst *> _alloca_insts;
+    std::vector<llvm::DbgDeclareInst *> _dbg_declare_insts;
+    std::vector<llvm::LoadInst *> _load_insts;
+    std::vector<llvm::StoreInst *> _store_insts;
+    std::vector<llvm::CallInst *> _call_insts;
+    std::vector<llvm::ReturnInst *> _return_insts;
+    std::vector<llvm::Argument *> _arg_list;
+    std::map<llvm::Argument *, Tree *> _arg_formal_in_tree_map;
+    std::map<llvm::Argument *, Tree *> _arg_formal_out_tree_map;
+    Tree *_ret_val_formal_in_tree;
+    Tree *_ret_val_formal_out_tree;
+
   };
 } // namespace pdg
 

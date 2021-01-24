@@ -30,7 +30,8 @@ namespace pdg
     RETURN,
     FUNC_ENTRY,
     GLOBAL_VALUE,
-    CALL
+    CALL,
+    GLOBAL_TYPE
   };
 
   enum class AccessTag

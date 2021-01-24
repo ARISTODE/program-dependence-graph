@@ -18,6 +18,7 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   _module = &M;
   _PDG = &ProgramGraph::getInstance();
   _PDG->build(M);
+  _PDG->bindDITypeToNodes(M);
   for (auto &F : M)
   {
     if (F.isDeclaration())

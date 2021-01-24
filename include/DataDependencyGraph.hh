@@ -2,6 +2,7 @@
 #define DATADEPENDENCYGRAPH_H_
 #include "Graph.hh"
 #include "llvm/Analysis/CFLAndersAliasAnalysis.h"
+#include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 
 
@@ -9,8 +10,6 @@ namespace pdg
 {
   class DataDependencyGraph : public llvm::FunctionPass
   {
-  private:
-    llvm::CFLAndersAAResult *andersAA;
   public:
     static char ID;
     DataDependencyGraph() : llvm::FunctionPass(ID){};
@@ -20,6 +19,9 @@ namespace pdg
     void addDefUseEdges(llvm::Instruction &inst);
     void addRAWEdges(llvm::Instruction &inst);
     void addAliasEdges(llvm::Instruction &inst);
+  private:
+    llvm::CFLAndersAAResult *_anders_aa;
+    llvm::MemoryDependenceResults *_mem_dep_res;
   };
 } // namespace pdg
 #endif
