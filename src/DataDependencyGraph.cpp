@@ -61,7 +61,7 @@ void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
   Node *dst = g.getNode(*dep_inst);
   if (src == nullptr || dst == nullptr)
     return;
-  src->addNeighbor(*dst, EdgeType::DATA_RAW);
+  dst->addNeighbor(*src, EdgeType::DATA_RAW);
 }
 
 bool pdg::DataDependencyGraph::runOnFunction(Function &F)

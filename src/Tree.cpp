@@ -78,14 +78,16 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
     base_node_addr_vars = grand_parent_node->getAddrVars();
   else
     base_node_addr_vars = _parent_node->getAddrVars();
-  
-  for (auto base_node_addr_var :base_node_addr_vars)
+
+  for (auto base_node_addr_var : base_node_addr_vars)
   {
     for (auto user : base_node_addr_var->users())
     {
       // handle load instruction
-      if (LoadInst* li = dyn_cast<LoadInst>(user))
+      if (LoadInst *li = dyn_cast<LoadInst>(user))
+      {
         _addr_vars.insert(li);
+      }
       // handle gep instruction
       if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
       {
@@ -97,18 +99,17 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 }
 
 //  ====== Tree =======
-
-pdg::Tree::Tree(const Tree& src_tree)
+pdg::Tree::Tree(const Tree &src_tree)
 {
-  TreeNode* src_tree_root_node = src_tree.getRootNode();
-  TreeNode* new_root_node = new TreeNode(*src_tree_root_node);
+  TreeNode *src_tree_root_node = src_tree.getRootNode();
+  TreeNode *new_root_node = new TreeNode(*src_tree_root_node);
   _root_node = new_root_node;
   _size = 0;
 }
 
 void pdg::Tree::print()
 {
-  std::queue<TreeNode*> node_queue;
+  std::queue<TreeNode *> node_queue;
   node_queue.push(_root_node);
   while (!node_queue.empty())
   {
@@ -123,7 +124,8 @@ void pdg::Tree::print()
       else
       {
         if (current_node->getDIType() != nullptr)
-          errs() << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << "(" << current_node->getAddrVars().size() << ")" << ", ";
+          errs() << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << "(" << current_node->getAddrVars().size() << ")"
+                 << ", ";
       }
       for (auto child : current_node->getChildNodes())
       {

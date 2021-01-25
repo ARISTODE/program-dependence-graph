@@ -55,8 +55,10 @@ namespace pdg
     EdgeSet::iterator end() { return _out_edge_set.end(); }
     EdgeSet::const_iterator begin() const { return _out_edge_set.begin(); }
     EdgeSet::const_iterator end() const { return _out_edge_set.end(); }
-    std::set<Node *> getOutNeighbors();
     std::set<Node *> getInNeighbors();
+    std::set<Node *> getInNeighborsWithDepType(EdgeType edge_type);
+    std::set<Node *> getOutNeighbors();
+    std::set<Node *> getOutNeighborsWithDepType(EdgeType edge_type);
     virtual ~Node() = default;
 
   protected:

@@ -207,8 +207,8 @@ std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
   TreeNode* parent_node = tree_node.getParentNode();
   if (parent_node != nullptr)
   {
-    DIType *parent_di_type = dbgutils::stripMemberTag(*parent_node->getDIType());
-    if (!parent_di_type)
+    auto parent_di_type = dbgutils::stripMemberTag(*parent_node->getDIType());
+    if (parent_di_type != nullptr)
       parent_type_name = dbgutils::getSourceLevelTypeName(*parent_di_type);
   }
 

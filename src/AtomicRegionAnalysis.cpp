@@ -19,8 +19,6 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   setupLockMap();
   computeCriticalSections(M);
   computeAtomicOperations(M);
-  // dumpCS();
-  // dumpAtomicOps();
   computeWarningCS();
   computeWarningAtomicOps();
   errs() << "CS Warning: " << _warning_cs_count << "/" << _critical_sections.size() << "\n";
@@ -169,6 +167,7 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
     {
       if (in_edge->getEdgeType() != EdgeType::VAL_DEP)
         continue;
+      errs() << "find in edge val_dep on addr var: " << *modified_var << "\n";
       TreeNode* tree_node = static_cast<TreeNode*>(in_edge->getSrcNode());
       if (_SDA->isSharedFieldID(pdgutils::computeTreeNodeID(*tree_node)))
         is_shared = true;

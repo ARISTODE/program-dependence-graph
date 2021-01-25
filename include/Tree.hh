@@ -10,7 +10,6 @@
 namespace pdg
 {
   class Tree;
-
   class TreeNode : public Node
   {
     public:

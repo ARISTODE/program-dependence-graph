@@ -19,6 +19,17 @@ std::set<pdg::Node *> pdg::Node::getInNeighbors()
   return in_neighbors;
 }
 
+std::set<pdg::Node *> pdg::Node::getInNeighborsWithDepType(pdg::EdgeType edge_type)
+{
+  std::set<Node *> in_neighbors_with_dep_type;
+  for (auto edge : _in_edge_set)
+  {
+    if (edge->getEdgeType() == edge_type)
+      in_neighbors_with_dep_type.insert(edge->getDstNode());
+  }
+  return in_neighbors_with_dep_type;
+}
+
 std::set<pdg::Node *> pdg::Node::getOutNeighbors()
 {
   std::set<Node *> out_neighbors;
@@ -27,4 +38,15 @@ std::set<pdg::Node *> pdg::Node::getOutNeighbors()
     out_neighbors.insert(edge->getDstNode());
   }
   return out_neighbors;
+}
+
+std::set<pdg::Node *> pdg::Node::getOutNeighborsWithDepType(pdg::EdgeType edge_type)
+{
+  std::set<Node *> out_neighbors_with_dep_type;
+  for (auto edge : _out_edge_set)
+  {
+    if (edge->getEdgeType() == edge_type)
+      out_neighbors_with_dep_type.insert(edge->getDstNode());
+  }
+  return out_neighbors_with_dep_type;
 }
