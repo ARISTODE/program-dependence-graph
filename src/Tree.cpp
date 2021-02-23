@@ -75,18 +75,25 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
   auto grand_parent_node = _parent_node->getParentNode();
   // TODO: now hanlde struct specifically, but should also verify on other aggregate pointer types
   if (grand_parent_node != nullptr && dbgutils::isStructType(*_parent_node->getDIType()) && dbgutils::isStructPointerType(*grand_parent_node->getDIType()))
+  {
     base_node_addr_vars = grand_parent_node->getAddrVars();
+  }
   else
     base_node_addr_vars = _parent_node->getAddrVars();
+
+  bool is_struct_field = false;
+  if (dbgutils::isStructType(*_parent_node->getDIType()))
+    is_struct_field = true;
 
   for (auto base_node_addr_var : base_node_addr_vars)
   {
     for (auto user : base_node_addr_var->users())
     {
-      // handle load instruction
+      // handle load instruction, field should not get the load inst from the sturct pointer.
       if (LoadInst *li = dyn_cast<LoadInst>(user))
       {
-        _addr_vars.insert(li);
+        if (!is_struct_field)
+          _addr_vars.insert(li);
       }
       // handle gep instruction
       if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
@@ -136,9 +143,8 @@ void pdg::Tree::print()
   }
 }
 
-void pdg::Tree::build()
+void pdg::Tree::build(int max_tree_depth)
 {
-  int max_tree_depth = 5;
   int current_tree_depth = 0;
   std::queue<TreeNode *> node_queue;
   node_queue.push(_root_node);

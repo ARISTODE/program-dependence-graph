@@ -17,19 +17,36 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   auto start = std::chrono::high_resolution_clock::now();
   _module = &M;
   _PDG = &ProgramGraph::getInstance();
-  _PDG->build(M);
-  _PDG->bindDITypeToNodes(M);
+  PTAWrapper &ptaw = PTAWrapper::getInstance();
+
+  PDGCallGraph &call_g = PDGCallGraph::getInstance();
+  if (!call_g.isBuild())
+    call_g.build(M);
+  
+
+  if (!_PDG->isBuild())
+  {
+    _PDG->build(M);
+    _PDG->bindDITypeToNodes(M);
+  }
+
+  if (!ptaw.hasPTASetup())
+    ptaw.setupPTA(M);
+  unsigned func_size = 0;
   for (auto &F : M)
   {
     if (F.isDeclaration())
       continue;
     connectIntraprocDependencies(F);
     connectInterprocDependencies(F);
+    func_size++;
   }
+  errs() << "func size: " << func_size << "\n";
   errs() << "Finsh adding dependencies" << "\n";
   auto stop = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
   errs() << "building PDG takes: " <<  duration.count() << "\n";
+  errs() << "PDG Node size: " << _PDG->numNode() << "\n";
   return false;
 }
 
@@ -141,11 +158,9 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
 // ===== connect dependencies =====
 void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
 {
-  // add data dependency edges
-  getAnalysis<DataDependencyGraph>(F); // add data dependencies for nodes in F
   // add control dependency edges
   // TODO: Figure out why control pass will run automatically.
-  // getAnalysis<ControlDependencyGraph>(F); // add data dependencies for nodes in F
+  getAnalysis<ControlDependencyGraph>(F); // add data dependencies for nodes in F
   // connect formal tree with address variables
   FunctionWrapper* func_w = getFuncWrapper(F);
   Node* entry_node = func_w->getEntryNode();
@@ -226,12 +241,26 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
   {
     TreeNode* current_node = node_queue.front();
     node_queue.pop();
+    TreeNode* parent_node = current_node->getParentNode();
+    std::unordered_set<Value*> parent_node_addr_vars;
+    if (parent_node != nullptr)
+      parent_node_addr_vars = parent_node->getAddrVars();
     for (auto addr_var : current_node->getAddrVars())
     {
       if (!_PDG->hasNode(*addr_var))
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
       current_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
+      auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+      for (auto alias_node : alias_nodes)
+      {
+        Value* alias_node_val = alias_node->getValue();
+        if (alias_node_val == nullptr)
+          continue;
+        if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
+          continue;
+        current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
+      }
     }
 
     for (auto child_node : current_node->getChildNodes())
@@ -332,42 +361,6 @@ void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actual_
   }
 }
 
-// ===== Graph Traverse Pass =====
-
-// DFS search
-bool pdg::ProgramDependencyGraph::canReach(pdg::Node &src, pdg::Node &dst)
-{
-  // TODO: prune by call graph rechability, improve traverse efficiency
-  if (canReach(src, dst, {}))
-    return true;
-  return false;
-}
-
-bool pdg::ProgramDependencyGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types)
-{
-  std::set<Node *> visited;
-  std::stack<Node *> node_stack;
-  node_stack.push(&src);
-
-  while (!node_stack.empty())
-  {
-    auto current_node = node_stack.top();
-    node_stack.pop();
-    if (visited.find(current_node) != visited.end())
-      continue;
-    visited.insert(current_node);
-    if (current_node == &dst)
-      return true;
-    for (auto out_edge : current_node->getOutEdgeSet())
-    {
-      // exclude path
-      if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
-        continue;
-      node_stack.push(out_edge->getDstNode());
-    }
-  }
-  return false;
-}
 
 static RegisterPass<pdg::ProgramDependencyGraph>
     PDG("pdg", "Program Dependency Graph Construction", false, true);

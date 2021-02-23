@@ -58,7 +58,7 @@ namespace pdg
     void setSize(int size) { _size = size; }
     void increaseTreeSize() { _size++; }
     void print();
-    void build();
+    void build(int max_tree_depth = 5);
     llvm::Value *getBaseVal() { return _base_val; }
     void setBaseVal(llvm::Value &v) { _base_val = &v; }
 

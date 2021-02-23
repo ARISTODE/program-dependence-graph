@@ -25,6 +25,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   dumpSharedFieldID();
+  printPingPongCalls(M);
   return false;
 }
 
@@ -70,23 +71,102 @@ std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file
 
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()
 {
-  for (auto F : _boundary_funcs)
+  // case 1: for each struct pointer argument passed in boundary, consider the 
+  // struct type as shared
+  // for (auto F : _boundary_funcs)
+  // {
+  //   if (F->isDeclaration() || F->empty())
+  //     continue;
+  //   FunctionWrapper* fw = _PDG->getFuncWrapper(*F);
+  //   for (auto &arg : F->args())
+  //   {
+  //     DIType* arg_di_type = fw->getArgDIType(arg);
+  //     if (arg_di_type == nullptr)
+  //       continue;
+  //     if (!dbgutils::isStructPointerType(*arg_di_type))
+  //       continue;
+  //     DIType *arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
+  //     if (!arg_lowest_di_type)
+  //       continue;
+  //     if (dbgutils::isStructType(*arg_lowest_di_type))
+  //       _shared_struct_di_types.insert(arg_lowest_di_type);
+  //     // if (!arg_lowest_di_type)
+  //     //   continue;
+  //     // if (dbgutils::isStructType(*arg_lowest_di_type))
+  //     // {
+  //     //   auto contained_struct_di_types = dbgutils::computeContainedStructTypes(*arg_lowest_di_type);
+  //     //   _shared_struct_di_types.insert(contained_struct_di_types.begin(), contained_struct_di_types.end());
+  //     // }
+  //   }
+  // }
+
+  // case 2: for struct types used in both domian, consider them as shared
+  std::set<std::string> driver_struct_type_names;
+  for (auto func : _driver_domain_funcs)
   {
-    if (F->isDeclaration() || F->empty())
+    if (func->isDeclaration())
       continue;
-    FunctionWrapper* fw = _PDG->getFuncWrapper(*F);
-    for (auto &arg : F->args())
+    for (auto inst_i = inst_begin(func); inst_i != inst_end(func); inst_i++)
     {
-      DIType* arg_di_type = fw->getArgDIType(arg);
-      DIType* arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
-      if (!arg_lowest_di_type)
+      Node* n = _PDG->getNode(*inst_i);
+      if (!n)
         continue;
-      if (dbgutils::isStructType(*arg_lowest_di_type))
+      DIType* node_di_type = n->getDIType();
+      if (StoreInst *si = dyn_cast<StoreInst>(&*inst_i))
       {
-        auto contained_struct_di_types = dbgutils::computeContainedStructTypes(*arg_lowest_di_type);
-        _shared_struct_di_types.insert(contained_struct_di_types.begin(), contained_struct_di_types.end());
+        auto val_op = si->getValueOperand()->stripPointerCasts();
+        Node* val_n = _PDG->getNode(*val_op);
+        if (!val_n)
+          continue;
+        node_di_type = val_n->getDIType();
+      }
+      if (!node_di_type)
+        continue;
+      DIType* lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
+      if (lowest_di_type == nullptr)
+        continue;
+      if (dbgutils::isStructType(*lowest_di_type))
+        driver_struct_type_names.insert(dbgutils::getSourceLevelTypeName(*lowest_di_type));
+    }
+  }
+  errs() << " === driver side struct types ===\n";
+  for (auto t : driver_struct_type_names)
+  {
+    errs() << "\t" << t << "\n";
+  }
+  std::set<std::string> processed_struct_names;
+  for (auto func : _kernel_domain_funcs)
+  {
+    if (func->isDeclaration())
+      continue;
+    for (auto inst_i = inst_begin(func); inst_i != inst_end(func); inst_i++)
+    {
+      Node* n = _PDG->getNode(*inst_i);
+      if (!n)
+        continue;
+      DIType* node_di_type = n->getDIType();
+      if (!node_di_type)
+        continue;
+      if (dbgutils::isStructType(*node_di_type) || dbgutils::isStructPointerType(*node_di_type))
+      {
+        DIType* lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
+        assert(lowest_di_type != nullptr && "null lowest di type (computeSharedStructTypes)\n");
+        std::string struct_type_name = dbgutils::getSourceLevelTypeName(*lowest_di_type);
+        struct_type_name = pdgutils::stripVersionTag(struct_type_name);
+        if (processed_struct_names.find(struct_type_name) != processed_struct_names.end())
+          continue;
+        // errs() << "kernel struct type name: " << struct_type_name << "\n";
+        processed_struct_names.insert(struct_type_name);
+        if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end())
+          _shared_struct_di_types.insert(lowest_di_type);
       }
     }
+  }
+  errs() << "found " << _shared_struct_di_types.size() << " shared struct types\n";
+  errs() << " ==== shared types ====\n";
+  for (auto t : _shared_struct_di_types)
+  {
+    errs() << "\t" << dbgutils::getSourceLevelTypeName(*t) << "\n";
   }
 }
 
@@ -102,7 +182,7 @@ void pdg::SharedDataAnalysis::buildTreesForSharedStructDIType(Module &M)
       root_node->addAddrVar(*var);
     }
     type_tree->setRootNode(*root_node);
-    type_tree->build();
+    type_tree->build(2);
     connectTypeTreeToAddrVars(*type_tree);
     _global_struct_di_type_map.insert(std::make_pair(shared_struct_di_type, type_tree));
   }
@@ -139,9 +219,13 @@ void pdg::SharedDataAnalysis::computeVarsWithDITypeInFunc(DIType &dt, Function &
     if (!inst_node)
       continue;
     DIType* inst_di_type = inst_node->getDIType();
-    if (!inst_di_type)
+    if (inst_di_type == nullptr)
       continue;
-    if (dbgutils::hasSameDIName(dt, *inst_di_type))
+    // should also consider the pointer to the struct.
+    DIType *inst_lowest_di_type = dbgutils::getLowestDIType(*inst_di_type);
+    if (inst_lowest_di_type == nullptr)
+      continue;
+    if (dbgutils::hasSameDIName(dt, *inst_lowest_di_type))
       vars.insert(&*inst_iter);
   }
 }
@@ -156,6 +240,17 @@ std::set<Value *> pdg::SharedDataAnalysis::computeVarsWithDITypeInModule(DIType 
     computeVarsWithDITypeInFunc(dt, F, vars);
   }
   return vars;
+}
+
+bool pdg::SharedDataAnalysis::isStructFieldNode(TreeNode &tree_node)
+{
+  auto parent_node = tree_node.getParentNode();
+  if (!parent_node)
+    return false;
+  auto parent_node_di_type = parent_node->getDIType();
+  if (!parent_node_di_type)
+    return false;
+  return dbgutils::isStructType(*parent_node_di_type);
 }
 
 bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &tree_node)
@@ -199,10 +294,18 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
     node_queue.push(tree->getRootNode());
     while (!node_queue.empty())
     {
-      TreeNode* current_tree_node = node_queue.front();
+      TreeNode *current_tree_node = node_queue.front();
       node_queue.pop();
-      if (isTreeNodeShared(*current_tree_node))
-        _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_tree_node));
+      DIType* node_di_type = current_tree_node->getDIType();
+      if (node_di_type == nullptr)
+        continue;
+      if (isStructFieldNode(*current_tree_node))
+      {
+        if (dbgutils::isFuncPointerType(*node_di_type) && current_tree_node->getParentNode() != nullptr)
+          _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_tree_node));
+        else if (isTreeNodeShared(*current_tree_node))
+          _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_tree_node));
+      }
 
       for (auto child : current_tree_node->getChildNodes())
       {
@@ -219,6 +322,75 @@ void pdg::SharedDataAnalysis::dumpSharedFieldID()
   {
     errs() << id << "\n";
   }
+}
+
+void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
+{
+  auto &call_g = PDGCallGraph::getInstance();
+  if (!call_g.isBuild())
+    call_g.build(M);
+  unsigned cross_boundary_times = 0;
+  for (auto f : _boundary_funcs)
+  {
+    if (f->isDeclaration())
+      continue;
+    auto caller_node = call_g.getNode(*f);
+    if (!caller_node)
+      continue;
+
+    std::set<Function *> opposite_domain_funcs = _driver_domain_funcs;
+    if (_driver_domain_funcs.find(f) != _driver_domain_funcs.end())
+      opposite_domain_funcs = _kernel_domain_funcs;
+    
+    // check if this func can be called from the other domain.
+    bool is_called = false;
+    for (auto in_neighbor : caller_node->getInNeighbors())
+    {
+      auto node_val = in_neighbor->getValue();
+      if (!isa<Function>(node_val))
+        continue;
+      Function* caller = cast<Function>(node_val);
+      if (opposite_domain_funcs.find(caller) != opposite_domain_funcs.end())
+      {
+        is_called = true;
+        break;
+      }
+    }
+
+    if (!is_called)
+      continue;
+    
+    std::queue<Node*> node_queue;
+    std::unordered_set<Node *> seen_node;
+    node_queue.push(caller_node);
+    while (!node_queue.empty())
+    {
+      Node* n = node_queue.front();
+      node_queue.pop();
+      if (seen_node.find(n) != seen_node.end())
+        continue;
+      seen_node.insert(n);
+      auto node_val = n->getValue();
+      if (!isa<Function>(node_val))
+        continue;
+      Function* called_f = cast<Function>(node_val);
+      if (opposite_domain_funcs.find(called_f) != opposite_domain_funcs.end())
+      {
+        cross_boundary_times++;
+        break;
+      }
+
+      for (auto out_neighbor : n->getOutNeighbors())
+      {
+        node_queue.push(out_neighbor);
+      }
+    }
+  }
+
+  errs() << "================  ping pong call stats  ==================\n";
+  errs() << "cross boundary times: " << cross_boundary_times << "\n";
+  errs() << "num of boundary funcs: " << _boundary_funcs.size() << "\n";
+  errs() << "==========================================================\n";
 }
 
 static RegisterPass<pdg::SharedDataAnalysis>

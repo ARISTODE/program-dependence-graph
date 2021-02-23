@@ -16,20 +16,26 @@ namespace pdg
     llvm::StringRef getPassName() const override { return "Shared Data Analysis"; }
     bool runOnModule(llvm::Module &M) override;
     void setupDriverFuncs(llvm::Module &M);
+    std::set<llvm::Function *> &getDriverFuncs() { return _driver_domain_funcs; }
     void setupKernelFuncs(llvm::Module &M);
+    std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
     void setupBoundaryFuncs(llvm::Module &M);
+    std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; };
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     void computeSharedStructDITypes();
     void buildTreesForSharedStructDIType(llvm::Module &M);
     void connectTypeTreeToAddrVars(Tree &tree);
     void computeVarsWithDITypeInFunc(llvm::DIType &dt, llvm::Function &F, std::set<llvm::Value *> &vars);
     std::set<llvm::Value *> computeVarsWithDITypeInModule(llvm::DIType &dt, llvm::Module &M);
+    bool isStructFieldNode(TreeNode &tree_node);
     bool isTreeNodeShared(TreeNode &tree_node);
     bool isSharedFieldID(std::string field_id);
     void computeSharedDataVars();
     void computeSharedFieldID();
     void dumpSharedFieldID();
     ProgramGraph *getPDG() { return _PDG; }
+    // some side tests
+    void printPingPongCalls(llvm::Module &M);
 
   private:
     ProgramGraph *_PDG;

@@ -6,8 +6,8 @@ namespace pdg
   enum class EdgeType
   {
     CALL,
+    IND_CALL,
     CONTROL,
-    DATA_GENERAL,
     DATA_DEF_USE,
     DATA_RAW,
     DATA_READ,
@@ -29,9 +29,10 @@ namespace pdg
     ACTUAL_OUT,
     RETURN,
     FUNC_ENTRY,
-    GLOBAL_VALUE,
+    GLOBAL_VAR,
     CALL,
-    GLOBAL_TYPE
+    GLOBAL_TYPE,
+    FUNC
   };
 
   enum class AccessTag

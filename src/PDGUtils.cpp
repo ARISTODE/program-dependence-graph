@@ -68,6 +68,21 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
   uint64_t gep_bit_offset = getGEPOffsetInBits(module, *struct_ty, gep);
   if (gep_bit_offset < 0)
     return false;
+
+  // TODO:  
+  // Value* lshr_op_inst = getLShrOnGep(gep);
+  // if (lshr_op_inst != nullptr)
+  // {
+  //   if (auto lshr = dyn_cast<UnaryOperator>(lshr_op_inst))
+  //   {
+  //     auto shift_bits = lshr->getOperand(1);        // constant int in llvm
+  //     if (ConstantInt *ci = dyn_cast<ConstantInt>(shift_bits))
+  //     {
+  //       gep_bit_offset += ci->getZExtValue(); // add the value as an unsigned integer
+  //     }
+  //   }
+  // }
+
   uint64_t di_type_bit_offset = dt.getOffsetInBits();
   if (gep_bit_offset == di_type_bit_offset)
     return true;
@@ -185,7 +200,7 @@ std::set<Value *> pdg::pdgutils::computeAddrTakenVarsFromAlloc(AllocaInst &ai)
 
 void pdg::pdgutils::printTreeNodesLabel(Node *node, raw_string_ostream &OS, std::string tree_node_type_str)
 {
-  TreeNode *n = dynamic_cast<TreeNode *>(node);
+  TreeNode *n = static_cast<TreeNode *>(node);
   int tree_node_depth = n->getDepth();
   DIType *node_di_type = n->getDIType();
   std::string field_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
@@ -218,4 +233,38 @@ std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
   node_field_name = dbgutils::getSourceLevelVariableName(*node_di_type);
   
   return (parent_type_name + node_field_name);
+}
+
+std::string pdg::pdgutils::stripVersionTag(std::string str)
+{
+  size_t pos = 0;
+  size_t nth = 2;
+  while (nth > 0)
+  {
+    pos = str.find(".", pos + 1);
+    if (pos == std::string::npos)
+      return str;
+    nth--;
+  }
+
+  if (pos != std::string::npos)
+    return str.substr(0, pos);
+  return str;
+}
+
+
+Value *pdg::pdgutils::getLShrOnGep(GetElementPtrInst &gep)
+{
+  for (auto u : gep.users())
+  {
+    if (LoadInst *li = dyn_cast<LoadInst>(u))
+    {
+      for (auto user : li->users())
+      {
+        if (isa<UnaryOperator>(user))
+          return user;
+      }
+    }
+  }
+  return nullptr;
 }

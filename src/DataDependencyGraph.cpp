@@ -3,22 +3,49 @@
 char pdg::DataDependencyGraph::ID = 0;
 
 using namespace llvm;
+
+bool pdg::DataDependencyGraph::runOnModule(Module &M)
+{
+  // setup SVF 
+  ProgramGraph &g = ProgramGraph::getInstance();
+  PTAWrapper &ptaw = PTAWrapper::getInstance();
+  if (!g.isBuild())
+  {
+    g.build(M);
+    g.bindDITypeToNodes(M);
+  }
+
+  if (!ptaw.hasPTASetup())
+    ptaw.setupPTA(M);
+
+  for (auto &F : M)
+  {
+    if (F.isDeclaration() || F.empty())
+      continue;
+    _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
+    for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+    {
+      addDefUseEdges(*inst_iter);
+      addRAWEdges(*inst_iter);
+      addAliasEdges(*inst_iter);
+    }
+  }
+  return false;
+}
+
+
 void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
+  PTAWrapper &ptaw = PTAWrapper::getInstance();
   Function* func = inst.getFunction();
-  auto inst_mem_loc = MemoryLocation::getOrNone(&inst); // get optional type
-  if (!inst_mem_loc)
-    return;
   for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); inst_iter++)
   {
     if (&inst == &*inst_iter)
       continue;
-    auto tmp_inst_mem_loc = MemoryLocation::getOrNone(&*inst_iter);
-    if (!tmp_inst_mem_loc)
-      continue;
-    AliasResult anders_aa_result = _anders_aa->query(*inst_mem_loc, *tmp_inst_mem_loc);
-    if (anders_aa_result != NoAlias)
+    auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
+    // auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
+    if (alias_result != NoAlias)
     {
       Node* src = g.getNode(inst);
       Node* dst = g.getNode(*inst_iter);
@@ -27,7 +54,6 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
       src->addNeighbor(*dst, EdgeType::DATA_ALIAS);
     }
   }
-  return;
 }
 
 void pdg::DataDependencyGraph::addDefUseEdges(Instruction &inst)
@@ -64,22 +90,43 @@ void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
   dst->addNeighbor(*src, EdgeType::DATA_RAW);
 }
 
-bool pdg::DataDependencyGraph::runOnFunction(Function &F)
+AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Value &v2)
 {
-  _anders_aa = &getAnalysis<CFLAndersAAWrapperPass>().getResult();
-  _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>().getMemDep();
-  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+  if (!v1.getType()->isPointerTy() || !v2.getType()->isPointerTy())
+    return NoAlias;
+  // check bit cast
+  if (BitCastInst *bci = dyn_cast<BitCastInst>(&v1))
   {
-    addDefUseEdges(*inst_iter);
-    addRAWEdges(*inst_iter);
-    addAliasEdges(*inst_iter);
+    if (bci->getOperand(0) == &v2)
+      return MustAlias;
   }
-  return false;
+  // handle load instruction  
+  if (LoadInst* li = dyn_cast<LoadInst>(&v1))
+  {
+    auto load_addr = li->getPointerOperand();
+    for (auto user : load_addr->users())
+    {
+      if (StoreInst *si = dyn_cast<StoreInst>(user))
+      {
+        if (si->getPointerOperand() == load_addr)
+        {
+          if (si->getValueOperand() == &v2)
+            return MustAlias;
+        }
+      }
+    }
+  }
+  // handle gep
+  if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&v1))
+  {
+    if (gep->getPointerOperand() == &v2)
+      return MustAlias;
+  }
+  return NoAlias;
 }
 
 void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {
-  AU.addRequired<CFLAndersAAWrapperPass>();
   AU.addRequired<MemoryDependenceWrapperPass>();
   AU.setPreservesAll();
 }

@@ -2,8 +2,74 @@
 
 using namespace llvm;
 
+// Generic Graph
+bool pdg::GenericGraph::hasNode(Value &v)
+{
+  return (_val_node_map.find(&v) != _val_node_map.end());
+}
+
+pdg::Node *pdg::GenericGraph::getNode(Value &v)
+{
+  if (!hasNode(v))
+    return nullptr;
+  return _val_node_map[&v];
+}
+
+
+// ===== Graph Traversal =====
+
+// DFS search
+bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
+{
+  // TODO: prune by call graph rechability, improve traverse efficiency
+  if (canReach(src, dst, {}))
+    return true;
+  return false;
+}
+
+bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types)
+{
+  std::set<Node *> visited;
+  std::stack<Node *> node_stack;
+  node_stack.push(&src);
+
+  while (!node_stack.empty())
+  {
+    auto current_node = node_stack.top();
+    node_stack.pop();
+    if (visited.find(current_node) != visited.end())
+      continue;
+    visited.insert(current_node);
+    if (current_node == &dst)
+      return true;
+    for (auto out_edge : current_node->getOutEdgeSet())
+    {
+      // exclude path
+      if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
+        continue;
+      node_stack.push(out_edge->getDstNode());
+    }
+  }
+  return false;
+}
+
+// PDG Specific
 void pdg::ProgramGraph::build(Module &M)
 {
+  // build node for global variables
+  for (auto &global_var : M.getGlobalList())
+  {
+    auto global_var_type = global_var.getType();
+    if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
+      continue;
+    DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
+    if (global_var_di_type == nullptr)
+      continue;
+    Node * n = new Node(global_var, GraphNodeType::GLOBAL_VAR);
+    _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
+    addNode(*n);
+  }
+
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
@@ -41,24 +107,13 @@ void pdg::ProgramGraph::build(Module &M)
       if (!hasFuncWrapper(*called_func))
         continue;
       CallWrapper *cw = new CallWrapper(*ci);
-      FunctionWrapper* callee_fw = getFuncWrapper(*called_func);
+      FunctionWrapper *callee_fw = getFuncWrapper(*called_func);
       cw->buildActualTreeForArgs(*callee_fw);
       cw->buildActualTreesForRetVal(*callee_fw);
       _call_wrapper_map.insert(std::make_pair(ci, cw));
     }
   }
-}
-
-bool pdg::ProgramGraph::hasNode(Value &v)
-{
-  return (_val_node_map.find(&v) != _val_node_map.end());
-}
-
-pdg::Node *pdg::ProgramGraph::getNode(Value &v)
-{
-  if (!hasNode(v))
-    return nullptr;
-  return _val_node_map[&v];
+  _is_build = true;
 }
 
 void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
@@ -93,12 +148,20 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
       n->setDIType(*node_di_type);
     }
   }
+
+  for (auto &global_var : M.getGlobalList())
+  {
+    Node *global_node = getNode(global_var);
+    if (global_node != nullptr)
+    {
+      auto dt = dbgutils::getGlobalVarDIType(global_var);
+      global_node->setDIType(*dt);
+    }
+  }
 }
 
 DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 {
-  // TODO: global variable
-
   // local variable 
   Function* func = n.getFunc();
   if (!func)
@@ -123,6 +186,8 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
         return nullptr;
       // DIType* retDIType = DIUtils::stripAttributes(sourceInstDIType);
       DIType *loaded_val_di_type = dbgutils::getBaseDIType(*load_addr_di_type);
+      if (loaded_val_di_type != nullptr)
+        return dbgutils::stripAttributes(*loaded_val_di_type);
       return loaded_val_di_type;
     }
 

@@ -25,7 +25,9 @@ namespace pdg
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
     std::set<llvm::Value *> computeAddrTakenVarsFromAlloc(llvm::AllocaInst &ai);
     void printTreeNodesLabel(Node* n, llvm::raw_string_ostream &OS, std::string tree_node_type_str);
+    llvm::Value *getLShrOnGep(llvm::GetElementPtrInst &gep);
     std::string stripFuncNameVersionNumber(std::string func_name);
     std::string computeTreeNodeID(TreeNode &tree_node);
+    std::string stripVersionTag(std::string str);
   } // namespace pdgutils
 } // namespace pdg
