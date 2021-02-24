@@ -156,7 +156,7 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
 {
   // add control dependency edges
   // TODO: Figure out why control pass will run automatically.
-  getAnalysis<ControlDependencyGraph>(F); // add data dependencies for nodes in F
+  getAnalysis<ControlDependencyGraph>(F); // add control dependencies for nodes in F
   // connect formal tree with address variables
   FunctionWrapper* func_w = getFuncWrapper(F);
   Node* entry_node = func_w->getEntryNode();

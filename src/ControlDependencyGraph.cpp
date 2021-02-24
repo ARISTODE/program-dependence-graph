@@ -38,16 +38,24 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
   {
     for (auto succ_iter = succ_begin(&BB); succ_iter != succ_end(&BB); succ_iter++)
     {
-      BasicBlock* succ_bb = *succ_iter;
-      if (!_PDT->dominates(&BB, succ_bb))
+      BasicBlock *succ_bb = *succ_iter;
+      if (!_PDT->dominates(succ_bb, &BB))
       {
-        BasicBlock* nearestCommonPostDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
+        BasicBlock *nearestCommonPostDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
+        Instruction *terminator = BB.getTerminator();
+        auto term_node = g.getNode(*terminator);
+        // self loop
         if (nearestCommonPostDominator == &BB)
         {
           // get terminator and connect with the basical block
-          Instruction *terminator = BB.getTerminator();
-          auto term_node = g.getNode(*terminator);
-          addControlDepFromNodeToBB(*term_node, *succ_bb);
+          addControlDepFromNodeToBB(*term_node, BB);
+        }
+        // conditions
+        DomTreeNode *domNode = _PDT->getNode(&*succ_bb);
+        while (domNode != nullptr && domNode->getBlock() != nullptr)
+        {
+          addControlDepFromNodeToBB(*term_node, *domNode->getBlock());
+          domNode = domNode->getIDom();
         }
       }
     }
