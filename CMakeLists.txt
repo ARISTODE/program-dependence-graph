@@ -14,7 +14,6 @@ message("LLVM STATUS:
 include_directories(${LLVM_INCLUDE_DIRS})
 link_directories(${LLVM_LIBRARY_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-include_directories("SVF/include")
 
 # Use the same C++ standard as LLVM does
 set(CMAKE_CXX_STANDARD 14 CACHE STRING "")
@@ -47,7 +46,6 @@ add_library(pdg MODULE
     ${SOURCES}
 )
 
-target_link_libraries(pdg PUBLIC "${CMAKE_SOURCE_DIR}/SVF/lib/libSvf.a")
 #
 # Turn on C++11, turn off C++ RTTI.
 #

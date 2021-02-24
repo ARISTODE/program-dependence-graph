@@ -17,21 +17,17 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   auto start = std::chrono::high_resolution_clock::now();
   _module = &M;
   _PDG = &ProgramGraph::getInstance();
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
 
   PDGCallGraph &call_g = PDGCallGraph::getInstance();
   if (!call_g.isBuild())
     call_g.build(M);
   
-
   if (!_PDG->isBuild())
   {
     _PDG->build(M);
     _PDG->bindDITypeToNodes(M);
   }
 
-  if (!ptaw.hasPTASetup())
-    ptaw.setupPTA(M);
   unsigned func_size = 0;
   for (auto &F : M)
   {

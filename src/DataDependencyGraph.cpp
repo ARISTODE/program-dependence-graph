@@ -6,23 +6,19 @@ using namespace llvm;
 
 bool pdg::DataDependencyGraph::runOnModule(Module &M)
 {
-  // setup SVF 
   ProgramGraph &g = ProgramGraph::getInstance();
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
   if (!g.isBuild())
   {
     g.build(M);
     g.bindDITypeToNodes(M);
   }
-
-  if (!ptaw.hasPTASetup())
-    ptaw.setupPTA(M);
-
+  
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
     _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
+    // setup alias query interface for each function
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
       addDefUseEdges(*inst_iter);
@@ -37,15 +33,14 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
 void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
   Function* func = inst.getFunction();
   for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); inst_iter++)
   {
     if (&inst == &*inst_iter)
       continue;
-    auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
-    // auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
-    if (anders_aa_result != NoAlias)
+    
+    auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
+    if (alias_result != NoAlias)
     {
       Node* src = g.getNode(inst);
       Node* dst = g.getNode(*inst_iter);
@@ -100,8 +95,8 @@ AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Valu
     if (bci->getOperand(0) == &v2)
       return MustAlias;
   }
-  // handle load instruction  
-  if (LoadInst* li = dyn_cast<LoadInst>(&v1))
+  // handle load instruction
+  if (LoadInst *li = dyn_cast<LoadInst>(&v1))
   {
     auto load_addr = li->getPointerOperand();
     for (auto user : load_addr->users())
@@ -116,20 +111,13 @@ AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Valu
       }
     }
   }
-  // handle gep
-  if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&v1))
+}
+
+  void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage & AU) const
   {
-    if (gep->getPointerOperand() == &v2)
-      return MustAlias;
+    AU.addRequired<MemoryDependenceWrapperPass>();
+    AU.setPreservesAll();
   }
-  return NoAlias;
-}
 
-void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
-{
-  AU.addRequired<MemoryDependenceWrapperPass>();
-  AU.setPreservesAll();
-}
-
-static RegisterPass<pdg::DataDependencyGraph>
-    DDG("ddg", "Data Dependency Graph Construction", false, true);
+  static RegisterPass<pdg::DataDependencyGraph>
+      DDG("ddg", "Data Dependency Graph Construction", false, true);
