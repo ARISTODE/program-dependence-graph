@@ -164,7 +164,7 @@ std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicR
 void pdg::AtomicRegionAnalysis::computeWarningCS()
 {
   ProgramGraph *G = _SDA->getPDG();
-  PDGCallGraph &CG = PDGCallGraph::getInstance();
+  // PDGCallGraph &CG = PDGCallGraph::getInstance();
 
   for (auto cs_pair : _critical_sections)
   {

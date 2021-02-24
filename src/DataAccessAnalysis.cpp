@@ -201,7 +201,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
   // generate function rpc stub
   rpc_str = "rpc " + F.getName().str() + "( ";
   auto arg_list = fw->getArgList();
-  for (int i = 0; i < arg_list.size(); i++)
+  for (unsigned i = 0; i < arg_list.size(); i++)
   {
     auto arg = arg_list[i];
     auto formal_in_tree = fw->getArgFormalInTree(*arg);
