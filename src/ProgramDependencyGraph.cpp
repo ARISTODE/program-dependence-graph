@@ -4,6 +4,7 @@
 using namespace llvm;
 
 char pdg::ProgramDependencyGraph::ID = 0;
+llvm::cl::opt<bool> FieldSensitive("fs", llvm::cl::desc("Field Sensitive"), llvm::cl::value_desc("field_sensitive"), llvm::cl::init(true));
 
 void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {
@@ -22,7 +23,6 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   PDGCallGraph &call_g = PDGCallGraph::getInstance();
   if (!call_g.isBuild())
     call_g.build(M);
-  
 
   if (!_PDG->isBuild())
   {
@@ -109,6 +109,9 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   if (call_site_node == nullptr || func_entry_node == nullptr )
     return;
   call_site_node->addNeighbor(*func_entry_node, EdgeType::CALL);
+  // don't expand field sensitive connection if not specified
+  if (!FieldSensitive)
+    return;
 
   // step 2: connect actual in -> formal in, formal out -> actual out
   auto actual_arg_list = cw.getArgList();
@@ -201,30 +204,32 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
       auto call_site_node = _PDG->getNode(*call_inst);
       if (!call_site_node)
         continue;
-     
-      for (auto arg : call_w->getArgList())
+
+      if (FieldSensitive)
       {
-        Tree* actual_in_tree = call_w->getArgActualInTree(*arg);
-        if (!actual_in_tree)
+        for (auto arg : call_w->getArgList())
         {
-          // errs() << "[WARNING]: empty actual tree for callsite " << *call_inst << "\n";
-          return;
+          Tree *actual_in_tree = call_w->getArgActualInTree(*arg);
+          if (!actual_in_tree)
+          {
+            // errs() << "[WARNING]: empty actual tree for callsite " << *call_inst << "\n";
+            return;
+          }
+          Tree *actual_out_tree = call_w->getArgActualOutTree(*arg);
+          call_site_node->addNeighbor(*actual_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
+          call_site_node->addNeighbor(*actual_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);
+          connectActualInTreeWithAddrVars(*actual_in_tree, *call_inst);
+          connectActualOutTreeWithAddrVars(*actual_out_tree, *call_inst);
         }
-        Tree* actual_out_tree = call_w->getArgActualOutTree(*arg);
-        call_site_node->addNeighbor(*actual_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
-        call_site_node->addNeighbor(*actual_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);
-        connectActualInTreeWithAddrVars(*actual_in_tree, *call_inst);
-        connectActualOutTreeWithAddrVars(*actual_out_tree, *call_inst);
+        // connect return trees
+        // TODO: should change the name here. for return value, we should only connect
+        // the tree node with vars after the call instruction
+        if (!call_w->hasNullRetVal())
+        {
+          connectActualOutTreeWithAddrVars(*call_w->getRetActualInTree(), *call_inst);
+          connectActualOutTreeWithAddrVars(*call_w->getRetActualOutTree(), *call_inst);
+        }
       }
-      // connect return trees
-      // TODO: should change the name here. for return value, we should only connect
-      // the tree node with vars after the call instruction
-      if (!call_w->hasNullRetVal())
-      {
-        connectActualOutTreeWithAddrVars(*call_w->getRetActualInTree(), *call_inst);
-        connectActualOutTreeWithAddrVars(*call_w->getRetActualOutTree(), *call_inst);
-      }
-      
       auto called_func_w = getFuncWrapper(*call_w->getCalledFunc());
       connectCallerAndCallee(*call_w, *called_func_w);
     }
