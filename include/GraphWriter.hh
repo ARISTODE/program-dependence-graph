@@ -82,7 +82,7 @@ namespace llvm
       case pdg::EdgeType::DATA_ALIAS:
         return "style=dotted,label = \"{alias}\" ";
       case pdg::EdgeType::PARAMETER_IN:
-        return "style=dashed, color=\"blue\"";
+        return "style=dashed, color=\"blue\", label = \" {p_i} \"";
       case pdg::EdgeType::PARAMETER_OUT:
         return "style=dashed, color=\"blue\"";
       case pdg::EdgeType::DATA_RAW:

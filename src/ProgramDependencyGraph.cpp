@@ -171,12 +171,9 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
   {
     Tree* formal_in_tree = func_w->getArgFormalInTree(*arg);
     if (!formal_in_tree)
-    {
-      // errs() << "[WARNING]: empty formal tree for func " << F.getName() << "\n";
       return;
-    }
-
     Tree* formal_out_tree = func_w->getArgFormalOutTree(*arg);
+
     entry_node->addNeighbor(*formal_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
     entry_node->addNeighbor(*formal_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);
     connectFormalInTreeWithAddrVars(*formal_in_tree);
@@ -242,6 +239,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
   TreeNode* root_node = formal_in_tree.getRootNode();
   std::queue<TreeNode*> node_queue;
   node_queue.push(root_node);
+   
   while (!node_queue.empty())
   {
     TreeNode* current_node = node_queue.front();
@@ -267,7 +265,10 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
         current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
       }
     }
-
+    
+    // stop connecting rest nodes with addr vars if not field sensitive
+    if (!FieldSensitive) 
+      break;
     for (auto child_node : current_node->getChildNodes())
     {
       node_queue.push(child_node);
@@ -297,6 +298,8 @@ void pdg::ProgramDependencyGraph::connectFormalOutTreeWithAddrVars(Tree &formal_
       }
     }
 
+    if(!FieldSensitive)
+      break;
     for (auto child_node : current_node->getChildNodes())
     {
       node_queue.push(child_node);
