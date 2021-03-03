@@ -7,7 +7,7 @@ bool pdg::ControlDependencyGraph::runOnFunction(Function &F)
 {
   _PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
   addControlDepFromEntryNodeToEntryBlock(F);
-  addControlDepFromDominatedBlockToDominator(F);
+  computeControlDependencies(F);
   return false;
 }
 
@@ -31,23 +31,34 @@ void pdg::ControlDependencyGraph::addControlDepFromEntryNodeToEntryBlock(Functio
   addControlDepFromNodeToBB(*func_w->getEntryNode(), F.getEntryBlock());
 }
 
-void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Function &F)
+void pdg::ControlDependencyGraph::computeControlDependencies(Function &F)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   for (auto &BB : F)
   {
     for (auto succ_iter = succ_begin(&BB); succ_iter != succ_end(&BB); succ_iter++)
     {
-      BasicBlock* succ_bb = *succ_iter;
-      if (!_PDT->dominates(&BB, succ_bb))
+      BasicBlock *succ_bb = *succ_iter;
+      if (&BB == &*succ_bb || !_PDT->dominates(&*succ_bb, &BB))
       {
-        BasicBlock* nearestCommonPostDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
-        if (nearestCommonPostDominator == &BB)
+        // get terminator and connect with the dependent block
+        Instruction *terminator = BB.getTerminator();
+        if (BranchInst *bi = dyn_cast<BranchInst>(terminator))
         {
-          // get terminator and connect with the basical block
-          Instruction *terminator = BB.getTerminator();
-          auto term_node = g.getNode(*terminator);
-          addControlDepFromNodeToBB(*term_node, *succ_bb);
+          if (!bi->getCondition())
+            break;
+          Node* cond_node = g.getNode(*bi->getCondition());
+          if (!cond_node)
+            break;
+
+          BasicBlock *nearestCommonPostDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
+          if (nearestCommonPostDominator == &BB)
+            addControlDepFromNodeToBB(*cond_node, *succ_bb);
+
+          for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonPostDominator); cur = cur->getIDom())
+          {
+            addControlDepFromNodeToBB(*cond_node, *cur->getBlock());
+          }
         }
       }
     }

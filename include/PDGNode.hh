@@ -59,6 +59,8 @@ namespace pdg
     std::set<Node *> getInNeighborsWithDepType(EdgeType edge_type);
     std::set<Node *> getOutNeighbors();
     std::set<Node *> getOutNeighborsWithDepType(EdgeType edge_type);
+    bool hasInNeighborWithEdgeType(Node &n, EdgeType edge_type);
+    bool hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type);
     virtual ~Node() = default;
 
   protected:

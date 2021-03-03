@@ -15,7 +15,7 @@ namespace pdg
     bool runOnFunction(llvm::Function &F) override;
     void addControlDepFromNodeToBB(Node &n, llvm::BasicBlock &bb);
     void addControlDepFromEntryNodeToEntryBlock(llvm::Function &F);
-    void addControlDepFromDominatedBlockToDominator(llvm::Function &F);
+    void computeControlDependencies(llvm::Function &F);
   private:
     llvm::PostDominatorTree *_PDT;
   };
