@@ -44,9 +44,20 @@ opt -load libpdg.so -dot-pdg < test.bc
 
 For those large software, generating a visualizable PDG is not easy. Graphviz often fails to generate the .dot file for a program with more than 1000 lines of C code. Fortunately, we rarely need such a large .dot file but only do kinds of analyses on the PDG, which is always in memory.
 
+## LLVM IR compilation
+For simple C programs(e.g., test.c), do
 
+> clang -emit-llvm -S -g test.c -o test.bc
 
-## Use Guide
+Now you have a binary format LLVM bitcode file which can be directly used as the input for PDG generation.
+
+For those large C software (e.g., wget), you can refer to this great article for help:
+
+[Compiling Autotooled projects to LLVM Bitcode](http://gbalats.github.io/2015/12/10/compiling-autotooled-projects-to-LLVM-bitcode.html)
+
+(We successfully compiled SPECCPU 2006 INT/thttpd/wget/telnet/openssh/curl/nginx/sqlite, thanks to the author!)
+
+## User Guide
 
 We can use the current PDG as a required pass through following steps:
 
