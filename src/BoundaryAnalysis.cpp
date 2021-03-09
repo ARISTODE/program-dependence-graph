@@ -48,7 +48,7 @@ void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)
       func_name = pdgutils::stripFuncNameVersionNumber(func_name);
       if (isBlackListFunc(func_name))
         continue;
-      _imported_funcs.insert(func_name);
+      _imported_funcs.push_back(func_name);
     }
   }
 }
@@ -63,7 +63,7 @@ void pdg::BoundaryAnalysis::computeDriverFuncs(Module &M)
     func_name = pdgutils::stripFuncNameVersionNumber(func_name);
     if (isBlackListFunc(func_name))
       continue;
-    _driver_domain_funcs.insert(func_name);
+    _driver_domain_funcs.push_back(func_name);
   }
 }
 
@@ -109,8 +109,8 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
           if (!dbgutils::isFuncPointerType(*struct_field_di_type))
             continue;
           std::string func_name = struct_element->getName().str();
-          _exported_func_ptrs.insert(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
-          _exported_funcs.insert(func_name);
+          _exported_func_ptrs.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
+          _exported_funcs.push_back(func_name);
         }
         // TODO: handle nested structs
       }
@@ -122,12 +122,12 @@ void pdg::BoundaryAnalysis::dumpToFiles()
 {
   errs() << "dumping to files\n";
   dumpToFile("imported_funcs", _imported_funcs);
-  dumpToFile("exported_funcs", _exported_funcs);
   dumpToFile("driver_funcs", _driver_domain_funcs);
+  dumpToFile("exported_funcs", _exported_funcs);
   dumpToFile("exported_func_ptrs", _exported_func_ptrs);
 }
 
-void pdg::BoundaryAnalysis::dumpToFile(std::string file_name, std::set<std::string> &names)
+void pdg::BoundaryAnalysis::dumpToFile(std::string file_name, std::vector<std::string> &names)
 {
   std::ofstream output_file(file_name);
   for (auto name: names)

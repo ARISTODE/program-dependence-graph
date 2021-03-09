@@ -203,6 +203,8 @@ void pdg::pdgutils::printTreeNodesLabel(Node *node, raw_string_ostream &OS, std:
   TreeNode *n = static_cast<TreeNode *>(node);
   int tree_node_depth = n->getDepth();
   DIType *node_di_type = n->getDIType();
+  if (!node_di_type)
+    return;
   std::string field_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
   OS << tree_node_type_str << " | " << tree_node_depth << " | " << field_type_name;
 }
@@ -231,7 +233,7 @@ std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
     return parent_type_name;
   DIType* node_di_type = dbgutils::stripAttributes(*tree_node.getDIType());
   node_field_name = dbgutils::getSourceLevelVariableName(*node_di_type);
-  
+
   return (parent_type_name + node_field_name);
 }
 

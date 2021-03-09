@@ -28,8 +28,6 @@ namespace pdg
       void connectFormalOutTreeWithAddrVars(Tree &formal_out_tree);
       void connectActualInTreeWithAddrVars(Tree &actual_in_tree, llvm::CallInst &ci);
       void connectActualOutTreeWithAddrVars(Tree &actual_out_tree, llvm::CallInst &ci);
-      bool canReach(Node &src, Node &dst);
-      bool canReach(Node &src, Node &dst, std::set<EdgeType> exclude_edge_types);
 
     private:
       llvm::Module *_module;

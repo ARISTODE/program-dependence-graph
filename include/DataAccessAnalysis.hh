@@ -1,6 +1,6 @@
 #ifndef DATAACCESSANALYSIS_H_
 #define DATAACCESSANALYSIS_H_
-#include "ProgramDependencyGraph.hh"
+#include "SharedDataAnalysis.hh"
 #include <fstream>
 #include <sstream>
 
@@ -15,6 +15,7 @@ namespace pdg
       void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
       llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
       std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
+      void computeExportedFuncsPtrNameMap();
       void computeDataAccessForTreeNode(TreeNode &tree_node);
       void computeDataAccessForTree(Tree* tree);
       void computeIntraProcDataAccess(llvm::Function &F);
@@ -23,11 +24,16 @@ namespace pdg
       void generateRpcForFunc(llvm::Function &F);
       void generateIDLFromArgTree(Tree *arg_tree);
       void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &projection_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+      std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
 
     private:
       llvm::Module *_module;
-      ProgramGraph *PDG;
+      SharedDataAnalysis* _SDA;
+      ProgramGraph *_PDG;
       std::ofstream idl_file;
+      std::set<std::string> _seen_func_ops;
+      std::string _ops_struct_proj_str;
+      std::map<std::string, std::string> _exported_funcs_ptr_name_map;
   };
 }
 

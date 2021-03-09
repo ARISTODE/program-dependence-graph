@@ -27,16 +27,19 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
   return false;
 }
 
-bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types)
+bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> include_edge_types)
 {
-  std::set<Node *> visited;
-  std::stack<Node *> node_stack;
-  node_stack.push(&src);
+  if (&src == &dst)
+    return true;
 
-  while (!node_stack.empty())
+  std::set<Node *> visited;
+  std::stack<Node *> node_queue;
+  node_queue.push(&src);
+
+  while (!node_queue.empty())
   {
-    auto current_node = node_stack.top();
-    node_stack.pop();
+    auto current_node = node_queue.top();
+    node_queue.pop();
     if (visited.find(current_node) != visited.end())
       continue;
     visited.insert(current_node);
@@ -45,13 +48,38 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeTy
     for (auto out_edge : current_node->getOutEdgeSet())
     {
       // exclude path
-      if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
+      if (include_edge_types.find(out_edge->getEdgeType()) == include_edge_types.end())
         continue;
-      node_stack.push(out_edge->getDstNode());
+      node_queue.push(out_edge->getDstNode());
     }
   }
   return false;
 }
+
+std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edge_type)
+{
+  std::set<Node *> ret;
+  std::queue<Node *> node_queue;
+  node_queue.push(&src);
+  std::set<Node*> visited;
+  while (!node_queue.empty())
+  {
+    Node *current_node = node_queue.front();
+    node_queue.pop();
+    if (visited.find(current_node) != visited.end())
+      continue;
+    visited.insert(current_node);
+    for (auto out_edge : current_node->getOutEdgeSet())
+    {
+      if (edge_type != out_edge->getEdgeType())
+        continue;
+      ret.insert(current_node);
+      node_queue.push(out_edge->getDstNode());
+    }
+  }
+  return ret;
+}
+
 
 // PDG Specific
 void pdg::ProgramGraph::build(Module &M)

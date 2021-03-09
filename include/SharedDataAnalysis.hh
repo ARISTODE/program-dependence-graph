@@ -16,6 +16,7 @@ namespace pdg
     llvm::StringRef getPassName() const override { return "Shared Data Analysis"; }
     bool runOnModule(llvm::Module &M) override;
     void setupDriverFuncs(llvm::Module &M);
+    void setupStrOps();
     std::set<llvm::Function *> &getDriverFuncs() { return _driver_domain_funcs; }
     void setupKernelFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
@@ -29,8 +30,10 @@ namespace pdg
     std::set<llvm::Value *> computeVarsWithDITypeInModule(llvm::DIType &dt, llvm::Module &M);
     bool isStructFieldNode(TreeNode &tree_node);
     bool isTreeNodeShared(TreeNode &tree_node);
+    bool isFieldUsedInStringOps(TreeNode &tree_node);
+    bool isStringFieldID(std::string field_id) { return _string_op_names.find(field_id) != _string_op_names.end(); }
     bool isSharedFieldID(std::string field_id);
-    void computeSharedDataVars();
+    // void computeSharedDataVars();
     void computeSharedFieldID();
     void dumpSharedFieldID();
     ProgramGraph *getPDG() { return _PDG; }
@@ -46,6 +49,8 @@ namespace pdg
     std::set<llvm::Function *> _boundary_funcs;
     std::map<llvm::DIType *, Tree *> _global_struct_di_type_map;
     std::set<std::string> _shared_field_id;
+    std::set<std::string> _string_field_id;
+    std::set<std::string> _string_op_names;
   };
 } // namespace pdg
 #endif

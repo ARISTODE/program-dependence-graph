@@ -369,6 +369,5 @@ void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actual_
   }
 }
 
-
 static RegisterPass<pdg::ProgramDependencyGraph>
     PDG("pdg", "Program Dependency Graph Construction", false, true);

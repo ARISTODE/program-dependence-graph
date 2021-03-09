@@ -22,8 +22,12 @@ namespace pdg
     llvm::DIType *getGlobalVarDIType(llvm::GlobalVariable &gv);
     llvm::DIType *getFuncRetDIType(llvm::Function &F);
     std::string getSourceLevelVariableName(llvm::DINode &dt);
-    std::string getSourceLevelTypeName(llvm::DIType &dt);
+    std::string getSourceLevelTypeName(llvm::DIType &dt, bool is_raw=false);
+    std::string getSourceLevelTypeNameWithNoQualifer(llvm::DIType &dt);
+    std::string getArgumentName(llvm::Argument &arg);
+    std::set<llvm::DbgInfoIntrinsic *> collectDbgInstInFunc(llvm::Function &F);
     std::set<llvm::DIType*> computeContainedStructTypes(llvm::DIType &dt);
+    std::string getFuncSigName(llvm::DIType &dt, llvm::Function &F, std::string func_ptr_name);
   } // namespace dbgutils
 } // namespace pdg
 

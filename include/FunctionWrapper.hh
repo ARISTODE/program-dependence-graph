@@ -25,6 +25,7 @@ namespace pdg
     void buildFormalTreeForArgs();
     void buildFormalTreesForRetVal();
     llvm::DIType *getArgDIType(llvm::Argument &arg);
+    llvm::DIType *getReturnValDIType() { return _ret_val_formal_in_tree->getRootNode()->getDIType(); }
     llvm::DILocalVariable *getArgDILocalVar(llvm::Argument &arg);
     llvm::AllocaInst *getArgAllocaInst(llvm::Argument &arg);
     Tree *getArgFormalInTree(llvm::Argument &arg);

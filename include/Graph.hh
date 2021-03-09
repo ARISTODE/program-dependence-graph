@@ -41,7 +41,8 @@ namespace pdg
     void setIsBuild() { _is_build = true; }
     bool isBuild() { return _is_build; }
     bool canReach(pdg::Node &src, pdg::Node &dst);
-    bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types);
+    bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> include_edge_types);
+    std::set<Node *> findNodesReachedByEdge(Node &src, EdgeType edge_type);
     ValueNodeMap &getValueNodeMap() { return _val_node_map; }
 
   protected:

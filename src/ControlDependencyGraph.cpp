@@ -45,17 +45,17 @@ void pdg::ControlDependencyGraph::computeControlDependencies(Function &F)
         Instruction *terminator = BB.getTerminator();
         if (BranchInst *bi = dyn_cast<BranchInst>(terminator))
         {
-          if (!bi->getCondition())
+          if (!bi->isConditional() || !bi->getCondition())
             break;
           Node* cond_node = g.getNode(*bi->getCondition());
           if (!cond_node)
             break;
 
-          BasicBlock *nearestCommonPostDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
-          if (nearestCommonPostDominator == &BB)
+          BasicBlock *nearestCommonDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
+          if (nearestCommonDominator == &BB)
             addControlDepFromNodeToBB(*cond_node, *succ_bb);
 
-          for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonPostDominator); cur = cur->getIDom())
+          for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
           {
             addControlDepFromNodeToBB(*cond_node, *cur->getBlock());
           }
