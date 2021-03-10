@@ -39,23 +39,26 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
     for (auto succ_iter = succ_begin(&BB); succ_iter != succ_end(&BB); succ_iter++)
     {
       BasicBlock *succ_bb = *succ_iter;
-      if (!_PDT->dominates(succ_bb, &BB))
+      if (&BB == &*succ_bb || !_PDT->dominates(&*succ_bb, &BB))
       {
-        BasicBlock *nearestCommonPostDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
+        // get terminator and connect with the dependent block
         Instruction *terminator = BB.getTerminator();
-        auto term_node = g.getNode(*terminator);
-        // self loop
-        if (nearestCommonPostDominator == &BB)
+        if (BranchInst *bi = dyn_cast<BranchInst>(terminator))
         {
-          // get terminator and connect with the basical block
-          addControlDepFromNodeToBB(*term_node, BB);
-        }
-        // conditions
-        DomTreeNode *domNode = _PDT->getNode(&*succ_bb);
-        while (domNode != nullptr && domNode->getBlock() != nullptr)
-        {
-          addControlDepFromNodeToBB(*term_node, *domNode->getBlock());
-          domNode = domNode->getIDom();
+          if (!bi->isConditional() || !bi->getCondition())
+            break;
+          Node *cond_node = g.getNode(*bi->getCondition());
+          if (!cond_node)
+            break;
+
+          BasicBlock *nearestCommonDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
+          if (nearestCommonDominator == &BB)
+            addControlDepFromNodeToBB(*cond_node, *succ_bb);
+
+          for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
+          {
+            addControlDepFromNodeToBB(*cond_node, *cur->getBlock());
+          }
         }
       }
     }

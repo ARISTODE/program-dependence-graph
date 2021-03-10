@@ -60,8 +60,8 @@ void pdg::ProgramGraph::build(Module &M)
   for (auto &global_var : M.getGlobalList())
   {
     auto global_var_type = global_var.getType();
-    if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
-      continue;
+    // if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
+    //   continue;
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;

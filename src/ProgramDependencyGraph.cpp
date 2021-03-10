@@ -29,6 +29,7 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   }
 
   unsigned func_size = 0;
+  connectGlobalWithUses();
   for (auto &F : M)
   {
     if (F.isDeclaration())
@@ -44,6 +45,24 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   errs() << "building PDG takes: " <<  duration.count() << "\n";
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
   return false;
+}
+
+void pdg::ProgramDependencyGraph::connectGlobalWithUses()
+{
+  for (auto &global_var : _module->getGlobalList())
+  {
+    Node* n = _PDG->getNode(global_var);
+    if (n == nullptr)
+      continue;
+
+    for (auto user : global_var.users())
+    {
+      Node* user_node = _PDG->getNode(*user);
+      if (user_node == nullptr)
+        continue;
+      n->addNeighbor(*user_node, EdgeType::DATA_DEF_USE);
+    }
+  }
 }
 
 void pdg::ProgramDependencyGraph::connectInTrees(Tree* src_tree, Tree* dst_tree, EdgeType edge_type)
@@ -138,14 +157,25 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     connectInTrees(ret_actual_out_tree, ret_formal_out_tree, EdgeType::PARAMETER_OUT);
   }
 
-  // step4: connect return value of callee to the call site
+  // step4: connect both control/data return edges of callee to the call site
   auto ret_insts = fw.getReturnInsts();
   auto call_inst = cw.getCallInst();
+  Node *dst = _PDG->getNode(*call_inst);
+  assert(dst != nullptr && "cannot add control edge to call node on nullptr!\n");
+  // add control return edge
   for (auto ret_inst : ret_insts)
   {
     Node *src = _PDG->getNode(*ret_inst);
-    Node *dst = _PDG->getNode(*call_inst);
-    if (src == nullptr || dst == nullptr)
+    if (src == nullptr)
+      continue;
+    src->addNeighbor(*dst, EdgeType::CONTROL);
+  }
+  // add data return edge
+  for (auto ret_inst : ret_insts)
+  {
+    Value* ret_val = ret_inst->getReturnValue();
+    Node* src = _PDG->getNode(*ret_val);
+    if (src == nullptr)
       continue;
     src->addNeighbor(*dst, EdgeType::DATA_RET);
   }

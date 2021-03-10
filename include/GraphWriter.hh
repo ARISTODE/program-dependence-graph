@@ -64,6 +64,11 @@ namespace llvm
         }
         break;
       }
+      case pdg::GraphNodeType::GLOBAL_VAR:
+      {
+          OS << "global: " << *node_val;
+          return OS.str();
+      }
       default:
         break;
       }
@@ -76,19 +81,21 @@ namespace llvm
       switch (edge_type)
       {
       case pdg::EdgeType::CONTROL:
-        return "label = \"{c}\"";
+        return "label = \"{CONTROL}\"";
       case pdg::EdgeType::DATA_DEF_USE:
-        return "style=dotted,label = \"{DEF_USE}\" ";
+        return "style=dotted,label = \"{D_DEF_USE}\" ";
       case pdg::EdgeType::DATA_ALIAS:
-        return "style=dotted,label = \"{alias}\" ";
+        return "style=dotted,label = \"{D_ALIAS}\" ";
       case pdg::EdgeType::PARAMETER_IN:
         return "style=dashed, color=\"blue\"";
       case pdg::EdgeType::PARAMETER_OUT:
         return "style=dashed, color=\"blue\"";
       case pdg::EdgeType::DATA_RAW:
-        return "style=dotted,label = \"{RAW}\" ";
+        return "style=dotted,label = \"{D_RAW}\" ";
       case pdg::EdgeType::CALL:
         return "style=dashed, color=\"red\", label =\"{CALL}\"";
+      case pdg::EdgeType::DATA_RET:
+        return "style=dashed, color=\"red\", label =\"{D_RET}\"";
       default:
         break;
       }
