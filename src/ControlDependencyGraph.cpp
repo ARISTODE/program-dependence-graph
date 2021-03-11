@@ -47,17 +47,19 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
         {
           if (!bi->isConditional() || !bi->getCondition())
             break;
-          Node *cond_node = g.getNode(*bi->getCondition());
-          if (!cond_node)
+          // Node *cond_node = g.getNode(*bi->getCondition());
+          // if (!cond_node)
+          //   break;
+          Node *branch_node = g.getNode(*bi);
+          if (branch_node == nullptr)
             break;
-
           BasicBlock *nearestCommonDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
           if (nearestCommonDominator == &BB)
-            addControlDepFromNodeToBB(*cond_node, *succ_bb);
+            addControlDepFromNodeToBB(*branch_node, *succ_bb);
 
           for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
           {
-            addControlDepFromNodeToBB(*cond_node, *cur->getBlock());
+            addControlDepFromNodeToBB(*branch_node, *cur->getBlock());
           }
         }
       }
