@@ -4,6 +4,8 @@ using namespace llvm;
 
 void pdg::Node::addNeighbor(Node &neighbor, EdgeType edge_type)
 {
+  if (hasOutNeighborWithEdgeType(neighbor, edge_type))
+    return;
   Edge *edge = new Edge(this, &neighbor, edge_type);
   addOutEdge(*edge);
   neighbor.addInEdge(*edge);
@@ -49,4 +51,24 @@ std::set<pdg::Node *> pdg::Node::getOutNeighborsWithDepType(pdg::EdgeType edge_t
       out_neighbors_with_dep_type.insert(edge->getDstNode());
   }
   return out_neighbors_with_dep_type;
+}
+
+bool pdg::Node::hasInNeighborWithEdgeType(Node &n, EdgeType edge_type)
+{
+  for (auto e : _in_edge_set)
+  {
+    if (e->getSrcNode() == &n && e->getEdgeType() == edge_type)
+      return true;
+  }
+  return false;
+}
+
+bool pdg::Node::hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type)
+{
+  for (auto e : _out_edge_set)
+  {
+    if (e->getDstNode() == &n && e->getEdgeType() == edge_type)
+      return true;
+  }
+  return false;
 }
