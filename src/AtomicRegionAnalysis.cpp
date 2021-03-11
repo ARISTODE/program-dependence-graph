@@ -226,6 +226,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       }
       if (!is_addr_var || !is_shared)
         continue;
+
       printWarningCS(cs_pair, *modified_val, *f, modified_names, "TYPE");
       _cs_warning_count++;
       cs_warning = true;
@@ -248,6 +249,8 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
       continue;
     std::set<std::string> modified_names;
     computeModifedNames(*val_node, modified_names);
+    if (modified_names.size() >= 2 && modified_names.find("counter") != modified_names.end())
+      continue;
 
     // scenerio 1: check if the accessed var is alias of boundary pointers
     // auto alias_boundary_ptrs = computeBoundaryAliasPtrs(*modified_var);
@@ -282,6 +285,8 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
         if (!tree_node->getDIType())
           continue;
       }
+
+
       if (is_shared)
       {
         auto func_name = atomic_op->getFunction()->getName().str();
