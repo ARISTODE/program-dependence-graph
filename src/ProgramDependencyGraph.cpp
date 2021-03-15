@@ -359,7 +359,7 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actual_i
 void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actual_out_tree, CallInst &ci)
 {
   TreeNode *root_node = actual_out_tree.getRootNode();
-  std::set<Instruction *> insts_after_ci = pdgutils::getInstructionAfterInst(ci);
+  // std::set<Instruction *> insts_after_ci = pdgutils::getInstructionAfterInst(ci);
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
   while (!node_queue.empty())
@@ -369,11 +369,11 @@ void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actual_
     for (auto addr_var : current_node->getAddrVars())
     {
       // only connect with succe insts of call sites
-      if (Instruction *i = dyn_cast<Instruction>(addr_var))
-      {
-        if (insts_after_ci.find(i) == insts_after_ci.end())
-          continue;
-      }
+      // if (Instruction *i = dyn_cast<Instruction>(addr_var))
+      // {
+      //   if (insts_after_ci.find(i) == insts_after_ci.end())
+      //     continue;
+      // }
       if (!_PDG->hasNode(*addr_var))
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
