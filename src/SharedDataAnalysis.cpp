@@ -12,6 +12,7 @@ void pdg::SharedDataAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 
 bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
 {
+  _module = &M;
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
   // read driver/kernel domian funcs
   setupStrOps();
@@ -286,6 +287,12 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
 {
   for (auto dt_tree_pair : _global_struct_di_type_map)
   {
+    auto di_type_name = dbgutils::getSourceLevelTypeName(*dt_tree_pair.first);
+    di_type_name = "struct." + di_type_name;
+    auto gb = _module->getNamedValue(StringRef(di_type_name));
+    if (gb != nullptr) 
+      errs() << "GB: " << *gb << "\n";
+
     Tree* tree = dt_tree_pair.second;
     std::queue<TreeNode*> node_queue;
     node_queue.push(tree->getRootNode());

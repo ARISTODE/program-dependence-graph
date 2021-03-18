@@ -150,10 +150,12 @@ DIType *pdg::dbgutils::stripMemberTag(DIType &dt)
 // ===== get the source level naming information for variable or types ===== 
 std::string pdg::dbgutils::getSourceLevelVariableName(DINode &di_node)
 {
+  DINode* node_ptr = &di_node;
+  if (!node_ptr)
+    return "";
+
   if (DILocalVariable *di_var = dyn_cast<DILocalVariable>(&di_node))
-  {
     return di_var->getName().str();
-  }
 
   // get field name
   if (DIType *dt = dyn_cast<DIType>(&di_node))

@@ -42,6 +42,7 @@ namespace pdg
 
   private:
     ProgramGraph *_PDG;
+    llvm::Module* _module;
     std::set<llvm::Value *> _shared_data_vars;
     std::set<llvm::DIType *> _shared_struct_di_types;
     std::set<llvm::Function *> _driver_domain_funcs;

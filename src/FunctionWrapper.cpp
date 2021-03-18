@@ -80,7 +80,15 @@ void pdg::FunctionWrapper::buildFormalTreesForRetVal()
   for (auto ret_inst : _return_insts)
   {
     auto ret_val = ret_inst->getReturnValue();
-    ret_formal_in_tree_root_node->addAddrVar(*ret_val);
+    if (ret_val != nullptr)
+    {
+      auto alias_vals = pdgutils::computeAliasForRetVal(*ret_val, *_func);
+      ret_formal_in_tree_root_node->addAddrVar(*ret_val);
+      for (auto alias_val : alias_vals)
+      {
+        ret_formal_in_tree_root_node->addAddrVar(*alias_val);
+      }
+    }
   }
   ret_formal_in_tree->setRootNode(*ret_formal_in_tree_root_node);
   ret_formal_in_tree->build();

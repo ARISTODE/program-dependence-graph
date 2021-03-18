@@ -24,10 +24,16 @@ namespace pdg
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
     std::set<llvm::Value *> computeAddrTakenVarsFromAlloc(llvm::AllocaInst &ai);
+    std::set<llvm::Value *> computeAliasForRetVal(llvm::Value &val, llvm::Function &func);
+    std::set<std::string> splitStr(std::string split_str, std::string delimiter);
+    llvm::AliasResult queryAliasUnderApproximate(llvm::Value &v1, llvm::Value &v2);
     void printTreeNodesLabel(Node* n, llvm::raw_string_ostream &OS, std::string tree_node_type_str);
     llvm::Value *getLShrOnGep(llvm::GetElementPtrInst &gep);
     std::string stripFuncNameVersionNumber(std::string func_name);
     std::string computeTreeNodeID(TreeNode &tree_node);
     std::string stripVersionTag(std::string str);
+    std::string ltrim(std::string str);
+    std::string rtrim(std::string str);
+    std::string trimStr(std::string str);
   } // namespace pdgutils
 } // namespace pdg

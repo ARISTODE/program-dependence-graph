@@ -14,4 +14,5 @@
 #include "llvm/Support/GraphWriter.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #endif

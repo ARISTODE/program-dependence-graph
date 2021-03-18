@@ -32,7 +32,7 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
     Tree* arg_actual_out_tree = new Tree(*arg_formal_in_tree);
     arg_actual_out_tree->setBaseVal(**actual_arg_iter);
     arg_actual_out_tree->setTreeNodeType(GraphNodeType::ACTUAL_OUT);
-    TreeNode* actual_out_root_node = arg_actual_in_tree->getRootNode();
+    TreeNode* actual_out_root_node = arg_actual_out_tree->getRootNode();
     actual_out_root_node->addAddrVar(**actual_arg_iter);
     arg_actual_out_tree->build();
     _arg_actual_out_tree_map.insert(std::make_pair(*actual_arg_iter, arg_actual_out_tree));

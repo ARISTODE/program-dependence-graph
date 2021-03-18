@@ -87,6 +87,8 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 
   for (auto base_node_addr_var : base_node_addr_vars)
   {
+    if (base_node_addr_var == nullptr)
+      continue;
     for (auto user : base_node_addr_var->users())
     {
       // handle load instruction, field should not get the load inst from the sturct pointer.

@@ -24,6 +24,7 @@ namespace pdg
       void generateRpcForFunc(llvm::Function &F);
       void generateIDLFromArgTree(Tree *arg_tree);
       void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &projection_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+      void constructGlobalOpStructStr();
       std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
 
     private:
@@ -34,6 +35,7 @@ namespace pdg
       std::set<std::string> _seen_func_ops;
       std::string _ops_struct_proj_str;
       std::map<std::string, std::string> _exported_funcs_ptr_name_map;
+      std::map<std::string, std::set<std::string>> _global_ops_fields_map;
   };
 }
 

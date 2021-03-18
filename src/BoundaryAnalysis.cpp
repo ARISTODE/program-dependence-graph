@@ -89,7 +89,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
       continue;
     const auto &typeArrRef = dyn_cast<DICompositeType>(gv_lowest_di_type)->getElements();
     Type *global_type = global_var.getType();
-    if (auto t = dyn_cast<PointerType>(global_type)) 
+    if (auto t = dyn_cast<PointerType>(global_type))
           global_type = t->getPointerElementType();
     if (!global_type->isStructTy())
       continue;

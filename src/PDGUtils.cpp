@@ -198,6 +198,88 @@ std::set<Value *> pdg::pdgutils::computeAddrTakenVarsFromAlloc(AllocaInst &ai)
   return addr_taken_vars;
 }
 
+std::set<Value *> pdg::pdgutils::computeAliasForRetVal(Value &val, Function &F)
+{
+  std::set<Value *> ret;
+  std::queue<Value *> val_queue;
+  val_queue.push(&val);
+  while (!val_queue.empty())
+  {
+    Value* cur_val = val_queue.front();
+    val_queue.pop();
+
+    for (auto instI = inst_begin(F); instI != inst_end(F); ++instI)
+    {
+      if (cur_val == &*instI)
+        continue;
+      if (queryAliasUnderApproximate(*cur_val, *instI) != NoAlias)
+      {
+        if (ret.find(&*instI) == ret.end())
+        {
+          ret.insert(&*instI);
+          val_queue.push(&*instI);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+std::set<std::string> pdg::pdgutils::splitStr(std::string split_str, std::string delimiter)
+{
+  std::set<std::string> ret_strs;
+  size_t pos = 0;
+  std::string token;
+  while ((pos = split_str.find(delimiter)) != std::string::npos)
+  {
+    token = trimStr(split_str.substr(0, pos));
+    ret_strs.insert(token);
+    split_str.erase(0, pos + delimiter.length());
+  }
+  return ret_strs;
+}
+
+AliasResult pdg::pdgutils::queryAliasUnderApproximate(Value &v1, Value &v2)
+{
+  if (!v1.getType()->isPointerTy() || !v2.getType()->isPointerTy())
+    return NoAlias;
+  // check bit cast
+  if (BitCastInst *bci = dyn_cast<BitCastInst>(&v1))
+  {
+    if (bci->getOperand(0) == &v2)
+      return MustAlias;
+  }
+  // handle load instruction  
+  if (LoadInst* li = dyn_cast<LoadInst>(&v1))
+  {
+    auto load_addr = li->getPointerOperand();
+    for (auto user : load_addr->users())
+    {
+      if (LoadInst *li = dyn_cast<LoadInst>(user))
+      {
+        if (li == &v2)
+          return MustAlias;
+      }
+
+      if (StoreInst *si = dyn_cast<StoreInst>(user))
+      {
+        if (si->getPointerOperand() == load_addr)
+        {
+          if (si->getValueOperand() == &v2)
+            return MustAlias;
+        }
+      }
+    }
+  }
+  // handle gep
+  if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&v1))
+  {
+    if (gep->getPointerOperand() == &v2)
+      return MustAlias;
+  }
+  return NoAlias;
+}
+
 void pdg::pdgutils::printTreeNodesLabel(Node *node, raw_string_ostream &OS, std::string tree_node_type_str)
 {
   TreeNode *n = static_cast<TreeNode *>(node);
@@ -269,4 +351,21 @@ Value *pdg::pdgutils::getLShrOnGep(GetElementPtrInst &gep)
     }
   }
   return nullptr;
+}
+
+std::string pdg::pdgutils::ltrim(std::string s)
+{
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
+  return s;
+}
+
+std::string pdg::pdgutils::rtrim(std::string s)
+{
+  s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+  return s;
+}
+
+std::string pdg::pdgutils::trimStr(std::string s)
+{
+  return ltrim(rtrim(s));
 }
