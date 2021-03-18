@@ -299,6 +299,8 @@ std::string pdg::pdgutils::stripFuncNameVersionNumber(std::string func_name)
   return func_name.substr(0, deli_pos);
 }
 
+
+
 std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
 {
   std::string parent_type_name = "";
@@ -335,7 +337,6 @@ std::string pdg::pdgutils::stripVersionTag(std::string str)
     return str.substr(0, pos);
   return str;
 }
-
 
 Value *pdg::pdgutils::getLShrOnGep(GetElementPtrInst &gep)
 {

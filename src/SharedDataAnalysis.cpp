@@ -22,6 +22,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   setupBoundaryFuncs(M);
   // compute struct type passed through boundary (shared struct type)
   computeSharedStructDITypes();
+  computeGlobalStructTypeNames();
   // build global tree for each struct type, connect with address variables
   buildTreesForSharedStructDIType(M);
   // generate shared field id
@@ -149,6 +150,33 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
   for (auto t : _shared_struct_di_types)
   {
     errs() << "\t" << dbgutils::getSourceLevelTypeName(*t) << "\n";
+  }
+}
+
+void pdg::SharedDataAnalysis::computeGlobalStructTypeNames()
+{
+  for (auto &global_var : _module->getGlobalList())
+  {
+    SmallVector<DIGlobalVariableExpression *, 4> sv;
+    if (!global_var.hasInitializer())
+      continue;
+    errs() << "H1\n";
+    DIGlobalVariable *di_gv = nullptr;
+    global_var.getDebugInfo(sv);
+    for (auto di_expr : sv)
+    {
+      if (di_expr->getVariable()->getName() == global_var.getName())
+        di_gv = di_expr->getVariable(); // get global variable from global expression
+    }
+    if (di_gv == nullptr)
+      continue;
+    auto gv_di_type = di_gv->getType();
+    if (gv_di_type == nullptr)
+      continue;
+    auto gv_lowest_di_type = dbgutils::getLowestDIType(*gv_di_type);
+    if (gv_lowest_di_type ==nullptr || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
+      continue;
+    _global_struct_di_type_names.insert("struct " + dbgutils::getSourceLevelTypeName(*gv_di_type, true));
   }
 }
 

@@ -103,14 +103,16 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
 
       if (DIType *struct_field_di_type = dyn_cast<DIType>(typeArrRef[i]))
       {
-            // if the field is a function pointer, directly print it to map
-        if (!struct_element->getName().str().empty())
+        // if the field is a function pointer, directly print it to map
+        std::string field_type_name = struct_element->getName().str();
+        if (!field_type_name.empty())
         {
-          if (!dbgutils::isFuncPointerType(*struct_field_di_type))
-            continue;
-          std::string func_name = struct_element->getName().str();
-          _exported_func_ptrs.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
-          _exported_funcs.push_back(func_name);
+          std::string field_source_name = dbgutils::getSourceLevelVariableName(*struct_field_di_type);
+          if (dbgutils::isFuncPointerType(*struct_field_di_type))
+          {
+            _exported_func_ptrs.push_back(field_source_name);
+            _exported_funcs.push_back(field_type_name);
+          }
         }
         // TODO: handle nested structs
       }

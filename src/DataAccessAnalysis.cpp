@@ -181,7 +181,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       continue;
     // check for shared fields
     std::string field_id = pdgutils::computeTreeNodeID(*child_node);
-    if (!_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type))
+    auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
+    bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
+    if (!_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField)
       continue;
 
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type);

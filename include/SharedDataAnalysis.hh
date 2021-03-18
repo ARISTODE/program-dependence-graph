@@ -24,6 +24,7 @@ namespace pdg
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; };
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     void computeSharedStructDITypes();
+    void computeGlobalStructTypeNames();
     void buildTreesForSharedStructDIType(llvm::Module &M);
     void connectTypeTreeToAddrVars(Tree &tree);
     void computeVarsWithDITypeInFunc(llvm::DIType &dt, llvm::Function &F, std::set<llvm::Value *> &vars);
@@ -35,6 +36,7 @@ namespace pdg
     bool isSharedFieldID(std::string field_id);
     // void computeSharedDataVars();
     void computeSharedFieldID();
+    std::set<std::string> getGlobalStructDITypeNames() { return _global_struct_di_type_names; }
     void dumpSharedFieldID();
     ProgramGraph *getPDG() { return _PDG; }
     // some side tests
@@ -52,6 +54,7 @@ namespace pdg
     std::set<std::string> _shared_field_id;
     std::set<std::string> _string_field_id;
     std::set<std::string> _string_op_names;
+    std::set<std::string> _global_struct_di_type_names;
   };
 } // namespace pdg
 #endif
