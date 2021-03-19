@@ -34,6 +34,7 @@ namespace pdg
     bool isFieldUsedInStringOps(TreeNode &tree_node);
     bool isStringFieldID(std::string field_id) { return _string_op_names.find(field_id) != _string_op_names.end(); }
     bool isSharedFieldID(std::string field_id);
+    bool isSharedStructType(std::string s) { return _shared_struct_type_names.find(s) != _shared_struct_type_names.end(); }
     // void computeSharedDataVars();
     void computeSharedFieldID();
     std::set<std::string> getGlobalStructDITypeNames() { return _global_struct_di_type_names; }
@@ -55,6 +56,7 @@ namespace pdg
     std::set<std::string> _string_field_id;
     std::set<std::string> _string_op_names;
     std::set<std::string> _global_struct_di_type_names;
+    std::set<std::string> _shared_struct_type_names;
   };
 } // namespace pdg
 #endif

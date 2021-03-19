@@ -24,6 +24,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     if (F.isDeclaration())
       continue;
     computeIntraProcDataAccess(F);
+    computeContainerOfLocs(F);
     // computeInterProcDataAccess(F);
   }
 
@@ -42,6 +43,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   idl_file.close();
   auto stop = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+  // printContainerOfStats();
   errs() << "data analysis pass takes: " << duration.count() << "\n";
   return false;
 }
@@ -215,8 +217,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       raw_string_ostream nested_struct_proj_str(sub_fields_str);
       generateIDLFromTreeNode(*child_node, nested_struct_proj_str, node_queue, indent_level + "\t");
       projection_str << indent_level
-                     << "projection "
-                     << " {\n"
+                     << "projection < " 
+                     << field_type_name
+                     << "> {\n"
                      << nested_struct_proj_str.str()
                      << indent_level
                      << "} " << field_var_name
@@ -364,17 +367,18 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
     }
     else if (dbgutils::isFuncPointerType(*arg_di_type))
     {
-      if (_exported_funcs_ptr_name_map.find(arg_name) != _exported_funcs_ptr_name_map.end())
-      {
-        Function* called_func = _module->getFunction(_exported_funcs_ptr_name_map[arg_name]);
-        if (called_func != nullptr)
-        {
-          // arg_type_name = dbgutils::getFuncSigName(*arg_di_type, *called_func, arg_name);
-          arg_type_name = "rpc_ptr";
-          // also, no need to concate the arg_name
-          arg_name = arg_name + " " + arg_name;
-        }
-      }
+      arg_type_name = "rpc_ptr";
+      arg_name = arg_name + " " + arg_name;
+      // TODO: for function pointer that are not defined by global structs, we need to handle differently.
+      // if (_exported_funcs_ptr_name_map.find(arg_name) != _exported_funcs_ptr_name_map.end())
+      // {
+      //   Function* called_func = _module->getFunction(_exported_funcs_ptr_name_map[arg_name]);
+      //   if (called_func != nullptr)
+      //   {
+      //     // arg_type_name = dbgutils::getFuncSigName(*arg_di_type, *called_func, arg_name);
+      //     // also, no need to concate the arg_name
+      //   }
+      // }
     }
 
     auto annotations = inferTreeNodeAnnotations(*root_node);
@@ -442,6 +446,47 @@ void pdg::DataAccessAnalysis::constructGlobalOpStructStr()
       std::string proj_str = "projection < struct " + proj_type_name + " > " + "_global_" + proj_type_name + " {\n" + proj_field_str + "};\n";
       _ops_struct_proj_str += proj_str;
   }
+}
+
+void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
+{
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
+  {
+    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&*inst_iter))
+    {
+      int gep_access_offset = pdgutils::getGEPAccessFieldOffset(*gep);
+      if (gep_access_offset >= 0)
+        continue;
+      // check the next instruction 
+      Instruction* next_i = gep->getNextNonDebugInstruction();
+      if (BitCastInst *bci = dyn_cast<BitCastInst>(next_i))
+      {
+        auto inst_node = _PDG->getNode(*bci);
+        if (inst_node != nullptr)
+        {
+          auto node_di_type = inst_node->getDIType();
+          if (node_di_type == nullptr)
+            continue;
+          std::string di_type_name = dbgutils::getSourceLevelTypeName(*node_di_type, true);
+          if (_SDA->isSharedStructType(di_type_name))
+          {
+            _container_of_insts.insert(bci);
+          }
+        }
+      }
+    }
+  }
+}
+
+void pdg::DataAccessAnalysis::printContainerOfStats()
+{
+  errs() << " ============== container of stats =============\n";
+  errs() << "num of container_of access shared states: " << _container_of_insts.size() << "\n";
+  for (auto i : _container_of_insts)
+  {
+    errs() << "container_of: " << i->getFunction()->getName() << " -- " << *i << "\n";
+  }
+  errs() << " ===============================================\n";
 }
 
 static RegisterPass<pdg::DataAccessAnalysis>

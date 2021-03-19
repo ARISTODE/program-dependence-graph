@@ -200,7 +200,30 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 
   // alloc inst
   if (isa<AllocaInst>(val))
-    return n.getDIType();
+  {
+    if (n.getDIType() == nullptr)
+    {
+      for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); ++inst_iter)
+      {
+        if (&*inst_iter == val)
+          continue;
+        if (AllocaInst *ai = dyn_cast<AllocaInst>(&*inst_iter))
+        {
+          if (ai->getType() == val->getType())
+          {
+            Node *alloca_n = getNode(*ai);
+            DIType* alloca_node_dt = alloca_n->getDIType();
+            if (alloca_node_dt != nullptr && dbgutils::isStructPointerType(*alloca_node_dt))
+              return alloca_node_dt;
+          }
+        }
+      }
+    }
+    else
+    {
+      return n.getDIType();
+    }
+  }
   // load inst
   if (LoadInst *li = dyn_cast<LoadInst>(val))
   {
@@ -227,6 +250,31 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
       return dbgutils::getBaseDIType(*global_var_di_type);
     }
   }
+
+  // store inst
+  if (StoreInst *st = dyn_cast<StoreInst>(val))
+  {
+    Value* value_operand = st->getValueOperand();
+    Value* pointer_operand = st->getPointerOperand();
+    Node* value_op_node = getNode(*value_operand);
+    Node* ptr_op_node = getNode(*pointer_operand);
+    if (value_op_node == nullptr || ptr_op_node == nullptr)
+      return nullptr;
+    
+    if (value_op_node->getDIType() != nullptr)
+      return nullptr;
+
+    DIType* ptr_op_di_type = ptr_op_node->getDIType();
+    if (ptr_op_di_type == nullptr)
+      return nullptr;
+    DIType *value_op_di_type = dbgutils::getBaseDIType(*ptr_op_di_type);
+    if (value_op_di_type == nullptr)
+      return nullptr;
+    value_op_di_type = dbgutils::stripAttributes(*value_op_di_type);
+    value_op_node->setDIType(*value_op_di_type);
+    return value_op_di_type;
+  }
+
   // gep inst
   if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(val))
   {
@@ -243,6 +291,10 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
       return nullptr;
     if (!dbgutils::isStructType(*base_addr_lowest_di_type))
       return nullptr;
+    // TODO: here we assume negative offset always move to the parent structure, and no other unsafe use.
+    // should verify this assumption is valid.
+    // if (pdgutils::getGEPAccessFieldOffset(*gep) < 0)
+    //   return base_addr_lowest_di_type;
     if (auto dict = dyn_cast<DICompositeType>(base_addr_lowest_di_type))
     {
       auto di_node_arr = dict->getElements();

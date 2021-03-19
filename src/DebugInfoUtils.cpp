@@ -220,11 +220,16 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
       {
         auto total_size = dct->getSizeInBits();
         auto element_size = element_dt->getSizeInBits();
+        auto element_type_name = getSourceLevelTypeName(*element_dt, is_raw);
         if (total_size != 0 && element_size != 0)
         {
           auto element_count = total_size / element_size;
-          auto element_type_name = getSourceLevelTypeName(*element_dt, is_raw);
           std::string arr_field_str = "array< " + element_type_name + ", " + std::to_string(element_count) + ">";
+          return arr_field_str;
+        }
+        else if (total_size == 0)
+        {
+          std::string arr_field_str = "array<" + element_type_name + ", 0>";
           return arr_field_str;
         }
       }
