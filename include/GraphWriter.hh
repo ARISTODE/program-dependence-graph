@@ -64,9 +64,24 @@ namespace llvm
         }
         break;
       }
-      case pdg::GraphNodeType::GLOBAL_VAR:
+      case pdg::GraphNodeType::INST_ANNO_LOCAL:
       {
-          OS << "global: " << *node_val;
+          OS << "Local Anno: " << *node_val;
+          return OS.str();
+      }
+      case pdg::GraphNodeType::INST_ANNO_GLOBAL:
+      {
+          OS << "Global Anno: " << *node_val;
+          return OS.str();
+      }
+      case pdg::GraphNodeType::GLOBALVAR_GLOBL:
+      {
+          OS << "global var: " << *node_val;
+          return OS.str();
+      }
+      case pdg::GraphNodeType::GLOBALVAR_LOCAL:
+      {
+          OS << "static var: " << *node_val;
           return OS.str();
       }
       default:
@@ -80,8 +95,16 @@ namespace llvm
       pdg::EdgeType edge_type = edge_iter.getEdgeType();
       switch (edge_type)
       {
-      case pdg::EdgeType::CONTROL:
-        return "label = \"{CONTROL}\"";
+      case pdg::EdgeType::CONTROLDEP_ENTRY:
+        return "label = \"{CONTROLDEP_ENTRY}\"";
+      case pdg::EdgeType::CONTROLDEP_BR:
+        return "label = \"{CONTROLDEP_BR}\"";
+      case pdg::EdgeType::CONTROLDEP_CALLINV:
+        return "label = \"{CONTROLDEP_CALLINV}\"";
+      case pdg::EdgeType::CONTROLDEP_CALLRET:
+        return "label = \"{CONTROLDEP_CALLRET}\"";
+      case pdg::EdgeType::CONTROLDEP_IND_BR:
+        return "label = \"{CONTROLDEP_IND_BR}\"";
       case pdg::EdgeType::DATA_DEF_USE:
         return "style=dotted,label = \"{D_DEF_USE}\" ";
       case pdg::EdgeType::DATA_ALIAS:
@@ -94,10 +117,10 @@ namespace llvm
         return "style=dashed, color=\"blue\", label=\"{P_F}\"";
       case pdg::EdgeType::DATA_RAW:
         return "style=dotted,label = \"{D_RAW}\" ";
-      case pdg::EdgeType::CALL:
-        return "style=dashed, color=\"red\", label =\"{CALL}\"";
       case pdg::EdgeType::DATA_RET:
         return "style=dashed, color=\"red\", label =\"{D_RET}\"";
+      case pdg::EdgeType::ANNO_VAR:
+        return "style=dashed, color=\"green\", label =\"{anno}\"";
       default:
         break;
       }

@@ -123,7 +123,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   auto func_entry_node = fw.getEntryNode();
   if (call_site_node == nullptr || func_entry_node == nullptr )
     return;
-  call_site_node->addNeighbor(*func_entry_node, EdgeType::CALL);
+  call_site_node->addNeighbor(*func_entry_node, EdgeType::CONTROLDEP_CALLINV);
 
   // step 2: connect actual in -> formal in, formal out -> actual out
   auto actual_arg_list = cw.getArgList();
@@ -168,7 +168,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     Node *src = _PDG->getNode(*ret_inst);
     if (src == nullptr)
       continue;
-    src->addNeighbor(*dst, EdgeType::CONTROL);
+    src->addNeighbor(*dst, EdgeType::CONTROLDEP_CALLRET);
   }
   // add data return edge
   for (auto ret_inst : ret_insts)

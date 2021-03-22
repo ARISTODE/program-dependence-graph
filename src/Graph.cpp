@@ -65,10 +65,12 @@ void pdg::ProgramGraph::build(Module &M)
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;
-    Node * n = new Node(global_var, GraphNodeType::GLOBAL_VAR);
+    Node * n = new Node(global_var, GraphNodeType::GLOBALVAR_GLOBL);
     _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
   }
+
+  buildGlobalAnnotationNodes(M);
 
   for (auto &F : M)
   {
@@ -77,7 +79,10 @@ void pdg::ProgramGraph::build(Module &M)
     FunctionWrapper *func_w = new FunctionWrapper(&F);
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
-      Node *n = new Node(*inst_iter, GraphNodeType::INST);
+      GraphNodeType node_type = GraphNodeType::INST;
+      if (isAnnotationCallInst(*inst_iter))
+        node_type = GraphNodeType::INST_ANNO_LOCAL;
+      Node *n = new Node(*inst_iter, node_type);
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
       addNode(*n);
@@ -268,5 +273,48 @@ void pdg::ProgramGraph::addFormalTreeNodesToGraph(FunctionWrapper &func_w)
       return;
     addTreeNodesToGraph(*formal_in_tree);
     addTreeNodesToGraph(*formal_out_tree);
+  }
+}
+
+bool pdg::ProgramGraph::isAnnotationCallInst(Instruction &inst)
+{
+  if (CallInst *ci = dyn_cast<CallInst>(&inst))
+  {
+    Function* f = pdgutils::getCalledFunc(*ci);
+    if (f == nullptr)
+      return false;
+    std::string called_func_name = f->getName().str();
+    if (called_func_name == "llvm.var.annotation")
+      return true;
+  }
+  return false;
+}
+
+void pdg::ProgramGraph::buildGlobalAnnotationNodes(Module &M)
+{
+  auto global_annos = M.getNamedGlobal("llvm.global.annotations");
+  if (global_annos)
+  {
+    Node* global_anno_node = new Node(*global_annos, GraphNodeType::INST_ANNO_GLOBAL);
+    _val_node_map.insert(std::pair<Value *, Node *>(global_annos, global_anno_node));
+    addNode(*global_anno_node);
+    auto casted_array = cast<ConstantArray>(global_annos->getOperand(0));
+    for (int i = 0; i < casted_array->getNumOperands(); i++)
+    {
+      auto casted_struct = cast<ConstantStruct>(casted_array->getOperand(i));
+      if (auto annotated_gv = dyn_cast<GlobalValue>(casted_struct->getOperand(0)->getOperand(0)))
+      {
+        auto globalSenStr = cast<GlobalVariable>(casted_struct->getOperand(1)->getOperand(0));
+        auto anno = cast<ConstantDataArray>(globalSenStr->getOperand(0))->getAsCString();
+        Node *n = getNode(*annotated_gv);
+        if (n == nullptr)
+        {
+          n = new Node(*annotated_gv, GraphNodeType::GLOBALVAR_GLOBL);
+          _val_node_map.insert(std::pair<Value *, Node *>(annotated_gv, n));
+          addNode(*n);
+        }
+        n->addNeighbor(*global_anno_node, EdgeType::ANNO_VAR);
+      }
+    }
   }
 }

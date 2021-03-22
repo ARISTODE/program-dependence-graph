@@ -81,6 +81,8 @@ namespace pdg
     llvm::DIType *computeNodeDIType(Node &n);
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
+    bool isAnnotationCallInst(llvm::Instruction &inst);
+    void buildGlobalAnnotationNodes(llvm::Module &M);
 
   private:
     FuncWrapperMap _func_wrapper_map;
