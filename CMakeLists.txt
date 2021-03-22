@@ -47,7 +47,7 @@ add_library(pdg MODULE
     ${SOURCES}
 )
 
-target_link_libraries(pdg PUBLIC "${CMAKE_SOURCE_DIR}/SVF/lib/libSvf.a")
+target_link_libraries(pdg PUBLIC "${CMAKE_SOURCE_DIR}/SVF/build/lib/libSvf.a")
 #
 # Turn on C++11, turn off C++ RTTI.
 #
