@@ -229,7 +229,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
                      << "> {\n"
                      << nested_struct_proj_str.str()
                      << indent_level
-                     << "} ;" << field_var_name
+                     << "} " << field_var_name
                      << "\n";
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
@@ -249,7 +249,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
   }
 }
 
-void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree)
+void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret)
 {
   if (!arg_tree)
     return;
@@ -310,6 +310,11 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree)
     }
     else
     {
+      if (proj_var_name.empty())
+        proj_var_name = proj_type_name;
+      // concat ret preifx
+      if (is_ret)
+        proj_var_name = "ret_" + proj_var_name;
       idl_file << "\tprojection < struct "
                << proj_type_name
                << " > "
@@ -411,7 +416,7 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
   // generate projection for return value
   auto ret_arg_tree = fw->getRetFormalInTree();
   if (dbgutils::getFuncRetDIType(F) != nullptr)
-    generateIDLFromArgTree(ret_arg_tree);
+    generateIDLFromArgTree(ret_arg_tree, true);
   //generate projection for each argument
   auto arg_tree_map = fw->getArgFormalInTreeMap();
   for (auto iter = arg_tree_map.begin(); iter != arg_tree_map.end(); iter++)
