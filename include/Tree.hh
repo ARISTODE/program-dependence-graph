@@ -34,6 +34,7 @@ namespace pdg
       int numOfChild() { return _children.size(); }
       bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
+      void dump() override;
 
     private:
       Tree *_tree = nullptr;

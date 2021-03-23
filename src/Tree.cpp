@@ -107,6 +107,11 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
   }
 }
 
+void pdg::TreeNode::dump()
+{
+  errs() << _depth << " - " << static_cast<int>(_node_type) << "\n";
+}
+
 //  ====== Tree =======
 pdg::Tree::Tree(const Tree &src_tree)
 {

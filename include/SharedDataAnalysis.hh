@@ -42,6 +42,7 @@ namespace pdg
     ProgramGraph *getPDG() { return _PDG; }
     // some side tests
     void printPingPongCalls(llvm::Module &M);
+    void dumpSharedTypes(std::string file_name);
 
   private:
     ProgramGraph *_PDG;

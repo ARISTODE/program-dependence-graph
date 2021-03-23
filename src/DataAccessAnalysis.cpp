@@ -28,7 +28,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     // computeInterProcDataAccess(F);
   }
 
-  idl_file << "module kernel() {\n";
+  idl_file << "module kernel {\n";
   for (auto F : _SDA->getBoundaryFuncs())
   {
     if (F->isDeclaration())
@@ -96,10 +96,13 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode& tree_node)
 
   // inter proc access tags
   auto parameter_in_nodes = _PDG->findNodesReachedByEdge(tree_node, EdgeType::PARAMETER_IN);
+  // errs() << "para in node size: " << parameter_in_nodes.size() << " - " << tree_node.getDepth() << "\n";
   for (auto n : parameter_in_nodes)
   {
+    // n->dump();
     if (n->getValue() != nullptr)
     {
+      // errs() << *n->getValue() << "\n";
       auto acc_tags = computeDataAccessTagsForVal(*n->getValue());
       for (auto acc_tag : acc_tags)
       {
@@ -129,6 +132,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTree(Tree* tree)
 
 void pdg::DataAccessAnalysis::computeIntraProcDataAccess(Function &F)
 {
+  // errs() << "compute intra for func: " << F.getName() << "\n";
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   if (func_wrapper_map.find(&F) == func_wrapper_map.end())
     return;
@@ -138,9 +142,12 @@ void pdg::DataAccessAnalysis::computeIntraProcDataAccess(Function &F)
   computeDataAccessForTree(arg_ret_tree);
   // compute arg access info
   auto arg_tree_map = fw->getArgFormalInTreeMap();
+  int count = 0;
   for (auto iter = arg_tree_map.begin(); iter != arg_tree_map.end(); iter++)
   {
     Tree* arg_tree = iter->second;
+    // errs() << "compute for arg: " << count << "\n";
+    count += 1;
     computeDataAccessForTree(arg_tree);
   }
 }
@@ -188,7 +195,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (!_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField)
       continue;
 
-    auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type);
+    auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     // compute access attributes
     std::string access_attributes = "";
@@ -217,13 +224,13 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       raw_string_ostream nested_struct_proj_str(sub_fields_str);
       generateIDLFromTreeNode(*child_node, nested_struct_proj_str, node_queue, indent_level + "\t");
       projection_str << indent_level
-                     << "projection < " 
+                     << "projection < struct " 
                      << field_type_name
                      << "> {\n"
                      << nested_struct_proj_str.str()
                      << indent_level
-                     << "} " << field_var_name
-                     << ";\n";
+                     << "} ;" << field_var_name
+                     << "\n";
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
     {
@@ -309,7 +316,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree)
                << proj_var_name
                << " {\n"
                << projection_str.str()
-               << "\t};\n";
+               << "\t}\n";
     }
   }
 }

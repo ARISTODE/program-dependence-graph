@@ -28,6 +28,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   // dumpSharedFieldID();
+  dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
   return false;
 }
@@ -428,6 +429,16 @@ void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
   errs() << "cross boundary times: " << cross_boundary_times << "\n";
   errs() << "num of boundary funcs: " << _boundary_funcs.size() << "\n";
   errs() << "==========================================================\n";
+}
+
+void pdg::SharedDataAnalysis::dumpSharedTypes(std::string file_name)
+{
+  std::ofstream output_file(file_name);
+  for (auto shared_struct_type : _shared_struct_type_names)
+  {
+    output_file << shared_struct_type << "\n";
+  }
+  output_file.close();
 }
 
 static RegisterPass<pdg::SharedDataAnalysis>

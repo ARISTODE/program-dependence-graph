@@ -28,6 +28,9 @@ namespace pdg
       void connectFormalOutTreeWithAddrVars(Tree &formal_out_tree);
       void connectActualInTreeWithAddrVars(Tree &actual_in_tree, llvm::CallInst &ci);
       void connectActualOutTreeWithAddrVars(Tree &actual_out_tree, llvm::CallInst &ci);
+      void connectTreeNode(TreeNode &src_node, TreeNode &dst_node, EdgeType edge_type);
+      void connectFormalInTreeWithActualTree(llvm::Function &F);
+      void connectFormalInTreeWithCallActualNode(Tree &formal_in_tree);
 
     private:
       llvm::Module *_module;
