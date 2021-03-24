@@ -34,6 +34,7 @@ void pdg::AtomicRegionAnalysis::setupLockMap()
   _lock_map.insert(std::make_pair("mutex_lock", "mutex_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
+  _lock_map.insert(std::make_pair("rcu_read_lock", "rcu_read_unlock"));
 }
 
 void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)

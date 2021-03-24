@@ -23,7 +23,7 @@ namespace pdg
       void generateIDLForFunc(llvm::Function &F);
       void generateRpcForFunc(llvm::Function &F);
       void generateIDLFromArgTree(Tree *arg_tree, bool is_ret = false);
-      void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &projection_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+      void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_projion_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
       void constructGlobalOpStructStr();
       void computeContainerOfLocs(llvm::Function &F);
       std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);

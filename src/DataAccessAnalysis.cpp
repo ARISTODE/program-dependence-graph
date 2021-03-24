@@ -172,7 +172,7 @@ Four cases:
 3. pointer to aggregate type
 4. aggregate type
 */
-void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_string_ostream &projection_str, std::queue<TreeNode *> &node_queue, std::string indent_level)
+void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_string_ostream &fields_projection_str, raw_string_ostream &nested_struct_projection_str, std::queue<TreeNode *> &node_queue, std::string indent_level)
 {
   DIType* node_di_type = tree_node.getDIType();
   assert(node_di_type != nullptr && "cannot generate IDL for node with null DIType\n");
@@ -209,7 +209,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       {
         field_name_prefix = "_global_";
       }
-      projection_str << indent_level
+      fields_projection_str << indent_level
                      << "projection "
                      << field_name_prefix
                      << field_type_name 
@@ -220,17 +220,26 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
     else if (dbgutils::isProjectableType(*field_di_type))
     {
-      std::string sub_fields_str;
-      raw_string_ostream nested_struct_proj_str(sub_fields_str);
-      generateIDLFromTreeNode(*child_node, nested_struct_proj_str, node_queue, indent_level + "\t");
-      projection_str << indent_level
-                     << "projection < struct " 
-                     << field_type_name
-                     << "> {\n"
-                     << nested_struct_proj_str.str()
-                     << indent_level
-                     << "} " << field_var_name
-                     << "\n";
+      std::string nested_fields_str;
+      raw_string_ostream nested_fields_proj(nested_fields_str);
+
+      std::string nested_struct_str;
+      raw_string_ostream field_nested_struct_proj(nested_struct_str);
+      
+      generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t");
+      
+      fields_projection_str << indent_level << "projection " << field_type_name << " " << field_var_name << ";\n";
+
+      nested_struct_projection_str
+          << "projection < struct "
+          << field_type_name
+          << "> " << field_type_name << "{\n"
+          << nested_fields_proj.str()
+          << indent_level
+          << "}"
+          << "\n";
+
+      nested_struct_projection_str << field_nested_struct_proj.str();
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
     {
@@ -240,11 +249,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       Function *called_func = _module->getFunction(exported_func_name);
       if (called_func == nullptr)
         continue;
-      projection_str << indent_level << "rpc_ptr " << field_var_name << " " << field_var_name << ";\n";
+      fields_projection_str << indent_level << "rpc_ptr " << field_var_name << " " << field_var_name << ";\n";
     }
     else
     {
-      projection_str << indent_level << field_type_name << " " << access_attributes << " " << field_var_name << ";\n";
+      fields_projection_str << indent_level << field_type_name << " " << access_attributes << " " << field_var_name << ";\n";
     }
   }
 }
@@ -282,20 +291,24 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
       if (current_node->getDILocalVar() != nullptr)
         proj_var_name = dbgutils::getSourceLevelVariableName(*current_node->getDILocalVar());
     }
-    std::string str;
-    raw_string_ostream projection_str(str);
+    std::string s;
+    raw_string_ostream fields_projection_str(s);
+    std::string ss;
+    raw_string_ostream nested_struct_projection_str(ss);
+
     // for pointer to aggregate type, retrive the child node(pointed object), and generate projection
     if (dbgutils::isPointerType(*dbgutils::stripMemberTag(*node_di_type)) && !current_node->getChildNodes().empty())
       current_node = current_node->getChildNodes()[0];
     // errs() << "generate idl for node: " << proj_type_name << "\n";
-    generateIDLFromTreeNode(*current_node, projection_str, node_queue, "\t\t");
+    generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t");
     // handle funcptr ops struct specifically
+    idl_file << nested_struct_projection_str.str();
     if (proj_type_name.find("_ops") != std::string::npos)
     {
       if (_global_ops_fields_map.find(proj_type_name) == _global_ops_fields_map.end())
         _global_ops_fields_map.insert(std::make_pair(proj_type_name, std::set<std::string>()));
 
-      auto accessed_field_names = pdgutils::splitStr(projection_str.str(), ";");
+      auto accessed_field_names = pdgutils::splitStr(fields_projection_str.str(), ";");
       for (auto field_name : accessed_field_names)
       {
         _global_ops_fields_map[proj_type_name].insert(field_name);
@@ -320,7 +333,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
                << " > "
                << proj_var_name
                << " {\n"
-               << projection_str.str()
+               << fields_projection_str.str()
                << "\t}\n";
     }
   }
