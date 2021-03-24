@@ -21,6 +21,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // get boundary functions
   setupBoundaryFuncs(M);
   // compute struct type passed through boundary (shared struct type)
+  readDriverGlobalStrucTypes();
   computeSharedStructDITypes();
   computeGlobalStructTypeNames();
   // build global tree for each struct type, connect with address variables
@@ -47,6 +48,15 @@ void pdg::SharedDataAnalysis::setupStrOps()
 void pdg::SharedDataAnalysis::setupDriverFuncs(Module &M)
 {
   _driver_domain_funcs = readFuncsFromFile("driver_funcs", M);
+}
+
+void pdg::SharedDataAnalysis::readDriverGlobalStrucTypes()
+{
+  ifstream driver_global_struct_types("driver_global_struct_types");
+  for (std::string line; std::getline(driver_global_struct_types, line);)
+  {
+    _driver_global_struct_types.insert(line);
+  }
 }
 
 void pdg::SharedDataAnalysis::setupKernelFuncs(Module &M)
@@ -86,6 +96,30 @@ std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file
 
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()
 {
+  // scan fro global structs
+  for (auto &global_var : _module->getGlobalList())
+  {
+    SmallVector<DIGlobalVariableExpression *, 4> sv;
+    if (!global_var.hasInitializer())
+      continue;
+    DIGlobalVariable *di_gv = nullptr;
+    global_var.getDebugInfo(sv);
+    for (auto di_expr : sv)
+    {
+      if (di_expr->getVariable()->getName() == global_var.getName())
+        di_gv = di_expr->getVariable(); // get global variable from global expression
+    }
+    if (!di_gv)
+      continue;
+    auto gv_di_type = di_gv->getType();
+    auto gv_lowest_di_type = dbgutils::getLowestDIType(*gv_di_type);
+    if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
+      continue;
+    auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type, true);
+    if (_driver_global_struct_types.find(gv_di_type_name) != _driver_global_struct_types.end())
+      _shared_struct_di_types.insert(gv_lowest_di_type);
+  }
+
   std::set<std::string> driver_struct_type_names;
   for (auto func : _driver_domain_funcs)
   {
@@ -114,11 +148,11 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
         driver_struct_type_names.insert(dbgutils::getSourceLevelTypeName(*lowest_di_type));
     }
   }
-  // errs() << " === driver side struct types ===\n";
-  // for (auto t : driver_struct_type_names)
-  // {
-  //   errs() << "\t" << t << "\n";
-  // }
+  errs() << " === driver side struct types ===\n";
+  for (auto t : driver_struct_type_names)
+  {
+    errs() << "\t" << t << "\n";
+  }
   std::set<std::string> processed_struct_names;
   for (auto func : _kernel_domain_funcs)
   {

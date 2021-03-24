@@ -81,6 +81,8 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     }
   }
 
+  // used to store driver global
+  std::ofstream driver_global_struct_types("driver_global_struct_types");
   for (auto &global_var : M.getGlobalList())
   {
     SmallVector<DIGlobalVariableExpression *, 4> sv;
@@ -97,12 +99,12 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
       continue;
     auto gv_di_type = di_gv->getType();
     auto gv_lowest_di_type = dbgutils::getLowestDIType(*gv_di_type);
-    if (gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
+    if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
       continue;
     auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type, true);
     if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
       continue;
-
+    driver_global_struct_types << gv_di_type_name << "\n";
     const auto &typeArrRef = dyn_cast<DICompositeType>(gv_lowest_di_type)->getElements();
     Type *global_type = global_var.getType();
     if (auto t = dyn_cast<PointerType>(global_type))

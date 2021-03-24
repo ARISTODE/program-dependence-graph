@@ -17,6 +17,7 @@ namespace pdg
     bool runOnModule(llvm::Module &M) override;
     void setupDriverFuncs(llvm::Module &M);
     void setupStrOps();
+    void readDriverGlobalStrucTypes();
     std::set<llvm::Function *> &getDriverFuncs() { return _driver_domain_funcs; }
     void setupKernelFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
@@ -58,6 +59,7 @@ namespace pdg
     std::set<std::string> _string_op_names;
     std::set<std::string> _global_struct_di_type_names;
     std::set<std::string> _shared_struct_type_names;
+    std::set<std::string> _driver_global_struct_types;
   };
 } // namespace pdg
 #endif
