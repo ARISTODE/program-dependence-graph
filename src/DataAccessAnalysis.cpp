@@ -211,8 +211,8 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       }
       fields_projection_str << indent_level
                      << "projection "
-                     << field_name_prefix
-                     << field_type_name 
+                     << field_var_name
+		     << (field_type_name.back() == '*' ? "*" : " ")
                      << " "
                      << field_var_name
                      << ";\n";
