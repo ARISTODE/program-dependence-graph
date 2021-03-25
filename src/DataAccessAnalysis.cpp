@@ -339,6 +339,25 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
   }
 }
 
+static std::list<std::string> ioremap_fns = {
+  "ioremap_nocache",
+  "ioremap",
+  "pci_ioremap_bar",
+};
+
+//std::string pdg::DataAccessAnalysis::handleIoRemap(Function &F, std::string &ret_type_str)
+std::string handleIoRemap(Function &F, std::string &ret_type_str)
+{
+  auto fname = F.getName().str();
+
+  if ((std::find(ioremap_fns.begin(), ioremap_fns.end(), fname) != ioremap_fns.end())
+      && (ret_type_str == "void*")) {
+    // Add ioremap annotation
+    return " [ioremap(caller)] ";
+  }
+  return "";
+}
+
 void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
 {
   FunctionWrapper *fw = _PDG->getFuncWrapperMap()[&F];
@@ -372,7 +391,9 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
     }
   }
 
-  rpc_str = rpc_prefix + " " + ret_type_str + " " + called_func_name + "( ";
+  auto ioremap_ann = handleIoRemap(F, ret_type_str);
+
+  rpc_str = rpc_prefix + " " + ret_type_str + ioremap_ann + " " + called_func_name + "( ";
   auto arg_list = fw->getArgList();
   for (unsigned i = 0; i < arg_list.size(); i++)
   {
