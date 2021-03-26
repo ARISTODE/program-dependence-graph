@@ -6,7 +6,7 @@ using namespace llvm;
 bool pdg::ControlDependencyGraph::runOnFunction(Function &F)
 {
   _PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
-  addControlDepFromEntryNodeToEntryBlock(F);
+  addControlDepFromEntryNodeToInsts(F);
   addControlDepFromDominatedBlockToDominator(F);
   return false;
 }
@@ -24,11 +24,14 @@ void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock 
   }
 }
 
-void pdg::ControlDependencyGraph::addControlDepFromEntryNodeToEntryBlock(Function &F)
+void pdg::ControlDependencyGraph::addControlDepFromEntryNodeToInsts(Function &F)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   FunctionWrapper* func_w = g.getFuncWrapperMap()[&F];
-  addControlDepFromNodeToBB(*func_w->getEntryNode(), F.getEntryBlock(), EdgeType::CONTROLDEP_ENTRY);
+  for (auto &BB : F)
+  {
+    addControlDepFromNodeToBB(*func_w->getEntryNode(), BB, EdgeType::CONTROLDEP_ENTRY);
+  }
 }
 
 void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Function &F)

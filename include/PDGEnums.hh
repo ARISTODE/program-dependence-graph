@@ -22,7 +22,7 @@ namespace pdg
     GLOBAL_DEP,
     VAL_DEP,
     ANNO_FUNC,
-    ANNO_VAR
+    ANNO_VAR,
     TYPE_OTHEREDGE
   };
 
