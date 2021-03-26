@@ -82,6 +82,10 @@ void pdg::ProgramGraph::build(Module &M)
       GraphNodeType node_type = GraphNodeType::INST;
       if (isAnnotationCallInst(*inst_iter))
         node_type = GraphNodeType::INST_ANNO_LOCAL;
+      if (isa<ReturnInst>(&*inst_iter))
+        node_type = GraphNodeType::INST_RET;
+      if (isa<CallInst>(&*inst_iter))
+        node_type = GraphNodeType::INST_CALL;
       Node *n = new Node(*inst_iter, node_type);
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
