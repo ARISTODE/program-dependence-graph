@@ -255,9 +255,10 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   }
   case dwarf::DW_TAG_enumeration_type:
   {
-    if (!dt.getName().str().empty())
-      return "u32 " + dt.getName().str(); // enum is translated to int
-    return "u32";
+    auto base_type = getBaseDIType(dt);
+    if (!base_type)
+      return "s32";
+    return getSourceLevelTypeName(*getBaseDIType(dt), is_raw);
   }
   default:
   {
