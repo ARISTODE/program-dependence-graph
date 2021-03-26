@@ -120,7 +120,7 @@ namespace llvm
       case pdg::EdgeType::DATA_RET:
         return "style=dashed, color=\"red\", label =\"{D_RET}\"";
       case pdg::EdgeType::ANNO_VAR:
-        return "style=dashed, color=\"green\", label =\"{anno}\"";
+        return "style=dashed, color=\"green\", label =\"{ANNO_VAR}\"";
       default:
         break;
       }

@@ -28,7 +28,7 @@ int encrypt (char *plaintext, int sz) {
 
 int main (){
     int age = 10;
-	char username[20], text[1024];
+	char __attribute__((annotate("sensitive"))) username[20], text[1024];
 	printf("Enter username: ");
 	scanf("%19s",username);
 	greeter(username, &age);
