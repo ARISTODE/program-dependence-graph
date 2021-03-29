@@ -1,0 +1,77 @@
+module kernel {
+rpc_ptr s32 ( s32 argc, s8** argv ) {
+}
+rpc void parse_args( s32 argc, s8** argv ) {
+}
+rpc void lookup_hostname( * sa4P, u64 sa4_len, s32*[out] gotv4P, * sa6P, u64 sa6_len, s32*[out] gotv6P ) {
+	projection < struct  > sa4P {
+	}
+	projection < struct  > sa6P {
+	}
+}
+rpc void read_throttlefile( s8* tf ) {
+}
+rpc void re_open_logfile(  ) {
+}
+rpc s32 handle_newconnect( projection tvP * tvP, s32 listen_fd ) {
+	projection < struct timeval > tvP {
+	}
+}
+rpc void clear_connection( projection c * c, projection tvP * tvP ) {
+	projection < struct  > c {
+		s32 [out] conn_state;
+		projection hc* hc;
+	}
+	projection < struct  > hc {
+	}
+	projection < struct timeval > tvP {
+	}
+}
+rpc void handle_read( projection c * c, projection tvP * tvP ) {
+	projection < struct  > c {
+		s32 [out] conn_state;
+		projection hc* hc;
+	}
+	projection < struct  > hc {
+	}
+	projection < struct timeval > tvP {
+	}
+}
+rpc void handle_send( projection c * c, projection tvP * tvP ) {
+	projection < struct  > c {
+		s32 [out] conn_state;
+		projection hc* hc;
+	}
+	projection < struct  > hc {
+	}
+	projection < struct timeval > tvP {
+	}
+}
+rpc void handle_linger( projection c * c, projection tvP * tvP ) {
+	projection < struct  > c {
+		projection hc* hc;
+	}
+	projection < struct  > hc {
+	}
+	projection < struct timeval > tvP {
+	}
+}
+rpc void shut_down(  ) {
+}
+rpc projection ret_* httpd_initialize( s8* hostname, * sa4P, * sa6P, u16 port, s8* cgi_pattern, s32 cgi_limit, s8* charset, s8* p3p, s32 max_age, s8* cwd, s32 no_log, projection logfp * logfp, s32 no_symlink_check, s32 vhost, s32 global_passwd, s8* url_pattern, s8* local_pattern, s32 no_empty_referrers ) {
+	projection < struct  > ret_ {
+	}
+	projection < struct  > sa4P {
+	}
+	projection < struct  > sa6P {
+	}
+	projection < struct __sFILE > logfp {
+	}
+}
+rpc void httpd_unlisten( projection hs * hs ) {
+	projection < struct  > hs {
+	}
+}
+
+
+}

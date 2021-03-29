@@ -1,0 +1,282 @@
+This file contains any messages produced by compilers while
+running configure, to aid debugging if configure makes a mistake.
+
+configure:573: checking host system type
+configure:594: checking target system type
+configure:612: checking build system type
+configure:638: checking for gcc
+configure:751: checking whether the C compiler (wllvm  ) works
+configure:767: wllvm -o conftest    conftest.c  1>&5
+configure:764:1: warning: type specifier missing, defaults to 'int' [-Wimplicit-int]
+main(){return(0);}
+^
+1 warning generated.
+configure:764:1: warning: type specifier missing, defaults to 'int' [-Wimplicit-int]
+main(){return(0);}
+^
+1 warning generated.
+configure:764:1: warning: type specifier missing, defaults to 'int' [-Wimplicit-int]
+main(){return(0);}
+^
+1 warning generated.
+configure:793: checking whether the C compiler (wllvm  ) is a cross-compiler
+configure:798: checking whether we are using GNU C
+configure:807: wllvm -E conftest.c
+configure:826: checking whether wllvm accepts -g
+configure:861: checking gcc version
+configure:879: checking how to link static binaries
+configure:910: checking for __progname
+configure:923: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:919:2: warning: implicit declaration of function 'puts' is invalid in C99 [-Wimplicit-function-declaration]
+        puts(__progname)
+        ^
+1 warning generated.
+configure:919:2: warning: implicit declaration of function 'puts' is invalid in C99 [-Wimplicit-function-declaration]
+        puts(__progname)
+        ^
+1 warning generated.
+configure:919:2: warning: implicit declaration of function 'puts' is invalid in C99 [-Wimplicit-function-declaration]
+        puts(__progname)
+        ^
+1 warning generated.
+configure:946: checking how to run the C preprocessor
+configure:967: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for fcntl.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for grp.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for memory.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for paths.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for poll.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for sys/poll.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for sys/devpoll.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1035:10: fatal error: 'sys/devpoll.h' file not found
+#include <sys/devpoll.h>
+         ^~~~~~~~~~~~~~~
+1 error generated.
+ERROR:Failed to compile using given arguments: [-E conftest.c]
+configure: failed program was:
+#line 1034 "configure"
+#include "confdefs.h"
+#include <sys/devpoll.h>
+configure:1029: checking for sys/event.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1029: checking for osreldate.h
+configure:1039: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1035:10: fatal error: 'osreldate.h' file not found
+#include <osreldate.h>
+         ^~~~~~~~~~~~~
+1 error generated.
+ERROR:Failed to compile using given arguments: [-E conftest.c]
+configure: failed program was:
+#line 1034 "configure"
+#include "confdefs.h"
+#include <osreldate.h>
+configure:1066: checking whether time.h and sys/time.h may both be included
+configure:1080: wllvm -c -g -O2  conftest.c 1>&5
+configure:1105: checking for dirent.h that defines DIR
+configure:1118: wllvm -c -g -O2  conftest.c 1>&5
+configure:1143: checking for opendir in -ldir
+configure:1162: wllvm -o conftest -g -O2   conftest.c -ldir   1>&5
+ld: library not found for -ldir
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+ERROR:Failed to compile using given arguments: [-o conftest -g -O2 conftest.c -ldir]
+configure: failed program was:
+#line 1151 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char opendir();
+
+int main() {
+opendir()
+; return 0; }
+configure:1228: checking for /usr/local/v6/lib
+configure:1238: checking for gethostbyname
+configure:1266: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1451: checking for socket
+configure:1479: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1580: checking for main in -linet6
+configure:1595: wllvm -o conftest -g -O2   conftest.c -linet6   1>&5
+ld: library not found for -linet6
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+ERROR:Failed to compile using given arguments: [-o conftest -g -O2 conftest.c -linet6]
+configure: failed program was:
+#line 1588 "configure"
+#include "confdefs.h"
+
+int main() {
+main()
+; return 0; }
+configure:1624: checking for crypt
+configure:1652: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1719: checking for hstrerror
+configure:1747: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1810: checking for strerror
+configure:1838: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1822:6: warning: incompatible redeclaration of library function 'strerror' [-Wincompatible-library-redeclaration]
+char strerror();
+     ^
+configure:1822:6: note: 'strerror' is a builtin with type 'char *(int)'
+1 warning generated.
+configure:1822:6: warning: incompatible redeclaration of library function 'strerror' [-Wincompatible-library-redeclaration]
+char strerror();
+     ^
+configure:1822:6: note: 'strerror' is a builtin with type 'char *(int)'
+1 warning generated.
+configure:1822:6: warning: incompatible redeclaration of library function 'strerror' [-Wincompatible-library-redeclaration]
+char strerror();
+     ^
+configure:1822:6: note: 'strerror' is a builtin with type 'char *(int)'
+1 warning generated.
+configure:1867: checking for waitpid
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for vsnprintf
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1879:6: warning: incompatible redeclaration of library function 'vsnprintf' [-Wincompatible-library-redeclaration]
+char vsnprintf();
+     ^
+configure:1879:6: note: 'vsnprintf' is a builtin with type 'int (char *, unsigned long, const char *, struct __va_list_tag *)'
+1 warning generated.
+configure:1879:6: warning: incompatible redeclaration of library function 'vsnprintf' [-Wincompatible-library-redeclaration]
+char vsnprintf();
+     ^
+configure:1879:6: note: 'vsnprintf' is a builtin with type 'int (char *, unsigned long, const char *, struct __va_list_tag *)'
+1 warning generated.
+configure:1879:6: warning: incompatible redeclaration of library function 'vsnprintf' [-Wincompatible-library-redeclaration]
+char vsnprintf();
+     ^
+configure:1879:6: note: 'vsnprintf' is a builtin with type 'int (char *, unsigned long, const char *, struct __va_list_tag *)'
+1 warning generated.
+configure:1867: checking for daemon
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for setsid
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for setlogin
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for getaddrinfo
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for getnameinfo
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for gai_strerror
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for kqueue
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for sigset
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1867: checking for atoll
+configure:1895: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:1923: checking for unistd.h
+configure:1933: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1962: checking for getpagesize
+configure:1990: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:2015: checking for working mmap
+configure:2163: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:2094:7: warning: incompatible redeclaration of library function 'malloc' [-Wincompatible-library-redeclaration]
+char *malloc();
+      ^
+configure:2094:7: note: 'malloc' is a builtin with type 'void *(unsigned long)'
+configure:2104:13: warning: implicit declaration of function 'getpagesize' is invalid in C99 [-Wimplicit-function-declaration]
+        pagesize = getpagesize();
+                   ^
+configure:2111:3: warning: implicitly declaring library function 'exit' with type 'void (int) __attribute__((noreturn))' [-Wimplicit-function-declaration]
+                exit(1);
+                ^
+configure:2111:3: note: include the header <stdlib.h> or explicitly provide a declaration for 'exit'
+configure:2113:17: warning: implicit declaration of function 'rand' is invalid in C99 [-Wimplicit-function-declaration]
+                *(data + i) = rand();
+                              ^
+configure:2114:2: warning: implicit declaration of function 'umask' is invalid in C99 [-Wimplicit-function-declaration]
+        umask(0);
+        ^
+configure:2118:6: warning: implicit declaration of function 'write' is invalid in C99 [-Wimplicit-function-declaration]
+        if (write(fd, data, pagesize) != pagesize)
+            ^
+configure:2120:2: warning: implicit declaration of function 'close' is invalid in C99 [-Wimplicit-function-declaration]
+        close(fd);
+        ^
+configure:2151:6: warning: implicit declaration of function 'read' is invalid in C99 [-Wimplicit-function-declaration]
+        if (read(fd, data3, pagesize) != pagesize)
+            ^
+configure:2157:2: warning: implicit declaration of function 'unlink' is invalid in C99 [-Wimplicit-function-declaration]
+        unlink("conftestmmap");
+        ^
+9 warnings generated.
+configure:2094:7: warning: incompatible redeclaration of library function 'malloc' [-Wincompatible-library-redeclaration]
+char *malloc();
+      ^
+configure:2094:7: note: 'malloc' is a builtin with type 'void *(unsigned long)'
+configure:2104:13: warning: implicit declaration of function 'getpagesize' is invalid in C99 [-Wimplicit-function-declaration]
+        pagesize = getpagesize();
+                   ^
+configure:2111:3: warning: implicitly declaring library function 'exit' with type 'void (int) __attribute__((noreturn))' [-Wimplicit-function-declaration]
+                exit(1);
+                ^
+configure:2111:3: note: include the header <stdlib.h> or explicitly provide a declaration for 'exit'
+configure:2113:17: warning: implicit declaration of function 'rand' is invalid in C99 [-Wimplicit-function-declaration]
+                *(data + i) = rand();
+                              ^
+configure:2114:2: warning: implicit declaration of function 'umask' is invalid in C99 [-Wimplicit-function-declaration]
+        umask(0);
+        ^
+configure:2118:6: warning: implicit declaration of function 'write' is invalid in C99 [-Wimplicit-function-declaration]
+        if (write(fd, data, pagesize) != pagesize)
+            ^
+configure:2120:2: warning: implicit declaration of function 'close' is invalid in C99 [-Wimplicit-function-declaration]
+        close(fd);
+        ^
+configure:2151:6: warning: implicit declaration of function 'read' is invalid in C99 [-Wimplicit-function-declaration]
+        if (read(fd, data3, pagesize) != pagesize)
+            ^
+configure:2157:2: warning: implicit declaration of function 'unlink' is invalid in C99 [-Wimplicit-function-declaration]
+        unlink("conftestmmap");
+        ^
+9 warnings generated.
+configure:2094:7: warning: incompatible redeclaration of library function 'malloc' [-Wincompatible-library-redeclaration]
+char *malloc();
+      ^
+configure:2094:7: note: 'malloc' is a builtin with type 'void *(unsigned long)'
+configure:2104:13: warning: implicit declaration of function 'getpagesize' is invalid in C99 [-Wimplicit-function-declaration]
+        pagesize = getpagesize();
+                   ^
+configure:2111:3: warning: implicitly declaring library function 'exit' with type 'void (int) __attribute__((noreturn))' [-Wimplicit-function-declaration]
+                exit(1);
+                ^
+configure:2111:3: note: include the header <stdlib.h> or explicitly provide a declaration for 'exit'
+configure:2113:17: warning: implicit declaration of function 'rand' is invalid in C99 [-Wimplicit-function-declaration]
+                *(data + i) = rand();
+                              ^
+configure:2114:2: warning: implicit declaration of function 'umask' is invalid in C99 [-Wimplicit-function-declaration]
+        umask(0);
+        ^
+configure:2118:6: warning: implicit declaration of function 'write' is invalid in C99 [-Wimplicit-function-declaration]
+        if (write(fd, data, pagesize) != pagesize)
+            ^
+configure:2120:2: warning: implicit declaration of function 'close' is invalid in C99 [-Wimplicit-function-declaration]
+        close(fd);
+        ^
+configure:2151:6: warning: implicit declaration of function 'read' is invalid in C99 [-Wimplicit-function-declaration]
+        if (read(fd, data3, pagesize) != pagesize)
+            ^
+configure:2157:2: warning: implicit declaration of function 'unlink' is invalid in C99 [-Wimplicit-function-declaration]
+        unlink("conftestmmap");
+        ^
+9 warnings generated.
+configure:2248: checking for select
+configure:2276: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:2248: checking for poll
+configure:2276: wllvm -o conftest -g -O2   conftest.c  1>&5
+configure:2304: checking if struct tm has tm_gmtoff member
+configure:2318: wllvm -c -g -O2  conftest.c 1>&5
+configure:2338: checking if int64_t exists
+configure:2351: wllvm -c -g -O2  conftest.c 1>&5
+configure:2371: checking if socklen_t exists
+configure:2385: wllvm -c -g -O2  conftest.c 1>&5
+configure:2406: checking whether make sets ${MAKE}
+configure:2444: checking for a BSD compatible install

@@ -1,0 +1,19 @@
+#!/bin/sh
+#
+# thttpd-rotate - nightly script to rotate thttpd's log files on FreeBSD
+#
+# This goes in /etc/periodic/daily.  It rotates the log files and then
+# tells thttpd to re-open its log file.
+
+cd /usr/local/www/chroot/logs
+rm -f thttpd_log.7.gz
+mv thttpd_log.6.gz thttpd_log.7.gz
+mv thttpd_log.5.gz thttpd_log.6.gz
+mv thttpd_log.4.gz thttpd_log.5.gz
+mv thttpd_log.3.gz thttpd_log.4.gz
+mv thttpd_log.2.gz thttpd_log.3.gz
+mv thttpd_log.1.gz thttpd_log.2.gz
+mv thttpd_log thttpd_log.1
+kill -HUP `cat /var/run/thttpd.pid`
+sleep 1
+gzip -f thttpd_log.1

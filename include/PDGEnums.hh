@@ -5,9 +5,12 @@ namespace pdg
 {
   enum class EdgeType
   {
-    CALL,
-    IND_CALL,
-    CONTROL,
+    CONTROLDEP_IND_CALLINV,
+    CONTROLDEP_CALLINV,
+    CONTROLDEP_CALLRET,
+    CONTROLDEP_ENTRY,
+    CONTROLDEP_BR,
+    CONTROLDEP_IND_BR,
     DATA_DEF_USE,
     DATA_RAW,
     DATA_READ,
@@ -17,7 +20,10 @@ namespace pdg
     PARAMETER_OUT,
     PARAMETER_FIELD,
     GLOBAL_DEP,
-    VAL_DEP
+    VAL_DEP,
+    ANNO_FUNC,
+    ANNO_VAR,
+    TYPE_OTHEREDGE
   };
 
   enum class GraphNodeType
@@ -27,12 +33,16 @@ namespace pdg
     FORMAL_OUT,
     ACTUAL_IN,
     ACTUAL_OUT,
-    RETURN,
+    INST_RET,
     FUNC_ENTRY,
-    GLOBAL_VAR,
-    CALL,
+    INST_CALL,
     GLOBAL_TYPE,
-    FUNC
+    FUNC,
+    INST_ANNO_LOCAL,
+    INST_ANNO_GLOBAL,
+    GLOBALVAR_GLOBL,
+    GLOBALVAR_LOCAL,
+    TYPE_OTHERNODE
   };
 
   enum class AccessTag

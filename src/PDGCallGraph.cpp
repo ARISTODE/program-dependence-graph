@@ -29,7 +29,7 @@ void pdg::PDGCallGraph::build(Module &M)
         {
           auto callee_node = getNode(*called_func);
           if (callee_node != nullptr)
-            caller_node->addNeighbor(*callee_node, EdgeType::CALL);
+            caller_node->addNeighbor(*callee_node, EdgeType::CONTROLDEP_CALLINV);
         }
         else
         {
@@ -39,7 +39,7 @@ void pdg::PDGCallGraph::build(Module &M)
           {
             Node* callee_node = getNode(*ind_call_can);
             if (callee_node != nullptr)
-              caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
+              caller_node->addNeighbor(*callee_node, EdgeType::CONTROLDEP_IND_CALLINV);
           }
         }
       }

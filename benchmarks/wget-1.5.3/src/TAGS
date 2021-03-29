@@ -1,0 +1,765 @@
+
+alloca.c,785
+#define ADDRESS_FUNCTION(ADDRESS_FUNCTION65,2010
+#define ADDRESS_FUNCTION(ADDRESS_FUNCTION67,2073
+typedef void *pointer;pointer71,2131
+typedef char *pointer;pointer73,2160
+#define	NULL	77,2204
+#define malloc 91,2671
+#define	STACK_DIRECTION	104,3070
+#define	STACK_DIR	109,3156
+static int stack_dir;113,3277
+#define	STACK_DIR	114,3327
+find_stack_direction 117,3368
+#define	ALIGN_SIZE	148,4158
+typedef union hdrhdr151,4200
+} header;header159,4406
+static header *last_alloca_header 161,4417
+alloca 171,4857
+#define CRAY_STACK242,6370
+struct stack_control_headerstack_control_header245,6463
+struct stack_segment_linkagestack_segment_linkage260,7084
+struct stk_statstk_stat298,8182
+struct stk_trailerstk_trailer327,9605
+i00afunc 356,10264
+i00afunc 430,12212
+
+ansi2knr.c,418
+#  define HAVE_ISASCII 144,4888
+#  define is_ascii(is_ascii148,4960
+#  define is_ascii(is_ascii150,4990
+#define is_space(is_space153,5031
+#define is_alpha(is_alpha154,5079
+#define is_alnum(is_alnum155,5127
+#define isidchar(isidchar158,5198
+#define isidfirstchar(isidfirstchar159,5249
+main(169,5426
+#define bufsize 173,5493
+skipspace(281,8156
+writeblanks(305,8649
+test1(329,9370
+convert1(381,10773
+
+cmpt.c,2163
+strerror 42,1190
+strcasecmp 59,1686
+strncasecmp 88,2344
+typedef unsigned chartype;chartype120,3287
+strstr 123,3322
+# define HAVE_LIMITS_H 217,5017
+# define HAVE_LOCALTIME_R 218,5042
+# define STDC_HEADERS 219,5070
+# define LEAP_SECONDS_POSSIBLE 226,5340
+# define __P(__P230,5393
+# define CHAR_BIT 234,5468
+# define INT_MIN 238,5512
+# define INT_MAX 241,5590
+# define TIME_T_MIN 246,5719
+# define TIME_T_MAX 251,5875
+#define TM_YEAR_BASE 254,5931
+#define EPOCH_YEAR 255,5957
+# define __isleap(__isleap260,6103
+const unsigned short int __mon_yday[265,6253
+# define localtime_r 280,6708
+#  define localtime_r 284,6860
+localtime_r 287,6990
+ydhms_tm_diff 307,7523
+static time_t localtime_offset;332,8520
+mktime 336,8598
+__mktime_internal 355,9262
+# define __P(__P499,13934
+#define localtime_r 504,14052
+#define localtime_r 507,14154
+weak_alias 479,13238
+#define match_char(match_char524,14505
+# define match_string(match_string526,14600
+# define match_string(match_string533,14855
+#define get_number(get_number538,15099
+# define get_alt_number(get_alt_number551,15531
+# define get_alt_number(get_alt_number579,16376
+#define recursive(recursive583,16505
+extern const struct locale_data _nl_C_LC_TIME;590,16713
+# define weekday_name 592,16761
+# define ab_weekday_name 593,16838
+# define month_name 595,16924
+# define ab_month_name 596,16999
+# define HERE_D_T_FMT 597,17079
+# define HERE_D_FMT 598,17157
+# define HERE_AM_STR 599,17233
+# define HERE_PM_STR 600,17309
+# define HERE_T_FMT_AMPM 601,17385
+# define HERE_T_FMT 603,17473
+static char const weekday_name[605,17553
+static char const ab_weekday_name[610,17686
+static char const month_name[614,17788
+static char const ab_month_name[619,17963
+# define HERE_D_T_FMT 624,18102
+# define HERE_D_FMT 625,18147
+# define HERE_AM_STR 626,18178
+# define HERE_PM_STR 627,18204
+# define HERE_T_FMT_AMPM 628,18230
+# define HERE_T_FMT 629,18269
+enum locale_status locale_status633,18376
+enum locale_status { not,633,18376
+enum locale_status { not, loc,633,18376
+enum locale_status { not, loc, raw 633,18376
+strptime_internal 640,18554
+strptime 1178,29924
+
+connect.c,246
+extern int errno;52,1351
+static int msock 56,1428
+static struct sockaddr *addr;57,1451
+make_connection 63,1596
+bindport 109,3193
+select_fd 159,4436
+acceptport 182,5189
+closeport 199,5629
+conaddr 212,5896
+iread 232,6489
+iwrite 269,7288
+
+connect.h,25
+#define CONNECT_H21,806
+
+fnmatch.c,43
+fnmatch 33,1178
+has_wildcards_p 194,4415
+
+fnmatch.h,166
+#define MTCH_H21,805
+#define	FNM_PATHNAME	24,873
+#define	FNM_NOESCAPE	25,942
+#define	FNM_PERIOD	26,1018
+#define	__FNM_FLAGS	27,1093
+#define	FNM_NOMATCH	30,1222
+
+ftp-basic.c,284
+extern int errno;46,1171
+extern int h_errno;49,1212
+char ftp_last_respline[52,1240
+ftp_response 60,1556
+ftp_request 105,2656
+ftp_login 131,3396
+ftp_port 247,5835
+ftp_pasv 298,7208
+ftp_type 351,8307
+ftp_cwd 390,9098
+ftp_rest 429,9850
+ftp_retr 464,10587
+ftp_list 504,11394
+
+ftp-ls.c,69
+symperms 44,1267
+ftp_parse_unix_ls 69,1983
+ftp_parse_ls 385,10444
+
+ftp-opie.c,133
+static char Wp[34,1003
+extract 2088,55013
+#define STRLEN4(STRLEN42100,55326
+btoe 2108,55561
+calculate_skey_response 2148,56595
+
+ftp.c,384
+extern int errno;50,1287
+extern int h_errno;53,1328
+#define LIST_FILENAME 57,1410
+extern char ftp_last_respline[59,1444
+ftp_expected_bytes 65,1649
+getftp 107,2419
+ftp_loop_internal 814,22227
+ftp_get_listing 985,26593
+ftp_retrieve_list 1035,28158
+ftp_retrieve_dirs 1224,33305
+ftp_retrieve_glob 1278,35063
+ftp_loop 1366,37252
+delelement 1445,39317
+freefileinfo 1465,39677
+
+ftp.h,764
+#define FTP_H19,811
+enum ftypeftype37,1403
+  FT_PLAINFILE,39,1416
+  FT_DIRECTORY,40,1432
+  FT_SYMLINK,41,1448
+  FT_UNKNOWN42,1462
+  GLOBALL,49,1532
+  GLOBALL, GETALL,49,1532
+  GLOBALL, GETALL, GETONE49,1532
+struct fileinfofileinfo53,1618
+enum commandcommand66,1993
+  DO_LOGIN 68,2008
+  DO_LOGIN      = 0x0001,68,2008
+  DO_CWD 69,2074
+  DO_CWD        = 0x0002,69,2074
+  DO_RETR 70,2133
+  DO_RETR       = 0x0004,70,2133
+  DO_LIST 71,2185
+  DO_LIST       = 0x0008,71,2185
+  LEAVE_PENDING 72,2247
+  LEAVE_PENDING = 0x0010	72,2247
+enum fstatusfstatus75,2308
+  NOTHING 77,2323
+  NOTHING       = 0x0000,77,2323
+  ON_YOUR_OWN 78,2374
+  ON_YOUR_OWN   = 0x0001,78,2374
+  DONE_CWD 80,2455
+  DONE_CWD      = 0x0002	80,2455
+} ccon;ccon90,2722
+
+getopt.c,584
+#define const34,1195
+#define _NO_PROTO39,1312
+char *optarg 89,3162
+int optind 104,3722
+static char *nextchar;113,4021
+int opterr 118,4135
+int optopt 124,4318
+  REQUIRE_ORDER,157,5743
+  REQUIRE_ORDER, PERMUTE,157,5743
+  REQUIRE_ORDER, PERMUTE, RETURN_IN_ORDER157,5743
+} ordering;158,5785
+#define        my_index 166,6051
+#define        my_bcopy(my_bcopy167,6089
+my_index 176,6286
+my_bcopy 188,6443
+static int first_nonopt;202,6857
+static int last_nonopt;203,6882
+exchange 215,7368
+_getopt_internal 292,10770
+getopt_long 625,21191
+getopt 632,21389
+main 648,21803
+
+getopt.h,264
+#define _GETOPT_H 19,801
+extern char *optarg;31,1109
+extern int optind;45,1617
+extern int opterr;50,1743
+extern int optopt;54,1822
+struct optionoption77,2876
+#define	no_argument	93,3203
+#define required_argument	94,3226
+#define optional_argument	95,3254
+
+headers.c,120
+header_get 71,2381
+header_process 126,3804
+header_extract_number 146,4336
+header_strdup 162,4644
+skip_lws 171,4847
+
+headers.h,230
+  HG_OK,21,805
+  HG_OK, HG_ERROR,21,805
+  HG_OK, HG_ERROR, HG_EOF21,805
+enum header_get_flags header_get_flags24,835
+enum header_get_flags { HG_NONE 24,835
+			HG_NO_CONTINUATIONS 25,872
+			HG_NO_CONTINUATIONS = 0x2 25,872
+
+host.c,356
+extern int errno;53,1312
+struct hosthost57,1360
+static struct host *hlist;73,1918
+ngethostbyname 81,2156
+search_host 97,2573
+search_address 107,2797
+store_hostaddress 126,3250
+add_hlist 186,5384
+realhost 241,7080
+same_host 310,9698
+accept_domain 368,11068
+sufmatch 390,11603
+ftp_getaddress 419,12502
+herrmsg 530,15670
+clean_hosts 547,16167
+
+host.h,22
+#define HOST_H21,801
+
+html.c,204
+extern int errno;40,1087
+static state_t global_state;43,1113
+struct tag_attr tag_attr45,1143
+idmatch 53,1273
+htmlfindurl 72,1828
+html_base 335,8776
+html_quote_string 351,9136
+ftp_index 406,10160
+
+html.h,48
+#define HTML_H21,803
+} state_t;state_t30,949
+
+http.c,1713
+extern char *version_string;65,1484
+extern int errno;68,1528
+extern int h_errno;71,1569
+#define TEXTHTML_S 75,1599
+#define HTTP_ACCEPT 76,1630
+#define H_20X(H_20X79,1699
+#define H_PARTIAL(H_PARTIAL80,1753
+#define H_REDIRECTED(H_REDIRECTED81,1815
+#define HTTP_STATUS_OK	86,2019
+#define HTTP_STATUS_CREATED	87,2048
+#define HTTP_STATUS_ACCEPTED	88,2081
+#define HTTP_STATUS_NO_CONTENT	89,2115
+#define HTTP_STATUS_PARTIAL_CONTENTS	90,2151
+#define HTTP_STATUS_MULTIPLE_CHOICES	93,2217
+#define HTTP_STATUS_MOVED_PERMANENTLY	94,2258
+#define HTTP_STATUS_MOVED_TEMPORARILY	95,2300
+#define HTTP_STATUS_NOT_MODIFIED	96,2342
+#define HTTP_STATUS_BAD_REQUEST	99,2405
+#define HTTP_STATUS_UNAUTHORIZED	100,2442
+#define HTTP_STATUS_FORBIDDEN	101,2479
+#define HTTP_STATUS_NOT_FOUND	102,2514
+#define HTTP_STATUS_INTERNAL	105,2576
+#define HTTP_STATUS_NOT_IMPLEMENTED	106,2610
+#define HTTP_STATUS_BAD_GATEWAY	107,2650
+#define HTTP_STATUS_UNAVAILABLE	108,2687
+parse_http_status_line 118,2975
+struct http_process_range_closure http_process_range_closure177,4541
+http_process_range 186,4783
+http_process_none 226,5922
+http_process_type 239,6161
+struct http_stathttp_stat259,6512
+#define FREEHSTAT(FREEHSTAT273,6959
+gethttp 304,8179
+http_loop 838,23142
+mktime_from_utc 1189,33217
+check_end 1209,33861
+http_atotm 1243,35104
+#define BASE64_LENGTH(BASE64_LENGTH1301,37604
+base64_encode 1307,37866
+basic_authentication_encode 1345,39006
+extract_header_attr 1370,39905
+#define HEXD2asc(HEXD2asc1405,40662
+dump_hash 1412,40976
+digest_authentication_encode 1427,41328
+#define HACK_O_MATIC(HACK_O_MATIC1557,44526
+known_authentication_scheme_p 1563,44763
+create_authorization_line 1576,45226
+
+init.c,789
+extern int errno;48,1226
+#define CMD_DECLARE(CMD_DECLARE52,1253
+} commands[82,2199
+comind 158,5732
+defaults 179,6095
+home_dir 221,7116
+wgetrc_file_name 250,7895
+run_wgetrc 303,9192
+initialize 349,10204
+parse_line 391,11165
+setval 447,12648
+cmd_boolean 473,13257
+cmd_number 497,13833
+cmd_number_inf 513,14187
+cmd_string 526,14489
+cmd_vector 539,14818
+cmd_directory_vector 554,15068
+cmd_bytes 595,15987
+cmd_time 648,17216
+cmd_spec_dirstruct 699,18409
+cmd_spec_dotstyle 713,18751
+cmd_spec_header 768,20298
+cmd_spec_htmlify 799,21039
+cmd_spec_mirror 808,21244
+cmd_spec_outputdocument 827,21589
+cmd_spec_recursive 836,21782
+cmd_spec_useragent 849,22025
+myatoi 868,22560
+#define ISODIGIT(ISODIGIT881,22759
+check_user_specified_header 884,22818
+cleanup 901,23230
+
+init.h,22
+#define INIT_H21,802
+
+log.c,560
+# define USE_STDARG31,1028
+extern int errno;46,1245
+#define SAVED_LOG_MAXMSG 52,1447
+#define SAVED_LOG_MAXSIZE 55,1516
+static char *saved_log;57,1559
+static long saved_log_size;59,1615
+static long saved_log_offset;62,1742
+int save_log_p;64,1812
+static FILE *logfp;66,1829
+#define CHECK_VERBOSE(CHECK_VERBOSE78,2183
+#define CANONICALIZE_LOGFP_OR_RETURN 96,2557
+logputs 106,2758
+logvprintf 131,3466
+logflush 169,4783
+logprintf 179,4944
+debug_logprintf 208,5490
+log_init 237,6037
+log_close 269,6705
+log_dump 281,6987
+redirect_output 298,7418
+
+main.c,309
+#define OPTIONS_DEFINED_HERE	43,1215
+# define PATH_SEPARATOR 54,1419
+extern char *version_string;57,1455
+extern int errno;60,1499
+struct options opt;63,1525
+const char *exec_name;72,1746
+i18n_initialize 78,1945
+print_usage 99,2682
+print_help 107,2903
+main 195,7432
+redirect_output_signal 709,20450
+
+md5.c,506
+#  define WORDS_BIGENDIAN 47,1509
+# define SWAP(SWAP52,1576
+# define SWAP(SWAP55,1687
+static const unsigned char fillbuf[61,1835
+md5_init_ctx 67,2003
+md5_read_ctx 84,2417
+md5_finish_ctx 100,2929
+md5_stream 131,3869
+#define BLOCKSIZE 134,3969
+md5_buffer 186,5308
+md5_process_bytes 203,5669
+#define FF(FF249,7038
+#define FG(FG250,7078
+#define FH(FH251,7111
+#define FI(FI252,7143
+md5_process_block 258,7289
+#define OP(OP293,8573
+#define CYCLIC(CYCLIC305,8930
+#define OP(OP335,9995
+
+md5.h,375
+#define _MD5_H 22,1011
+typedef u_int32_t md5_uint32;md5_uint3239,1538
+#  define UINT_MAX_32_BITS 42,1608
+#  define UINT_MAX_32_BITS 44,1654
+#  define UINT_MAX 53,1974
+   typedef unsigned int md5_uint32;md5_uint3257,2053
+    typedef unsigned short md5_uint32;md5_uint3260,2132
+     typedef unsigned long md5_uint32;md5_uint3263,2216
+struct md5_ctxmd5_ctx74,2529
+
+mswindows.c,315
+char *argv0;33,1014
+static int windows_nt_p;38,1091
+sleep 43,1163
+read_registry 53,1414
+pwd_cuserid 68,1811
+windows_main_junk 94,2270
+ws_cleanup 110,2547
+ws_hangup 116,2599
+fork_to_background 125,2795
+ws_handler 145,3227
+ws_changetitle 168,3601
+ws_mypath 182,3943
+ws_help 216,4618
+ws_startup 238,5094
+
+mswindows.h,1350
+#define MSWINDOWS_H21,813
+# define S_ISDIR(S_ISDIR24,850
+# define S_ISLNK(S_ISLNK27,927
+#define strcasecmp 31,1028
+#define strncasecmp 32,1055
+#define lstat 35,1112
+#define PATH_SEPARATOR 37,1132
+# define stat 41,1229
+#define REALCLOSE(REALCLOSE44,1257
+#define READ(READ47,1354
+#define WRITE(WRITE48,1410
+# define mkdir(mkdir55,1593
+# define mkdir(mkdir57,1650
+#define EWOULDBLOCK 64,1775
+#define EINPROGRESS 65,1822
+#define EALREADY 66,1869
+#define ENOTSOCK 67,1913
+#define EDESTADDRREQ 68,1957
+#define EMSGSIZE 69,2005
+#define EPROTOTYPE 70,2049
+#define ENOPROTOOPT 71,2095
+#define EPROTONOSUPPORT 72,2142
+#define ESOCKTNOSUPPORT 73,2193
+#define EOPNOTSUPP 74,2244
+#define EPFNOSUPPORT 75,2290
+#define EAFNOSUPPORT 76,2338
+#define EADDRINUSE 77,2386
+#define EADDRNOTAVAIL 78,2432
+#define ENETDOWN 79,2481
+#define ENETUNREACH 80,2525
+#define ENETRESET 81,2572
+#define ECONNABORTED 82,2617
+#define ECONNRESET 83,2665
+#define ENOBUFS 84,2711
+#define EISCONN 85,2754
+#define ENOTCONN 86,2797
+#define ESHUTDOWN 87,2841
+#define ETOOMANYREFS 88,2886
+#define ETIMEDOUT 89,2934
+#define ECONNREFUSED 90,2979
+#define ELOOP 91,3027
+#define EHOSTDOWN 92,3068
+#define EHOSTUNREACH 93,3113
+#define EPROCLIM 94,3161
+#define EUSERS 95,3205
+#define EDQUOT 96,3247
+#define ESTALE 97,3289
+#define EREMOTE 98,3331
+
+netrc.c,341
+extern int errno;44,1247
+#define NETRC_FILE_NAME 47,1273
+acc_t *netrc_list;49,1307
+search_netrc 60,1645
+# define xmalloc 145,3425
+# define xstrdup 146,3449
+# define xrealloc 155,3810
+# define DYNAMIC_LINE_BUFFER 156,3836
+read_whole_line 159,3876
+maybe_add_to_list 193,4621
+parse_netrc 232,5386
+free_netrc(401,9104
+main 421,9367
+
+netrc.h,58
+typedef struct _acc_t_acc_t20,787
+} acc_t;acc_t27,975
+
+options.h,66
+struct optionsoptions23,821
+extern struct options opt;138,4766
+
+rbuf.c,163
+rbuf_initialize 29,932
+rbuf_initialized_p 37,1062
+rbuf_uninitialize 43,1136
+rbuf_readchar 52,1294
+rbuf_peek 60,1461
+rbuf_flush 80,1965
+rbuf_discard 98,2343
+
+rbuf.h,124
+#define RBUF_H21,790
+struct rbufrbuf24,829
+#define RBUF_READCHAR(RBUF_READCHAR45,1646
+#define RBUF_FD(RBUF_FD59,2203
+
+recur.c,535
+extern char *version_string;46,1257
+#define ROBOTS_FILENAME 48,1287
+static urlpos *urls_downloaded;53,1419
+static slist *urls_html;56,1478
+static slist *ulist;59,1545
+static char **forbidden 62,1603
+static int depth;65,1668
+static char *base_dir;68,1751
+static char *robots_host;71,1830
+static int first_time 73,1857
+recursive_cleanup 85,2279
+recursive_reset 103,2663
+recursive_retrieve 115,3033
+convert_all_links 511,15487
+robots_url 582,17443
+retrieve_robots 602,17998
+parse_robots 625,18662
+robots_match 800,23143
+
+recur.h,23
+#define RECUR_H21,804
+
+retr.c,490
+static long internal_secs,47,1285
+static long internal_secs, internal_msecs;47,1285
+enum spflags spflags55,1479
+enum spflags { SP_NONE,55,1479
+enum spflags { SP_NONE, SP_INIT,55,1479
+enum spflags { SP_NONE, SP_INIT, SP_FINISH 55,1479
+get_contents 81,2616
+print_percentage 128,3585
+show_progress 146,4255
+reset_timer 230,6476
+elapsed_time 246,6796
+rate 262,7238
+#define USE_PROXY_P(USE_PROXY_P280,7664
+retrieve_url 288,7960
+retrieve_from_file 434,11740
+printwhat 481,13155
+
+retr.h,22
+#define RETR_H21,802
+
+sysdep.h,503
+#define SYSDEP_H24,897
+# define S_ISLNK(S_ISLNK51,1624
+# define lstat 54,1667
+# define S_ISLNK(S_ISLNK65,2001
+# define S_ISDIR(S_ISDIR68,2072
+# define S_ISREG(S_ISREG71,2149
+#define sparc79,2376
+# define READ(READ85,2452
+# define WRITE(WRITE88,2527
+# define REALCLOSE(REALCLOSE91,2608
+#define CLOSE(CLOSE94,2648
+#define ISASCII(ISASCII111,3413
+#define ISALPHA(ISALPHA112,3462
+#define ISSPACE(ISSPACE113,3511
+#define ISDIGIT(ISDIGIT114,3560
+#define ISXDIGIT(ISXDIGIT115,3609
+
+url.c,1106
+extern int errno;44,1149
+#define DEFAULT_HTTP_PORT 48,1206
+#define DEFAULT_FTP_PORT 49,1235
+#define URL_SEPARATOR 52,1298
+# define URL_UNSAFE 59,1534
+# define URL_UNSAFE 61,1601
+#define URL_CLEANSE(URL_CLEANSE66,1760
+#define DOTP(DOTP77,1986
+#define DDOTP(DDOTP79,2061
+static char *protostrings[92,2629
+struct protoproto127,3028
+static struct proto sup_protos[135,3152
+skip_url 153,3827
+contains_unsafe 172,4192
+decode_string 187,4584
+encode_string 215,5151
+urlproto 244,5714
+skip_proto 270,6332
+has_proto 291,6826
+skip_uname 308,7231
+newurl 325,7610
+freeurl 339,7976
+parseurl 377,9149
+parse_dir 514,13398
+parse_uname 564,14480
+process_ftp_type 607,15494
+str_url 626,15951
+url_equal 716,18171
+findurl 745,18766
+get_urls_file 769,19426
+get_urls_html 824,20801
+free_urlpos 1017,26007
+rotate_backups(1031,26219
+mkalldirs 1059,26911
+count_slashes 1106,28248
+mkstruct 1118,28476
+url_filename 1198,30510
+construct 1261,32100
+opt_url 1330,33601
+getproxy 1344,33962
+no_proxy_match 1356,34273
+convert_links 1367,34532
+construct_relative 1452,37023
+add_url 1490,37934
+
+url.h,394
+#define URL_H21,800
+#define CLEANDUP(CLEANDUP25,936
+struct urlinfourlinfo28,1056
+enum uflagsuflags46,1601
+  URELATIVE 48,1615
+  URELATIVE     = 0x0001,48,1615
+  UNOPROTO 49,1669
+  UNOPROTO      = 0x0002,49,1669
+  UABS2REL 50,1733
+  UABS2REL      = 0x0004,50,1733
+  UREL2ABS 51,1800
+  UREL2ABS      = 0x0008 51,1800
+typedef struct _urlpos_urlpos56,1976
+} urlpos;urlpos63,2289
+
+utils.c,785
+extern int errno;54,1402
+memfatal 61,1520
+xmalloc 79,2130
+xrealloc 90,2252
+xstrdup 107,2591
+strdupdelim 128,3057
+sepstring 140,3398
+time_str 179,4226
+uerrmsg 198,4658
+pwd_cuserid 231,5562
+fork_to_background 247,5805
+path_simplify 294,7016
+touch 403,9226
+remove_link 420,9619
+file_exists_p 444,10414
+file_non_directory_p 457,10683
+unique_name_1 469,11024
+unique_name 492,11474
+make_directory 509,11976
+acceptable 547,12892
+frontcmp 572,13555
+proclist 581,13817
+accdir 606,14375
+match_backwards 630,14912
+in_acclist 651,15528
+suffix 685,16208
+read_whole_line 705,16798
+load_file 738,17627
+free_vec 757,18089
+merge_vecs 772,18407
+add_slist 804,19136
+in_slist 869,20594
+free_slist 887,20872
+legible 902,21086
+numdigit 940,21959
+long_to_string 951,22193
+
+utils.h,141
+#define UTILS_H21,810
+   NOSORT 25,858
+enum accd accd28,880
+   ALLABS 29,892
+typedef struct _slist_slist33,980
+} slist;slist37,1043
+
+version.c,26
+char *version_string 1,0
+
+wget.h,1437
+#define WGET_H25,968
+# define NDEBUG 28,998
+#  define PARAMS(PARAMS33,1098
+#  define PARAMS(PARAMS35,1133
+# define _(_42,1312
+# define _(_47,1449
+#define DO_NOTHING 70,2280
+# define DEBUGP(DEBUGP74,2388
+# define DEBUGP(DEBUGP76,2466
+# define GCC_FORMAT_ATTR(GCC_FORMAT_ATTR81,2605
+# define GCC_FORMAT_ATTR(GCC_FORMAT_ATTR83,2702
+enum log_options log_options88,2847
+enum log_options { LOG_VERBOSE,88,2847
+enum log_options { LOG_VERBOSE, LOG_NOTQUIET,88,2847
+enum log_options { LOG_VERBOSE, LOG_NOTQUIET, LOG_NONVERBOSE,88,2847
+enum log_options { LOG_VERBOSE, LOG_NOTQUIET, LOG_NONVERBOSE, LOG_ALWAYS 88,2847
+void logprintf PARAMS 90,2924
+#define DEFAULT_LOGFILE 102,3418
+#define MD5_HASHLEN 104,3454
+#define HYPHENP(HYPHENP109,3558
+#define MINVAL(MINVAL112,3644
+#define ASC2HEXD(ASC2HEXD115,3720
+#define HEXD2ASC(HEXD2ASC119,3863
+#define ARRAY_SIZE(ARRAY_SIZE121,3930
+#define STRDUP_ALLOCA(STRDUP_ALLOCA131,4300
+#define ALLOCA_ARRAY(ALLOCA_ARRAY136,4426
+#define XREALLOC_ARRAY(XREALLOC_ARRAY138,4501
+#define DO_REALLOC(DO_REALLOC148,5073
+#define FREE_MAYBE(FREE_MAYBE164,5636
+  TEXTHTML 175,5862
+  TEXTHTML      = 0x0001,175,5862
+  RETROKF 176,5924
+  RETROKF       = 0x0002,176,5924
+  HEAD_ONLY 177,5973
+  HEAD_ONLY     = 0x0004,177,5973
+  SEND_NOCACHE 178,6032
+  SEND_NOCACHE  = 0x0008,178,6032
+  ACCEPTRANGES 179,6096
+  ACCEPTRANGES  = 0x0010	179,6096
+} uerr_t;uerr_t199,6928

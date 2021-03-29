@@ -1,0 +1,50 @@
+module kernel {
+rpc s32 getopt_long( s32 argc, s8** argv, s8* shortopts, projection longopts * longopts, s32* longind ) {
+	projection < struct option > longopts {
+	}
+}
+rpc s8* ftp_getaddress(  ) {
+}
+rpc void initialize(  ) {
+}
+rpc s32 parse_line( s8* line, s8**[out] com, s8**[out] val ) {
+}
+rpc s32 setval( s8* com, s8* val ) {
+}
+rpc void cleanup(  ) {
+}
+rpc void logprintf( u32 o, s8* fmt ) {
+}
+rpc void debug_logprintf( s8* fmt ) {
+}
+rpc void log_init( s8* file, s32 appendp ) {
+}
+rpc void log_close(  ) {
+}
+rpc_ptr s32 ( s32 argc, s8** argv ) {
+}
+rpc void i18n_initialize(  ) {
+}
+rpc void print_help(  ) {
+}
+rpc void print_usage(  ) {
+}
+rpc void recursive_reset(  ) {
+}
+rpc u32 recursive_retrieve( s8* file, s8* this_url ) {
+}
+rpc void convert_all_links(  ) {
+}
+rpc u32 retrieve_url( s8* origurl, s8**[out] file, s8**[out] newloc, s8* refurl, s32*[out] dt ) {
+}
+rpc u32 retrieve_from_file( s8* file, s32 html, s32*[out] count ) {
+}
+rpc s8* time_str( s32* tm ) {
+}
+rpc void fork_to_background(  ) {
+}
+rpc s8* legible( s32 l ) {
+}
+
+
+}

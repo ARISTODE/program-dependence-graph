@@ -1,0 +1,234 @@
+# Generated automatically from Makefile.in.in by configure.
+# Makefile for program source directory in GNU NLS utilities package.
+# Copyright (C) 1995, 1996, 1997 by Ulrich Drepper <drepper@gnu.ai.mit.edu>
+#
+# This file file be copied and used freely without restrictions.  It can
+# be used in projects which are not available under the GNU Public License
+# but which still want to provide support for the GNU gettext functionality.
+# Please note that the actual code is *not* freely available.
+
+PACKAGE = wget
+VERSION = 1.5.3
+
+SHELL = /bin/sh
+
+
+srcdir = .
+top_srcdir = ..
+
+prefix = /usr/local
+exec_prefix = ${prefix}
+datadir = $(prefix)/share
+localedir = $(datadir)/locale
+gnulocaledir = $(prefix)/share/locale
+gettextsrcdir = $(prefix)/share/gettext/po
+subdir = po
+
+INSTALL = /usr/bin/install -c
+INSTALL_DATA = ${INSTALL} -m 644
+
+CC = wllvm
+GMSGFMT = PATH=../src:$$PATH /Users/yongzhehuang/anaconda3/bin/msgfmt
+MSGFMT = /Users/yongzhehuang/anaconda3/bin/msgfmt
+XGETTEXT = PATH=../src:$$PATH /Users/yongzhehuang/anaconda3/bin/xgettext
+MSGMERGE = PATH=../src:$$PATH msgmerge
+
+DEFS = -DHAVE_CONFIG_H
+CFLAGS = -g -O0
+CPPFLAGS = 
+
+INCLUDES = -I.. -I$(top_srcdir)/intl
+
+COMPILE = $(CC) -c $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) $(XCFLAGS)
+
+POFILES =  cs.po de.po hr.po no.po it.po pt_BR.po
+GMOFILES =  cs.gmo de.gmo hr.gmo no.gmo it.gmo pt_BR.gmo
+DISTFILES = ChangeLog Makefile.in.in POTFILES.in $(PACKAGE).pot \
+$(POFILES) $(GMOFILES) $(SOURCES)
+
+POTFILES = \
+	../src/cmpt.c \
+	../src/connect.c \
+	../src/fnmatch.c \
+	../src/ftp-basic.c \
+	../src/ftp-ls.c \
+	../src/ftp-opie.c \
+	../src/ftp.c \
+	../src/getopt.c \
+	../src/headers.c \
+	../src/host.c \
+	../src/html.c \
+	../src/http.c \
+	../src/init.c \
+	../src/log.c \
+	../src/main.c \
+	../src/mswindows.c \
+	../src/netrc.c \
+	../src/rbuf.c \
+	../src/recur.c \
+	../src/retr.c \
+	../src/url.c \
+	../src/utils.c
+
+CATALOGS =  cs.gmo de.gmo hr.gmo no.gmo it.gmo pt_BR.gmo
+CATOBJEXT = .gmo
+INSTOBJEXT = .mo
+
+.SUFFIXES:
+.SUFFIXES: .c .o .po .pox .gmo .mo .msg
+
+.c.o:
+	$(COMPILE) $<
+
+.po.pox:
+	$(MAKE) $(PACKAGE).pot
+	$(MSGMERGE) $< $(srcdir)/$(PACKAGE).pot -o $*.pox
+
+.po.mo:
+	$(MSGFMT) -o $@ $<
+
+.po.gmo:
+	file=$(srcdir)/`echo $* | sed 's,.*/,,'`.gmo \
+	  && rm -f $$file && $(GMSGFMT) -o $$file $<
+
+
+all: all-yes
+
+all-yes: $(CATALOGS)
+all-no:
+
+$(srcdir)/$(PACKAGE).pot: $(POTFILES)
+	$(XGETTEXT) --default-domain=$(PACKAGE) --directory=$(top_srcdir) \
+	  --add-comments --keyword=_ --keyword=N_ \
+	  --files-from=$(srcdir)/POTFILES.in
+	rm -f $(srcdir)/$(PACKAGE).pot
+	mv $(PACKAGE).po $(srcdir)/$(PACKAGE).pot
+
+install.mo: install
+install: install-exec install-data
+install-exec:
+install-data: install-data-yes
+install-data-no: all
+install-data-yes: all
+	@catalogs='$(CATALOGS)'; \
+	for cat in $$catalogs; do \
+	  cat=`basename $$cat`; \
+	  case "$$cat" in \
+	    *.gmo) destdir=$(gnulocaledir);; \
+	    *)     destdir=$(localedir);; \
+	  esac; \
+	  lang=`echo $$cat | sed 's/\$(CATOBJEXT)$$//'`; \
+	  dir=$$destdir/$$lang/LC_MESSAGES; \
+	  $(top_srcdir)/mkinstalldirs $$dir; \
+	  if test -r $$cat; then \
+	    $(INSTALL_DATA) $$cat $$dir/$(PACKAGE)$(INSTOBJEXT); \
+	    echo "installing $$cat as $$dir/$(PACKAGE)$(INSTOBJEXT)"; \
+	  else \
+	    $(INSTALL_DATA) $(srcdir)/$$cat $$dir/$(PACKAGE)$(INSTOBJEXT); \
+	    echo "installing $(srcdir)/$$cat as" \
+		 "$$dir/$(PACKAGE)$(INSTOBJEXT)"; \
+	  fi; \
+	  if test -r $$cat.m; then \
+	    $(INSTALL_DATA) $$cat.m $$dir/$(PACKAGE)$(INSTOBJEXT).m; \
+	    echo "installing $$cat.m as $$dir/$(PACKAGE)$(INSTOBJEXT).m"; \
+	  else \
+	    if test -r $(srcdir)/$$cat.m ; then \
+	      $(INSTALL_DATA) $(srcdir)/$$cat.m \
+		$$dir/$(PACKAGE)$(INSTOBJEXT).m; \
+	      echo "installing $(srcdir)/$$cat as" \
+		   "$$dir/$(PACKAGE)$(INSTOBJEXT).m"; \
+	    else \
+	      true; \
+	    fi; \
+	  fi; \
+	done
+	if test "$(PACKAGE)" = "gettext"; then \
+	  $(INSTALL_DATA) $(srcdir)/Makefile.in.in \
+			  $(gettextsrcdir)/Makefile.in.in; \
+	else \
+	  : ; \
+	fi
+
+# Define this as empty until I found a useful application.
+installcheck:
+
+uninstall:
+	catalogs='$(CATALOGS)'; \
+	for cat in $$catalogs; do \
+	  cat=`basename $$cat`; \
+	  lang=`echo $$cat | sed 's/\$(CATOBJEXT)$$//'`; \
+	  rm -f $(localedir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT); \
+	  rm -f $(localedir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT).m; \
+	  rm -f $(gnulocaledir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT); \
+	  rm -f $(gnulocaledir)/$$lang/LC_MESSAGES/$(PACKAGE)$(INSTOBJEXT).m; \
+	done
+	rm -f $(gettextsrcdir)/po-Makefile.in.in
+
+check: all
+
+cat-id-tbl.o: ../intl/libgettext.h
+
+dvi info tags TAGS ID:
+
+mostlyclean:
+	rm -f core core.* *.pox $(PACKAGE).po *.old.po
+	rm -fr *.o
+
+clean: mostlyclean
+
+distclean: clean
+	rm -f Makefile Makefile.in POTFILES *.mo *.msg
+
+maintainer-clean: distclean
+	@echo "This command is intended for maintainers to use;"
+	@echo "it deletes files that may require special tools to rebuild."
+	rm -f $(GMOFILES)
+
+distdir = ../$(PACKAGE)-$(VERSION)/$(subdir)
+dist distdir: update-po $(DISTFILES)
+	dists="$(DISTFILES)"; \
+	for file in $$dists; do \
+	  ln $(srcdir)/$$file $(distdir) 2> /dev/null \
+	    || cp -p $(srcdir)/$$file $(distdir); \
+	done
+
+update-po: Makefile
+	$(MAKE) $(PACKAGE).pot
+	PATH=`pwd`/../src:$$PATH; \
+	cd $(srcdir); \
+	catalogs='$(CATALOGS)'; \
+	for cat in $$catalogs; do \
+	  cat=`basename $$cat`; \
+	  lang=`echo $$cat | sed 's/\$(CATOBJEXT)$$//'`; \
+	  mv $$lang.po $$lang.old.po; \
+	  echo "$$lang:"; \
+	  if $(MSGMERGE) $$lang.old.po $(PACKAGE).pot -o $$lang.po; then \
+	    rm -f $$lang.old.po; \
+	  else \
+	    echo "msgmerge for $$cat failed!"; \
+	    rm -f $$lang.po; \
+	    mv $$lang.old.po $$lang.po; \
+	  fi; \
+	done
+
+POTFILES: POTFILES.in
+	( if test 'x$(srcdir)' != 'x.'; then \
+	    posrcprefix='$(top_srcdir)/'; \
+	  else \
+	    posrcprefix="../"; \
+	  fi; \
+	  rm -f $@-t $@ \
+	    && (sed -e '/^#/d' -e '/^[ 	]*$$/d' \
+		    -e "s@.*@	$$posrcprefix& \\\\@" < $(srcdir)/$@.in \
+		| sed -e '$$s/\\$$//') > $@-t \
+	    && chmod a-w $@-t \
+	    && mv $@-t $@ )
+
+Makefile: Makefile.in.in ../config.status POTFILES
+	cd .. \
+	  && CONFIG_FILES=$(subdir)/$@.in CONFIG_HEADERS= \
+	       $(SHELL) ./config.status
+
+# Tell versions [3.59,3.63) of GNU make not to export all variables.
+# Otherwise a system limit (for SysV at least) may be exceeded.
+.NOEXPORT:

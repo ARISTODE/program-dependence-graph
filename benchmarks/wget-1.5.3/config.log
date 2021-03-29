@@ -1,0 +1,274 @@
+This file contains any messages produced by compilers while
+running configure, to aid debugging if configure makes a mistake.
+
+configure:567: checking host system type
+configure:652: checking whether make sets ${MAKE}
+configure:690: checking for a BSD compatible install
+configure:747: checking for gcc
+configure:824: checking whether the C compiler (wllvm -g -O0 ) works
+configure:838: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:835:1: warning: type specifier missing, defaults to 'int' [-Wimplicit-int]
+main(){return(0);}
+^
+1 warning generated.
+configure:835:1: warning: type specifier missing, defaults to 'int' [-Wimplicit-int]
+main(){return(0);}
+^
+1 warning generated.
+configure:835:1: warning: type specifier missing, defaults to 'int' [-Wimplicit-int]
+main(){return(0);}
+^
+1 warning generated.
+configure:858: checking whether the C compiler (wllvm -g -O0 ) is a cross-compiler
+configure:863: checking whether we are using GNU C
+configure:872: wllvm -E conftest.c
+configure:887: checking whether wllvm accepts -g
+configure:928: checking how to run the C preprocessor
+configure:949: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:989: checking for AIX
+configure:1021: checking for wllvm option to accept ANSI C
+configure:1055: wllvm  -c -g -O0  conftest.c 1>&5
+configure:1077: checking for function prototypes
+configure:1237: checking for working const
+configure:1291: wllvm -c -g -O0  conftest.c 1>&5
+configure:1312: checking for size_t
+configure:1345: checking for pid_t
+configure:1378: checking whether byte ordering is bigendian
+configure:1396: wllvm -c -g -O0  conftest.c 1>&5
+configure:1411: wllvm -c -g -O0  conftest.c 1>&5
+configure:1406:2: error: use of undeclared identifier 'not'
+ not big endian
+ ^
+1 error generated.
+ERROR:Failed to compile using given arguments: [-c -g -O0 conftest.c]
+configure: failed program was:
+#line 1400 "configure"
+#include "confdefs.h"
+#include <sys/types.h>
+#include <sys/param.h>
+int main() {
+
+#if BYTE_ORDER != BIG_ENDIAN
+ not big endian
+#endif
+; return 0; }
+configure:1472: checking for string.h
+configure:1482: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1472: checking for stdarg.h
+configure:1482: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1472: checking for unistd.h
+configure:1482: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1472: checking for sys/time.h
+configure:1482: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1472: checking for utime.h
+configure:1482: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1472: checking for sys/utime.h
+configure:1482: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1478:10: fatal error: 'sys/utime.h' file not found
+#include <sys/utime.h>
+         ^~~~~~~~~~~~~
+1 error generated.
+ERROR:Failed to compile using given arguments: [-E conftest.c]
+configure: failed program was:
+#line 1477 "configure"
+#include "confdefs.h"
+#include <sys/utime.h>
+configure:1512: checking for sys/select.h
+configure:1522: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1512: checking for sys/utsname.h
+configure:1522: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1512: checking for pwd.h
+configure:1522: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1512: checking for signal.h
+configure:1522: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:1549: checking whether time.h and sys/time.h may both be included
+configure:1563: wllvm -c -g -O0  conftest.c 1>&5
+configure:1585: checking return type of signal handlers
+configure:1607: wllvm -c -g -O0  conftest.c 1>&5
+configure:1627: checking for struct utimbuf
+configure:1655: checking for working alloca.h
+configure:1667: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1688: checking for alloca
+configure:1716: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1884: checking for strdup
+configure:1912: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1896:6: warning: incompatible redeclaration of library function 'strdup' [-Wincompatible-library-redeclaration]
+char strdup();
+     ^
+configure:1896:6: note: 'strdup' is a builtin with type 'char *(const char *)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strdup' [-Wincompatible-library-redeclaration]
+char strdup();
+     ^
+configure:1896:6: note: 'strdup' is a builtin with type 'char *(const char *)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strdup' [-Wincompatible-library-redeclaration]
+char strdup();
+     ^
+configure:1896:6: note: 'strdup' is a builtin with type 'char *(const char *)'
+1 warning generated.
+configure:1884: checking for strstr
+configure:1912: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1896:6: warning: incompatible redeclaration of library function 'strstr' [-Wincompatible-library-redeclaration]
+char strstr();
+     ^
+configure:1896:6: note: 'strstr' is a builtin with type 'char *(const char *, const char *)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strstr' [-Wincompatible-library-redeclaration]
+char strstr();
+     ^
+configure:1896:6: note: 'strstr' is a builtin with type 'char *(const char *, const char *)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strstr' [-Wincompatible-library-redeclaration]
+char strstr();
+     ^
+configure:1896:6: note: 'strstr' is a builtin with type 'char *(const char *, const char *)'
+1 warning generated.
+configure:1884: checking for strcasecmp
+configure:1912: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1896:6: warning: incompatible redeclaration of library function 'strcasecmp' [-Wincompatible-library-redeclaration]
+char strcasecmp();
+     ^
+configure:1896:6: note: 'strcasecmp' is a builtin with type 'int (const char *, const char *)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strcasecmp' [-Wincompatible-library-redeclaration]
+char strcasecmp();
+     ^
+configure:1896:6: note: 'strcasecmp' is a builtin with type 'int (const char *, const char *)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strcasecmp' [-Wincompatible-library-redeclaration]
+char strcasecmp();
+     ^
+configure:1896:6: note: 'strcasecmp' is a builtin with type 'int (const char *, const char *)'
+1 warning generated.
+configure:1884: checking for strncasecmp
+configure:1912: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1896:6: warning: incompatible redeclaration of library function 'strncasecmp' [-Wincompatible-library-redeclaration]
+char strncasecmp();
+     ^
+configure:1896:6: note: 'strncasecmp' is a builtin with type 'int (const char *, const char *, unsigned long)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strncasecmp' [-Wincompatible-library-redeclaration]
+char strncasecmp();
+     ^
+configure:1896:6: note: 'strncasecmp' is a builtin with type 'int (const char *, const char *, unsigned long)'
+1 warning generated.
+configure:1896:6: warning: incompatible redeclaration of library function 'strncasecmp' [-Wincompatible-library-redeclaration]
+char strncasecmp();
+     ^
+configure:1896:6: note: 'strncasecmp' is a builtin with type 'int (const char *, const char *, unsigned long)'
+1 warning generated.
+configure:1939: checking for gettimeofday
+configure:1967: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1939: checking for mktime
+configure:1967: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1939: checking for strptime
+configure:1967: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1994: checking for strerror
+configure:2022: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:2006:6: warning: incompatible redeclaration of library function 'strerror' [-Wincompatible-library-redeclaration]
+char strerror();
+     ^
+configure:2006:6: note: 'strerror' is a builtin with type 'char *(int)'
+1 warning generated.
+configure:2006:6: warning: incompatible redeclaration of library function 'strerror' [-Wincompatible-library-redeclaration]
+char strerror();
+     ^
+configure:2006:6: note: 'strerror' is a builtin with type 'char *(int)'
+1 warning generated.
+configure:2006:6: warning: incompatible redeclaration of library function 'strerror' [-Wincompatible-library-redeclaration]
+char strerror();
+     ^
+configure:2006:6: note: 'strerror' is a builtin with type 'char *(int)'
+1 warning generated.
+configure:1994: checking for vsnprintf
+configure:2022: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:2006:6: warning: incompatible redeclaration of library function 'vsnprintf' [-Wincompatible-library-redeclaration]
+char vsnprintf();
+     ^
+configure:2006:6: note: 'vsnprintf' is a builtin with type 'int (char *, unsigned long, const char *, struct __va_list_tag *)'
+1 warning generated.
+configure:2006:6: warning: incompatible redeclaration of library function 'vsnprintf' [-Wincompatible-library-redeclaration]
+char vsnprintf();
+     ^
+configure:2006:6: note: 'vsnprintf' is a builtin with type 'int (char *, unsigned long, const char *, struct __va_list_tag *)'
+1 warning generated.
+configure:2006:6: warning: incompatible redeclaration of library function 'vsnprintf' [-Wincompatible-library-redeclaration]
+char vsnprintf();
+     ^
+configure:2006:6: note: 'vsnprintf' is a builtin with type 'int (char *, unsigned long, const char *, struct __va_list_tag *)'
+1 warning generated.
+configure:1994: checking for select
+configure:2022: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1994: checking for signal
+configure:2022: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1994: checking for symlink
+configure:2022: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1994: checking for access
+configure:2022: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:1994: checking for isatty
+configure:2022: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:2049: checking for uname
+configure:2077: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:2049: checking for gethostname
+configure:2077: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:2105: checking for gethostbyname
+configure:2133: wllvm -o conftest -g -O0   conftest.c  1>&5
+configure:2208: checking for socket in -lsocket
+configure:2227: wllvm -o conftest -g -O0   conftest.c -lsocket   1>&5
+ld: library not found for -lsocket
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+ERROR:Failed to compile using given arguments: [-o conftest -g -O0 conftest.c -lsocket]
+configure: failed program was:
+#line 2216 "configure"
+#include "confdefs.h"
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char socket();
+
+int main() {
+socket()
+; return 0; }
+configure:2352: checking whether NLS is requested
+configure:2369: checking for msgfmt
+configure:2403: checking for xgettext
+configure:2438: checking for gmsgfmt
+configure:2484: checking for locale.h
+configure:2494: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:2484: checking for libintl.h
+configure:2494: wllvm -E  conftest.c >/dev/null 2>conftest.out
+configure:2524: checking for gettext
+configure:2552: wllvm -o conftest -g -O0   conftest.c  1>&5
+Undefined symbols for architecture x86_64:
+  "_gettext", referenced from:
+      _main in conftest-e92912.o
+ld: symbol(s) not found for architecture x86_64
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+ERROR:Failed to compile using given arguments: [-o conftest -g -O0 conftest.c]
+configure: failed program was:
+#line 2529 "configure"
+#include "confdefs.h"
+/* System header to define __stub macros and hopefully few prototypes,
+    which can conflict with char gettext(); below.  */
+#include <assert.h>
+/* Override any gcc2 internal prototype to avoid an error.  */
+/* We use char because int might match the return type of a gcc2
+    builtin and then its argument prototype would still apply.  */
+char gettext();
+
+int main() {
+
+/* The GNU C library defines this for functions which it implements
+    to always fail with ENOSYS.  Some functions are actually named
+    something starting with __ and the normal name is an alias.  */
+#if defined (__stub_gettext) || defined (__stub___gettext)
+choke me
+#else
+gettext();
+#endif
+
+; return 0; }
+configure:2574: checking for gettext in -lintl
+configure:2593: wllvm -o conftest -g -O0   conftest.c -lintl   1>&5
+configure:2661: checking for makeinfo

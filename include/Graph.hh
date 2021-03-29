@@ -41,8 +41,8 @@ namespace pdg
     void setIsBuild() { _is_build = true; }
     bool isBuild() { return _is_build; }
     bool canReach(pdg::Node &src, pdg::Node &dst);
-    bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> include_edge_types);
-    std::set<Node *> findNodesReachedByEdge(Node &src, EdgeType edge_type);
+    bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types);
+    std::set<Node*> findNodesReachableByEdges(Node &src, std::set<EdgeType> edge_types);
     ValueNodeMap &getValueNodeMap() { return _val_node_map; }
 
   protected:
@@ -82,6 +82,8 @@ namespace pdg
     llvm::DIType *computeNodeDIType(Node &n);
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
+    bool isAnnotationCallInst(llvm::Instruction &inst);
+    void buildGlobalAnnotationNodes(llvm::Module &M);
 
   private:
     FuncWrapperMap _func_wrapper_map;

@@ -27,19 +27,16 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
   return false;
 }
 
-bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> include_edge_types)
+bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types)
 {
-  if (&src == &dst)
-    return true;
-
   std::set<Node *> visited;
-  std::stack<Node *> node_queue;
-  node_queue.push(&src);
+  std::stack<Node *> node_stack;
+  node_stack.push(&src);
 
-  while (!node_queue.empty())
+  while (!node_stack.empty())
   {
-    auto current_node = node_queue.top();
-    node_queue.pop();
+    auto current_node = node_stack.top();
+    node_stack.pop();
     if (visited.find(current_node) != visited.end())
       continue;
     visited.insert(current_node);
@@ -48,38 +45,13 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeTy
     for (auto out_edge : current_node->getOutEdgeSet())
     {
       // exclude path
-      if (include_edge_types.find(out_edge->getEdgeType()) == include_edge_types.end())
+      if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
         continue;
-      node_queue.push(out_edge->getDstNode());
+      node_stack.push(out_edge->getDstNode());
     }
   }
   return false;
 }
-
-std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edge_type)
-{
-  std::set<Node *> ret;
-  std::queue<Node *> node_queue;
-  node_queue.push(&src);
-  std::set<Node*> visited;
-  while (!node_queue.empty())
-  {
-    Node *current_node = node_queue.front();
-    node_queue.pop();
-    if (visited.find(current_node) != visited.end())
-      continue;
-    visited.insert(current_node);
-    for (auto out_edge : current_node->getOutEdgeSet())
-    {
-      if (edge_type != out_edge->getEdgeType())
-        continue;
-      ret.insert(current_node);
-      node_queue.push(out_edge->getDstNode());
-    }
-  }
-  return ret;
-}
-
 
 // PDG Specific
 void pdg::ProgramGraph::build(Module &M)
@@ -88,15 +60,17 @@ void pdg::ProgramGraph::build(Module &M)
   for (auto &global_var : M.getGlobalList())
   {
     auto global_var_type = global_var.getType();
-    if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
-      continue;
+    // if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
+    //   continue;
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;
-    Node * n = new Node(global_var, GraphNodeType::GLOBAL_VAR);
+    Node * n = new Node(global_var, GraphNodeType::GLOBALVAR_GLOBL);
     _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
   }
+
+  buildGlobalAnnotationNodes(M);
 
   for (auto &F : M)
   {
@@ -105,7 +79,14 @@ void pdg::ProgramGraph::build(Module &M)
     FunctionWrapper *func_w = new FunctionWrapper(&F);
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
-      Node *n = new Node(*inst_iter, GraphNodeType::INST);
+      GraphNodeType node_type = GraphNodeType::INST;
+      if (isa<CallInst>(&*inst_iter))
+        node_type = GraphNodeType::INST_CALL;
+      if (isa<ReturnInst>(&*inst_iter))
+        node_type = GraphNodeType::INST_RET;
+      if (isAnnotationCallInst(*inst_iter))
+        node_type = GraphNodeType::INST_ANNO_LOCAL;
+      Node *n = new Node(*inst_iter, node_type);
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
       addNode(*n);
@@ -200,30 +181,7 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 
   // alloc inst
   if (isa<AllocaInst>(val))
-  {
-    if (n.getDIType() == nullptr)
-    {
-      for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); ++inst_iter)
-      {
-        if (&*inst_iter == val)
-          continue;
-        if (AllocaInst *ai = dyn_cast<AllocaInst>(&*inst_iter))
-        {
-          if (ai->getType() == val->getType())
-          {
-            Node *alloca_n = getNode(*ai);
-            DIType* alloca_node_dt = alloca_n->getDIType();
-            if (alloca_node_dt != nullptr && dbgutils::isStructPointerType(*alloca_node_dt))
-              return alloca_node_dt;
-          }
-        }
-      }
-    }
-    else
-    {
-      return n.getDIType();
-    }
-  }
+    return n.getDIType();
   // load inst
   if (LoadInst *li = dyn_cast<LoadInst>(val))
   {
@@ -250,31 +208,6 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
       return dbgutils::getBaseDIType(*global_var_di_type);
     }
   }
-
-  // store inst
-  if (StoreInst *st = dyn_cast<StoreInst>(val))
-  {
-    Value* value_operand = st->getValueOperand();
-    Value* pointer_operand = st->getPointerOperand();
-    Node* value_op_node = getNode(*value_operand);
-    Node* ptr_op_node = getNode(*pointer_operand);
-    if (value_op_node == nullptr || ptr_op_node == nullptr)
-      return nullptr;
-    
-    if (value_op_node->getDIType() != nullptr)
-      return nullptr;
-
-    DIType* ptr_op_di_type = ptr_op_node->getDIType();
-    if (ptr_op_di_type == nullptr)
-      return nullptr;
-    DIType *value_op_di_type = dbgutils::getBaseDIType(*ptr_op_di_type);
-    if (value_op_di_type == nullptr)
-      return nullptr;
-    value_op_di_type = dbgutils::stripAttributes(*value_op_di_type);
-    value_op_node->setDIType(*value_op_di_type);
-    return value_op_di_type;
-  }
-
   // gep inst
   if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(val))
   {
@@ -291,10 +224,6 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
       return nullptr;
     if (!dbgutils::isStructType(*base_addr_lowest_di_type))
       return nullptr;
-    // TODO: here we assume negative offset always move to the parent structure, and no other unsafe use.
-    // should verify this assumption is valid.
-    // if (pdgutils::getGEPAccessFieldOffset(*gep) < 0)
-    //   return base_addr_lowest_di_type;
     if (auto dict = dyn_cast<DICompositeType>(base_addr_lowest_di_type))
     {
       auto di_node_arr = dict->getElements();
@@ -349,4 +278,71 @@ void pdg::ProgramGraph::addFormalTreeNodesToGraph(FunctionWrapper &func_w)
     addTreeNodesToGraph(*formal_in_tree);
     addTreeNodesToGraph(*formal_out_tree);
   }
+}
+
+bool pdg::ProgramGraph::isAnnotationCallInst(Instruction &inst)
+{
+  if (CallInst *ci = dyn_cast<CallInst>(&inst))
+  {
+    Function* f = pdgutils::getCalledFunc(*ci);
+    if (f == nullptr)
+      return false;
+    std::string called_func_name = f->getName().str();
+    if (called_func_name == "llvm.var.annotation")
+      return true;
+  }
+  return false;
+}
+
+void pdg::ProgramGraph::buildGlobalAnnotationNodes(Module &M)
+{
+  auto global_annos = M.getNamedGlobal("llvm.global.annotations");
+  if (global_annos)
+  {
+    Node* global_anno_node = new Node(*global_annos, GraphNodeType::INST_ANNO_GLOBAL);
+    _val_node_map.insert(std::pair<Value *, Node *>(global_annos, global_anno_node));
+    addNode(*global_anno_node);
+    auto casted_array = cast<ConstantArray>(global_annos->getOperand(0));
+    for (int i = 0; i < casted_array->getNumOperands(); i++)
+    {
+      auto casted_struct = cast<ConstantStruct>(casted_array->getOperand(i));
+      if (auto annotated_gv = dyn_cast<GlobalValue>(casted_struct->getOperand(0)->getOperand(0)))
+      {
+        auto globalSenStr = cast<GlobalVariable>(casted_struct->getOperand(1)->getOperand(0));
+        auto anno = cast<ConstantDataArray>(globalSenStr->getOperand(0))->getAsCString();
+        Node *n = getNode(*annotated_gv);
+        if (n == nullptr)
+        {
+          n = new Node(*annotated_gv, GraphNodeType::GLOBALVAR_GLOBL);
+          _val_node_map.insert(std::pair<Value *, Node *>(annotated_gv, n));
+          addNode(*n);
+        }
+        n->addNeighbor(*global_anno_node, EdgeType::ANNO_VAR);
+      }
+    }
+  }
+}
+
+std::set<pdg::Node *> pdg::GenericGraph::findNodesReachableByEdges(pdg::Node &src, std::set<EdgeType> edge_types)
+{
+  std::set<Node *> ret;
+  std::queue<Node *> node_queue;
+  node_queue.push(&src);
+  std::set<Node*> visited;
+  while (!node_queue.empty())
+  {
+    Node *current_node = node_queue.front();
+    node_queue.pop();
+    if (visited.find(current_node) != visited.end())
+      continue;
+    visited.insert(current_node);
+    for (auto out_edge : current_node->getOutEdgeSet())
+    {
+      if (edge_types.find(out_edge->getEdgeType()) == edge_types.end())
+        continue;
+      ret.insert(current_node);
+      node_queue.push(out_edge->getDstNode());
+    }
+  }
+  return ret;
 }

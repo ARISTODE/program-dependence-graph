@@ -95,7 +95,8 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode& tree_node)
   }
 
   // inter proc access tags
-  auto parameter_in_nodes = _PDG->findNodesReachedByEdge(tree_node, EdgeType::PARAMETER_IN);
+  std::set<EdgeType> edge_types {EdgeType::PARAMETER_IN};
+  auto parameter_in_nodes = _PDG->findNodesReachableByEdges(tree_node, edge_types);
   // errs() << "para in node size: " << parameter_in_nodes.size() << " - " << tree_node.getDepth() << "\n";
   for (auto n : parameter_in_nodes)
   {
@@ -198,10 +199,15 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     // compute access attributes
-    std::string access_attributes = "";
-    auto child_access_tags = child_node->getAccessTags();
-    if (child_access_tags.find(AccessTag::DATA_WRITE) != child_access_tags.end())
-      access_attributes = "[out]";
+    // std::string access_attributes = "";
+    // auto child_access_tags = child_node->getAccessTags();
+    // if (child_access_tags.find(AccessTag::DATA_WRITE) != child_access_tags.end())
+    //   access_attributes = "[out]";
+    auto annotations = inferTreeNodeAnnotations(*child_node);
+    std::string anno_str = "";
+    for (auto anno : annotations) 
+      anno_str += anno;
+
     if (dbgutils::isStructPointerType(*field_di_type))
     {
       std::string field_name_prefix = "";
@@ -253,7 +259,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
     else
     {
-      fields_projection_str << indent_level << field_type_name << " " << access_attributes << " " << field_var_name << ";\n";
+      fields_projection_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name << ";\n";
     }
   }
 }
@@ -301,6 +307,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
       current_node = current_node->getChildNodes()[0];
     // errs() << "generate idl for node: " << proj_type_name << "\n";
     generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t");
+
     // handle funcptr ops struct specifically
     idl_file << nested_struct_projection_str.str();
     if (proj_type_name.find("_ops") != std::string::npos)
@@ -313,13 +320,6 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
       {
         _global_ops_fields_map[proj_type_name].insert(field_name);
       }
-      // global_ops_fields_map[proj_type_name].insert();
-      // if this is a op struct, generaete a projection for it
-      // if (_seen_func_ops.find(proj_type_name) != _seen_func_ops.end())
-      //   continue;
-      // _seen_func_ops.insert(proj_type_name);
-      // std::string proj_str = "projection < struct " + proj_type_name + " > " + "_global_" + proj_type_name + " {\n " + projection_str.str() + "};\n";
-      // _ops_struct_proj_str += proj_str;
     }
     else
     {
@@ -431,7 +431,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
     std::string anno_str = "";
     for (auto anno : annotations) 
       anno_str += anno;
-    rpc_str = rpc_str + arg_type_name + " " + anno_str + arg_name;
+    rpc_str = rpc_str + arg_type_name + anno_str + " " + arg_name;
     if (i != arg_list.size() - 1)
       rpc_str += ", ";
   }
@@ -476,6 +476,13 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
     if (_SDA->isStringFieldID(field_id))
       annotations.insert("[string]");
   }
+
+  for (auto acc_tag : tree_node.getAccessTags())
+  {
+    if (acc_tag == AccessTag::DATA_WRITE)
+      annotations.insert("[out]");
+  }
+
   return annotations;
 }
 
