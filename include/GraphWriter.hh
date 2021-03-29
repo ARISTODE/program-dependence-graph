@@ -64,6 +64,24 @@ namespace llvm
         }
         break;
       }
+      case pdg::GraphNodeType::INST_CALL:
+      {
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str(); // print the instruction literal
+        }
+        break;
+      }
+      case pdg::GraphNodeType::INST_RET:
+      {
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str(); // print the instruction literal
+        }
+        break;
+      }
       case pdg::GraphNodeType::INST_ANNO_LOCAL:
       {
           OS << "Local Anno: " << *node_val;
