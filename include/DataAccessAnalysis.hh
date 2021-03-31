@@ -33,6 +33,7 @@ namespace pdg
       llvm::Module *_module;
       SharedDataAnalysis* _SDA;
       ProgramGraph *_PDG;
+      PDGCallGraph *_call_graph;
       std::ofstream idl_file;
       std::set<std::string> _seen_func_ops;
       std::string _ops_struct_proj_str;

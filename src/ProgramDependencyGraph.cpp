@@ -270,6 +270,11 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
           continue;
         if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
           continue;
+        if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(alias_node_val))
+        {
+          if (!gep->hasAllZeroIndices())
+            continue;
+        }
         current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
       }
       // check if the addr_var is used in call instruction

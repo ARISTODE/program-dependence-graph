@@ -29,7 +29,7 @@ namespace pdg
     void printPaths(Node &src, Node &sink);
     PathVecs computePaths(Node &src, Node &sink); // compute all pathes
     void computePathsHelper(PathVecs &path_vecs, Node &src, Node &sink, std::vector<llvm::Function *> cur_path, std::unordered_set<llvm::Function *> visited_funcs, bool &found_path);
-
+    std::vector<Node*> computeTransitiveClosure(Node &src);
   private:
   };
 } // namespace pdg

@@ -201,3 +201,26 @@ void pdg::PDGCallGraph::computePathsHelper(PathVecs &path_vecs, Node &src, Node 
     computePathsHelper(path_vecs, *out_neighbor, sink, cur_path, visited_funcs, found_path);
   }
 }
+
+// compute the functions that can be transitively reached from F through function calls
+std::vector<pdg::Node *> pdg::PDGCallGraph::computeTransitiveClosure(pdg::Node &src)
+{
+  std::queue<Node *> node_queue;
+  std::unordered_set<Node *> seen_node;
+  std::vector<Node*> ret;
+  node_queue.push(&src);
+  while (!node_queue.empty())
+  {
+    Node *n = node_queue.front();
+    node_queue.pop();
+    if (seen_node.find(n) != seen_node.end())
+      continue;
+    seen_node.insert(n);
+    ret.push_back(n);
+    for (auto out_neighbor : n->getOutNeighbors())
+    {
+      node_queue.push(out_neighbor);
+    }
+  }
+  return ret;
+}

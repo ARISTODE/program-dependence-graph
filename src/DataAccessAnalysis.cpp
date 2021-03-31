@@ -4,6 +4,8 @@ using namespace llvm;
 
 char pdg::DataAccessAnalysis::ID = 0;
 
+cl::opt<bool> SharedDataFlag("sd", llvm::cl::desc("turn on shared data optimization"), llvm::cl::init(true), llvm::cl::value_desc("shared_data"));
+
 void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 {
   AU.addRequired<SharedDataAnalysis>();
@@ -16,6 +18,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _module = &M;
   _SDA = &getAnalysis<SharedDataAnalysis>();
   _PDG = _SDA->getPDG();
+  _call_graph = &PDGCallGraph::getInstance();
   computeExportedFuncsPtrNameMap();
   idl_file.open("kernel.idl");
   // intra-procedural analysis
@@ -94,7 +97,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode& tree_node)
     }
   }
 
-  // inter proc access tags
+  // inter proc access
   auto parameter_in_nodes = _PDG->findNodesReachedByEdge(tree_node, EdgeType::PARAMETER_IN);
   // errs() << "para in node size: " << parameter_in_nodes.size() << " - " << tree_node.getDepth() << "\n";
   for (auto n : parameter_in_nodes)
@@ -192,7 +195,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     std::string field_id = pdgutils::computeTreeNodeID(*child_node);
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
     bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
-    if (!_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField)
+    if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField)
       continue;
 
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
