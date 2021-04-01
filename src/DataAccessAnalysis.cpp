@@ -363,6 +363,7 @@ static std::list<std::string> ioremap_fns = {
     "ioremap_nocache",
     "ioremap",
     "pci_ioremap_bar",
+    "pci_iomap",
 };
 
 //std::string pdg::DataAccessAnalysis::handleIoRemap(Function &F, std::string &ret_type_str)
