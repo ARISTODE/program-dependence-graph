@@ -256,6 +256,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
     std::unordered_set<Value*> parent_node_addr_vars;
     if (parent_node != nullptr)
       parent_node_addr_vars = parent_node->getAddrVars();
+    
     for (auto addr_var : current_node->getAddrVars())
     {
       if (!_PDG->hasNode(*addr_var))
@@ -276,6 +277,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
             continue;
         }
         current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
+        current_node->addAddrVar(*alias_node_val);
       }
       // check if the addr_var is used in call instruction
       // if so, connect the tree node with the actual tree of the call

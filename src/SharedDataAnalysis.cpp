@@ -76,6 +76,10 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
   auto exported_funcs = readFuncsFromFile("exported_funcs", M);
   _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
   _boundary_funcs.insert(exported_funcs.begin(), exported_funcs.end());
+  for (auto bf : _boundary_funcs)
+  {
+    _boundary_func_names.insert(bf->getName().str());
+  }
 }
 
 std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file_name, Module &M)

@@ -38,6 +38,7 @@ namespace pdg
       Tree *getRetActualInTree() { return _ret_val_actual_in_tree; }
       Tree *getRetActualOutTree() { return _ret_val_actual_out_tree; }
       bool hasNullRetVal() { return (_ret_val_actual_in_tree == nullptr); }
+      int getArgIdxByVal(llvm::Value &val);
   };
 }
 

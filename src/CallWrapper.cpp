@@ -78,3 +78,11 @@ pdg::Tree *pdg::CallWrapper::getArgActualOutTree(Value &actual_arg)
     return nullptr;
   return _arg_actual_out_tree_map[&actual_arg];
 }
+
+int pdg::CallWrapper::getArgIdxByVal(Value& val)
+{
+  auto it = std::find(_arg_list.begin(), _arg_list.end(), &val);
+  if (it == _arg_list.end())
+    return -1;
+  return std::distance(_arg_list.begin(), it);
+}

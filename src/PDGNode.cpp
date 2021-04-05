@@ -72,3 +72,13 @@ bool pdg::Node::hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type)
   }
   return false;
 }
+
+bool pdg::Node::isAddrVarNode()
+{
+  for (auto in_edge : _in_edge_set)
+  {
+    if (in_edge->getEdgeType() == EdgeType::PARAMETER_IN && in_edge->getSrcNode()->getNodeType() == GraphNodeType::FORMAL_IN)
+      return true;
+  }
+  return false;
+}

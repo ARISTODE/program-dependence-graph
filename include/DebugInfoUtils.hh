@@ -15,6 +15,8 @@ namespace pdg
     bool isFuncPointerType(llvm::DIType &dt);
     bool isProjectableType(llvm::DIType &dt);
     bool hasSameDIName(llvm::DIType& d1, llvm::DIType &d2);
+    bool isVoidPointerType(llvm::DIType &dt);
+    bool isArrayType(llvm::DIType &dt);
     llvm::DIType *getLowestDIType(llvm::DIType &dt);
     llvm::DIType *getBaseDIType(llvm::DIType &dt);
     llvm::DIType *stripAttributes(llvm::DIType &dt);

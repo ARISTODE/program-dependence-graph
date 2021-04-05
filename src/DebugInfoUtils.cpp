@@ -80,6 +80,27 @@ bool pdg::dbgutils::isProjectableType(DIType &dt)
   return (isStructType(dt) || isUnionType(dt));
 }
 
+bool pdg::dbgutils::isVoidPointerType(DIType &dt)
+{
+  DIType *d1 = stripMemberTag(dt);
+  if (d1->getTag() == dwarf::DW_TAG_pointer_type)
+  {
+    auto baseTy = getBaseDIType(*d1);
+    if (baseTy == nullptr)
+      return true;
+  }
+  return false;
+}
+
+bool pdg::dbgutils::isArrayType(DIType &dt)
+{
+  DIType* d = stripMemberTag(dt);
+  d = stripAttributes(*d);
+  if (d != nullptr)
+    return (d->getTag() == dwarf::DW_TAG_array_type);
+  return false;
+}
+
 bool pdg::dbgutils::hasSameDIName(DIType &d1, DIType &d2)
 {
   std::string d1_name = dbgutils::getSourceLevelTypeName(d1);

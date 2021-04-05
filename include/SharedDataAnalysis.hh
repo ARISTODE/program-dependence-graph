@@ -22,7 +22,8 @@ namespace pdg
     void setupKernelFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
     void setupBoundaryFuncs(llvm::Module &M);
-    std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; };
+    std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
+    std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     void computeSharedStructDITypes();
     void computeGlobalStructTypeNames();
@@ -53,6 +54,7 @@ namespace pdg
     std::set<llvm::Function *> _driver_domain_funcs;
     std::set<llvm::Function *> _kernel_domain_funcs;
     std::set<llvm::Function *> _boundary_funcs;
+    std::set<std::string> _boundary_func_names;
     std::map<llvm::DIType *, Tree *> _global_struct_di_type_map;
     std::set<std::string> _shared_field_id;
     std::set<std::string> _string_field_id;

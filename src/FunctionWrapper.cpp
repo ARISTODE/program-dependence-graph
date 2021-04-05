@@ -152,3 +152,33 @@ pdg::Tree *pdg::FunctionWrapper::getArgFormalOutTree(Argument& arg)
     return nullptr;
   return _arg_formal_out_tree_map[&arg];
 }
+
+std::set<Value *> pdg::FunctionWrapper::computeAddrVarDerivedFromArg(Argument &arg)
+{
+  auto arg_formal_in_tree = getArgFormalInTree(arg);
+  std::set<Value *> ret;
+  std::queue<TreeNode *> node_queue;
+  node_queue.push(arg_formal_in_tree->getRootNode());
+  while (!node_queue.empty())
+  {
+    TreeNode *current_node = node_queue.front();
+    node_queue.pop();
+    for (auto addr_var : current_node->getAddrVars())
+    {
+      ret.insert(addr_var);
+      // TODO: check if addr var is passed in interprocedural calls
+      // for (auto user : addr_var->users())
+      // {
+      //   if (CallInst *ci = dyn_cast<CallInst>(user))
+      //   {
+          
+      //   }
+      // }
+    }
+    for (auto child_node : current_node->getChildNodes())
+    {
+      node_queue.push(child_node);
+    }
+  }
+  return ret;
+}

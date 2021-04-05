@@ -22,7 +22,7 @@
 
 #include "llvm/IR/DerivedTypes.h"
 #include "AnalysisState.hpp"
-//#include "neo4j_wrapper.hpp"
+#include "DataAccessAnalysis.hh"
 
 #include <list>
 #include <time.h>
@@ -90,9 +90,14 @@ namespace NesCheck
     const DataLayout *CurrentDL;
     ObjectSizeOffsetEvaluator *ObjSizeEval;
     BuilderTy *Builder;
-    std::set<Value*> SafePtrs;
-    std::set<Value*> SeqPtrs;
-    std::set<Value*> WildPtrs;
+    std::set<Value *> SafePtrs;
+    std::set<Value *> SeqPtrs;
+    std::set<Value *> WildPtrs;
+    std::set<Value *> UnknownPtrs;
+    std::set<pdg::Node *> ProcessedNodes;
+    pdg::DataAccessAnalysis *_DDA;
+    pdg::ProgramGraph* _PDG;
+    std::set<std::string> BoundaryFuncNames;
 
     AnalysisState TheState;
     Type *MySizeType;
@@ -186,22 +191,22 @@ namespace NesCheck
       SizeOffsetEvalType SizeOffset = ObjSizeEval->compute(v);
       if (ObjSizeEval->knownSize(SizeOffset))
       {
-        errs() << "\tUsing Size from ObjSizeEval = " << *(SizeOffset.first) << "\n";
+        // errs() << "\tUsing Size from ObjSizeEval = " << *(SizeOffset.first) << "\n";
         size = SizeOffset.first;
       }
       else
       {
         Type *t = v->getType();
-        if (!isa<Function>(v))
-          errs() << "\tUsing manual Size (ObjSizeEval failed) for " << *v << " - type:" << *t << "\n";
-        else
-          errs() << "\tUsing manual Size (ObjSizeEval failed) for " << ((Function *)v)->getName() << " - type:" << *t << "\n";
+        // if (!isa<Function>(v))
+          // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << *v << " - type:" << *t << "\n";
+        // else
+          // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << ((Function *)v)->getName() << " - type:" << *t << "\n";
 
         if (t->isPointerTy())
           t = ((PointerType *)t)->getElementType();
         if (ArrayType *arrT = dyn_cast<ArrayType>(t))
         {
-          errs() << "\t\tarray[" << arrT->getNumElements() << " x " << *(arrT->getElementType()) << "]\n";
+          // errs() << "\t\tarray[" << arrT->getNumElements() << " x " << *(arrT->getElementType()) << "]\n";
           Value *arraysize = ConstantInt::get(MySizeType, arrT->getNumElements());
           Value *totalsize = ConstantInt::get(arraysize->getType() /*MySizeType*/, CurrentDL->getTypeAllocSize(arrT->getElementType()));
           totalsize = Builder->CreateMul(totalsize, arraysize);
@@ -209,23 +214,23 @@ namespace NesCheck
         }
         else if (isa<FunctionType>(t))
         {
-          errs() << "\t\t" << *t << " is a FunctionType\n";
+          // errs() << "\t\t" << *t << " is a FunctionType\n";
           size = ConstantInt::get(MySizeType, 8); // hardcode size to pointer size (i.e., 8)
         }
         else if ((isa<CallInst>(v) || isa<InvokeInst>(v)) && v->getType()->isPointerTy())
         {
-          errs() << "\t\t" << *t << " is a CallInst/InvokeInst returning a pointer type\n";
+          // errs() << "\t\t" << *t << " is a CallInst/InvokeInst returning a pointer type\n";
           // if this is a call to an unininstrumented function that returns a pointer, we don't have info
           size = UnknownSizeConstInt;
         }
         else
         {
-          errs() << "\t\t" << *t << " is not a special-case type for manual sizing\n";
+          // errs() << "\t\t" << *t << " is not a special-case type for manual sizing\n";
           // last attempt at getting size (for structs)
           if (t->isSized())
             size = ConstantInt::get(MySizeType, CurrentDL->getTypeAllocSize(t));
         }
-        errs() << "\tManual Size is " << *size << "\n";
+        // errs() << "\tManual Size is " << *size << "\n";
       }
 
       return size;
@@ -242,25 +247,25 @@ namespace NesCheck
         SizeOffsetEvalType SizeOffset = ObjSizeEval->compute(GEPInstr);
         if (ObjSizeEval->knownOffset(SizeOffset))
         {
-          errs() << "\tUsing Offset from ObjSizeEval = " << *(SizeOffset.second) << "\n";
+          // errs() << "\tUsing Offset from ObjSizeEval = " << *(SizeOffset.second) << "\n";
           return SizeOffset.second;
         }
         // else, let's use the GEP functions
         APInt Off(CurrentDL->getPointerTypeSizeInBits(GEPInstr->getType()), 0);
         if (GEPInstr->accumulateConstantOffset(*CurrentDL, Off))
         {
-          errs() << "\tUsing Offset from GEP.accumulateConstantOffset() = " << Off << "\n";
+          // errs() << "\tUsing Offset from GEP.accumulateConstantOffset() = " << Off << "\n";
           return ConstantInt::get(MySizeType, Off);
         }
 
         // as a last resort, let's infer it manually
         uint64_t typeStoreSize = CurrentDL->getTypeStoreSize(GEPInstr->getResultElementType());
-        errs() << "\tSize of type of Ptr = " << typeStoreSize << "\n";
+        // errs() << "\tSize of type of Ptr = " << typeStoreSize << "\n";
         // Note: the following indexing used to be GEPInstr->getOperand(1), but now it should be more accurate
         Value *Idx = Builder->CreateIntCast(GEPInstr->getOperand(GEPInstr->getNumIndices()), MySizeType, false);
         Value *Size = ConstantInt::get(MySizeType /*IntTy*/, typeStoreSize);
         Value *Offset = Builder->CreateMul(Idx, Size);
-        errs() << "\tUsing Offset from manual evaluation = " << *Offset << "\n";
+        // errs() << "\tUsing Offset from manual evaluation = " << *Offset << "\n";
         return Offset;
       }
       else
@@ -277,11 +282,11 @@ namespace NesCheck
     {
       if (TrapBB != nullptr /*&& SingleTrapBB*/)
       {
-        errs() << "\tReusing existing TrapBB\n";
+        // errs() << "\tReusing existing TrapBB\n";
         return TrapBB;
       }
 
-      errs() << "\tCreating TrapBB...";
+      // errs() << "\tCreating TrapBB...";
       Function *Fn = CurrInst->getParent()->getParent();
       IRBuilder<>::InsertPointGuard Guard(*Builder);
       TrapBB = BasicBlock::Create(Fn->getContext(), "trap", Fn);
@@ -299,7 +304,7 @@ namespace NesCheck
       TrapCall->setDoesNotThrow();
       TrapCall->setDebugLoc(CurrInst->getDebugLoc());
       Builder->CreateUnreachable();
-      errs() << " Done.\n";
+      // errs() << " Done.\n";
 
       return TrapBB;
     }
@@ -308,11 +313,11 @@ namespace NesCheck
     {
       if (isCurrentFunctionWhitelisted || isCurrentFunctionWhitelistedForInstrumentation)
       {
-        errs() << "Skipping instrumentation of GEP because of whitelisting\n";
+        // errs() << "Skipping instrumentation of GEP because of whitelisting\n";
         return false;
       }
 
-      errs() << "Instrumenting GEP: " << *GEPInstr << " (getType: " << *(GEPInstr->getType()) << " -> getResultElementType: " << *(GEPInstr->getResultElementType()) << ")\n";
+      // errs() << "Instrumenting GEP: " << *GEPInstr << " (getType: " << *(GEPInstr->getType()) << " -> getResultElementType: " << *(GEPInstr->getResultElementType()) << ")\n";
 
       ++ChecksConsidered;
 
@@ -320,7 +325,7 @@ namespace NesCheck
       if (!(GEPInstr->hasIndices()))
       { // || GEPInstr->hasAllZeroIndices()) {
         ++ChecksUnable;
-        errs() << "\tUnable, no indices\n";
+        // errs() << "\tUnable, no indices\n";
         return false;
       }
 
@@ -332,17 +337,17 @@ namespace NesCheck
       if (varinfo == NULL)
       {
         ++ChecksUnable;
-        errs() << "\tUnable, unknown variable '" << *Ptr << "'\n";
+        // errs() << "\tUnable, unknown variable '" << *Ptr << "'\n";
         return false;
       }
       else if (varinfo->classification == VariableStates::Safe)
       {
         ++ChecksSkippedForSafe;
-        errs() << "\tSkipping, SAFE variable '" << *Ptr << "'\n";
+        // errs() << "\tSkipping, SAFE variable '" << *Ptr << "'\n";
         return false;
       }
 
-      errs() << "\tVariable found, size = " << *(varinfo->size) << "\n";
+      // errs() << "\tVariable found, size = " << *(varinfo->size) << "\n";
 
       // add instrumentation to check that index is within boundaries
       uint64_t typeStoreSize = CurrentDL->getTypeStoreSize(GEPInstr->getResultElementType());
@@ -357,7 +362,7 @@ namespace NesCheck
         LHS = Builder->CreateSub(varinfo->size, ConstantInt::get(IntTy, typeStoreSize));
       Value *Cmp = Builder->CreateICmpSLT(LHS, Offset);
 
-      errs() << "\tCmp (" << /* *(varinfo->size) */ *LHS << " < " << *Offset << ") : " << *Cmp << "\n";
+      // errs() << "\tCmp (" << /* *(varinfo->size) */ *LHS << " < " << *Offset << ") : " << *Cmp << "\n";
 
       // now emit a branch instruction to a trap block.
       // If Cmp is non-null, perform a jump only if its value evaluates to true.
@@ -369,7 +374,7 @@ namespace NesCheck
         if (!C->getZExtValue())
         {
           // always false, no check needed
-          errs() << "\tCheck is always false (" << C->getZExtValue() << ") -> unneeded\n";
+          // errs() << "\tCheck is always false (" << C->getZExtValue() << ") -> unneeded\n";
           ++ChecksAlwaysFalse;
           if (!IS_NAIVE)
             return false;
@@ -377,12 +382,12 @@ namespace NesCheck
         else
         {
           // always true, memory bug!
-          errs() << "\t" << RED << "Check is always true (" << C->getZExtValue() << ") -> unconditional memory bug!!" << NORMAL << "\n";
+          // errs() << "\t" << RED << "Check is always true (" << C->getZExtValue() << ") -> unconditional memory bug!!" << NORMAL << "\n";
           ++ChecksAlwaysTrue;
           Cmp = nullptr; // unconditional branch
         }
       }
-      errs() << "\tinstrumented\n";
+      // errs() << "\tinstrumented\n";
       ++ChecksAdded;
 
       if (IS_DEBUGGING)
@@ -398,19 +403,73 @@ namespace NesCheck
       return true;
     }
 
-    void recordPtrTypes(std::string ptrType, Value* ptr)
+    void recordPtrTypes(std::string ptrType, Value *ptr)
     {
-      if (ptrType == "SAFE")
-        SafePtrs.insert(ptr);
-      else if (ptrType == "SEQ")
-        SeqPtrs.insert(ptr);
-      else if (ptrType == "DYN")
-        WildPtrs.insert(ptr);
+      auto node = _PDG->getNode(*ptr);
+      if (node == nullptr || !node->isAddrVarNode())
+        return;
+      auto node_val = node->getValue();
+      if (Instruction *i = dyn_cast<Instruction>(node_val))
+      {
+        auto func_name = i->getFunction()->getName().str();
+        if (func_name.find("_nesCheck") != std::string::npos)
+          func_name.erase(func_name.find("_nesCheck"));
+        if (BoundaryFuncNames.find(func_name) == BoundaryFuncNames.end())
+          return;
+      }
+
+      std::set<pdg::TreeNode*>  tree_nodes;
+      for (auto in_edge : node->getInEdgeSet())
+      {
+        if (in_edge->getEdgeType() == pdg::EdgeType::PARAMETER_IN && in_edge->getSrcNode()->getNodeType() == pdg::GraphNodeType::FORMAL_IN)
+        {
+          pdg::TreeNode* tn = static_cast<pdg::TreeNode*>(in_edge->getSrcNode());
+          tree_nodes.insert(tn);
+        }
+      }
+
+      for (auto tree_node : tree_nodes)
+      {
+        auto field_id = pdg::pdgutils::computeTreeNodeID(*tree_node);
+        // if (!_DDA->getSDA()->isSharedFieldID(field_id))
+        //   continue;
+        if (ProcessedNodes.find(tree_node) != ProcessedNodes.end())
+          continue;
+        ProcessedNodes.insert(tree_node);
+        if (ptrType == "SAFE")
+        {
+          _DDA->getKSplitStats()->increaseSafePtr();
+          // SafePtrs.insert(ptr);
+        }
+        else if (ptrType == "SEQ")
+        {
+          if (!pdg::dbgutils::isArrayType(*tree_node->getDIType()))
+            _DDA->getKSplitStats()->increaseArrayNum();
+        }
+        else if (ptrType == "DYN")
+        {
+          // if (!pdg::dbgutils::isVoidPointerType(*tree_node->getDIType()))
+          // {
+          if (Instruction *i = dyn_cast<Instruction>(ptr))
+            errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << "\n";
+          _DDA->getKSplitStats()->increaseWildPtrNum();
+          // }
+          // WildPtrs.insert(ptr);
+        }
+        else if (ptrType == "UNKNOWN")
+        {
+          if (Instruction *i = dyn_cast<Instruction>(ptr))
+            errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << "\n";
+          _DDA->getKSplitStats()->increaseUnknownPtrNum();
+          errs() << "unknown: " << *ptr << "\n";
+          // UnknownPtrs.insert(ptr);
+        }
+      }
     }
 
     void dumpRecordedTypes()
     {
-      errs() << "SAFE Ptrs: \n";
+      errs() << "SAFE Ptrs: " << SafePtrs.size() << "\n";
       for (auto ptr : SafePtrs)
       {
         if (Instruction *i = dyn_cast<Instruction>(ptr))
@@ -418,7 +477,7 @@ namespace NesCheck
       }
       errs() << " =============================================== \n";
 
-      errs() << "Seq Ptrs: \n";
+      errs() << "Seq Ptrs: " << SeqPtrs.size() << "\n";
       for (auto ptr : SeqPtrs)
       {
         if (Instruction *i = dyn_cast<Instruction>(ptr))
@@ -426,11 +485,19 @@ namespace NesCheck
       }
       errs() << " =============================================== \n";
 
-      errs() << "Wild Ptrs: \n";
+      errs() << "Wild Ptrs: " << WildPtrs.size() << "\n";
       for (auto ptr : WildPtrs)
       {
         if (Instruction *i = dyn_cast<Instruction>(ptr))
           errs() << *i << " - " << i->getFunction()->getName() << "\n";
+      }
+      errs() << " =============================================== \n";
+
+      errs() << "Unknown Ptrs: " << UnknownPtrs.size() << "\n";
+      for (auto ptr : UnknownPtrs)
+      {
+        if (Instruction *i = dyn_cast<Instruction>(ptr))
+          errs() << "Unknwon: " << *i << " - " << i->getFunction()->getName() << "\n";
       }
       errs() << " =============================================== \n";
     }
@@ -442,9 +509,11 @@ namespace NesCheck
 
       bool changed = false;
 
-      char address[11];
-      sprintf(address, "%p", (const void *)I);
-      errs() << BLUE << "[" << address << "] " << NORMAL;
+      std::string addr;
+      llvm::raw_string_ostream ss(addr);
+      ss << (const void *)I;
+      // if (I != nullptr)
+      //   errs() << BLUE << "[" << ss.str() << "] " << NORMAL;
 
       for (Use &U : (&*I)->operands())
       {
@@ -459,14 +528,14 @@ namespace NesCheck
         {
           if (GlobalVariable *GV = dyn_cast<GlobalVariable>(gepo->getPointerOperand()))
           {
-            errs() << "Global Variable - " << *GV << "\n";
+            // errs() << "Global Variable - " << *GV << "\n";
             TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName()));
           }
           for (auto it = gepo->idx_begin(), et = gepo->idx_end(); it != et; ++it)
           {
             if (GlobalVariable *GV = dyn_cast<GlobalVariable>(*it))
             {
-              errs() << "Global Variable  - " << *GV << "\n";
+              // errs() << "Global Variable  - " << *GV << "\n";
               TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName()));
             }
           }
@@ -476,12 +545,12 @@ namespace NesCheck
       if (AllocaInst *II = dyn_cast_or_null<AllocaInst>(I))
       {
         bool isArray = II->isArrayAllocation() || II->getType()->getElementType()->isArrayTy();
-        errs() << "(+) " << *II << "\t" << DETAIL << " // {";
-        if (isArray)
-          errs() << " array[" << *(II->getArraySize()) << "]";
-        errs() << " (" << *(II->getAllocatedType()) << ") "
-               << "}"
-               << "" << NORMAL << "\n";
+        // errs() << "(+) " << *II << "\t" << DETAIL << " // {";
+        // if (isArray)
+        //   errs() << " array[" << *(II->getArraySize()) << "]";
+        // errs() << " (" << *(II->getAllocatedType()) << ") "
+        //        << "}"
+        //        << "" << NORMAL << "\n";
 
         if (II->getAllocatedType()->isPointerTy())
         {
@@ -501,17 +570,17 @@ namespace NesCheck
       {
         if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName() == "malloc" && II->getCalledFunction()->arg_size() == 1)
         {
-          errs() << "(M) " << *II << "\n";
+          // errs() << "(M) " << *II << "\n";
           TheState.SetSizeForPointerVariable(II, II->getArgOperand(0));
         }
         else if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName() == "realloc" && II->getCalledFunction()->arg_size() == 2)
         {
-          errs() << "(M) " << *II << "\n";
+          // errs() << "(M) " << *II << "\n";
           TheState.SetSizeForPointerVariable(II, II->getArgOperand(1));
         }
         else if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName() == "free" && II->getCalledFunction()->arg_size() == 1)
         {
-          errs() << "(F) " << *II << "\n";
+          // errs() << "(F) " << *II << "\n";
           TheState.SetSizeForPointerVariable(II->getArgOperand(0), NULL);
           // propagate new size backwards
           Value *varr = II->getArgOperand(0);
@@ -534,7 +603,7 @@ namespace NesCheck
         }
         else
         {
-          errs() << "( ) " << *II << "\n";
+          // errs() << "( ) " << *II << "\n";
           if (II->getType()->isPointerTy())
             TheState.SetSizeForPointerVariable(II, getSizeForValue(II));
         }
@@ -545,7 +614,7 @@ namespace NesCheck
           StringRef fname = II->getCalledFunction()->getName();
           if (CONTAINS(FunctionsToRemove, II->getCalledFunction()) && (fname.endswith("_nesCheck")))
           {
-            errs() << "Call needs rewriting!\n";
+            // errs() << "Call needs rewriting!\n";
             rewriteCallSite(II);
           }
         }
@@ -553,14 +622,14 @@ namespace NesCheck
 
       else if (ReturnInst *RI = dyn_cast_or_null<ReturnInst>(I))
       {
-        errs() << "(R) " << *RI << "\n";
+        // errs() << "(R) " << *RI << "\n";
         if (CONTAINS(FunctionsAddedWithNewReturnType, RI->getParent()->getParent()))
         {
-          errs() << "Return instruction needs rewriting\n";
+          // errs() << "Return instruction needs rewriting\n";
           // Don't support functions that had multiple return values
           assert(RI->getNumOperands() < 2);
           // return the size of the pointer being returned in the old function
-          errs() << "OLD RETURN VALUE = " << *(RI->getOperand(0)) << "\n";
+          // errs() << "OLD RETURN VALUE = " << *(RI->getOperand(0)) << "\n";
           Value *varr = RI->getOperand(0);
           llvm::Value *CCC;
           VariableInfo *varinfo;
@@ -588,7 +657,7 @@ namespace NesCheck
             Return = llvm::InsertValueInst::Create(Return, RI->getOperand(0), 0, "ret", RI);
             // Insert the globals return value in field 1
             Return = llvm::InsertValueInst::Create(Return, CCC, 1, "ret", RI);
-            errs() << "Return: " << *Return->getType();
+            // errs() << "Return: " << *Return->getType();
 
             // And update the return instruction
             RI->setOperand(0, Return);
@@ -600,12 +669,12 @@ namespace NesCheck
       {
         Value *valoperand = II->getValueOperand();
         // propagate size metadata
-        if (!isa<Function>(valoperand))
-          errs() << "(~) " << *II << "\t" << DETAIL << " // {" << *valoperand << " -> " << *(II->getPointerOperand()) << " }"
-                 << "" << NORMAL << "\n";
-        else
-          errs() << "(~) " << *II << "\t" << DETAIL << " // {" << ((Function *)valoperand)->getName() << " -> " << *(II->getPointerOperand()) << " }"
-                 << "" << NORMAL << "\n";
+        // if (!isa<Function>(valoperand))
+        //   errs() << "(~) " << *II << "\t" << DETAIL << " // {" << *valoperand << " -> " << *(II->getPointerOperand()) << " }"
+        //          << "" << NORMAL << "\n";
+        // else
+        //   errs() << "(~) " << *II << "\t" << DETAIL << " // {" << ((Function *)valoperand)->getName() << " -> " << *(II->getPointerOperand()) << " }"
+        //          << "" << NORMAL << "\n";
 
         if (valoperand->getType()->isPointerTy())
         {
@@ -621,7 +690,7 @@ namespace NesCheck
             {
               differentBasicBlock = true;
               BasicBlock *B = instr->getParent();
-              errs() << "\tValue " << *instr << " actually comes from a different BasicBlock\n" /* << *B << "\n"*/;
+              // errs() << "\tValue " << *instr << " actually comes from a different BasicBlock\n" /* << *B << "\n"*/;
 
               AllocaInst *sizevaralloca;
               VariableInfo *varinfo2 = TheState.GetPointerVariableInfo(instr);
@@ -666,7 +735,7 @@ namespace NesCheck
       else if (LoadInst *II = dyn_cast_or_null<LoadInst>(I))
       {
         // propagate size metadata
-        errs() << "(~) " << *II << "\n";
+        // errs() << "(~) " << *II << "\n";
         if (II->getType()->isPointerTy())
         {
           Value *ptroperand = II->getPointerOperand();
@@ -686,7 +755,6 @@ namespace NesCheck
               TheState.SetSizeForPointerVariable(ptroperand, loadsize);
               TheState.SetInstantiatedExplicitSizeVariable(ptroperand, true);
             }
-            errs() << PtrTypeToString(varinfo->classification) << " \n";
             std::string ptrTypeName = TheState.ClassifyPointerVariable(II, varinfo->classification);
             recordPtrTypes(ptrTypeName, II);
             TheState.SetSizeForPointerVariable(II, varinfo->size);
@@ -698,19 +766,27 @@ namespace NesCheck
       {
         Value *Ptr = II->getPointerOperand();
 
-        errs() << "(*) " << *II << "\t" << DETAIL << " // {" << *(Ptr) << " (" << *(II->getPointerOperandType()) << ") | " << *(II->getType()) << " -> " << *(II->getResultElementType()) << " }" << NORMAL << "\n";
+        // errs() << "(*) " << *II << "\t" << DETAIL << " // {" << *(Ptr) << " (" << *(II->getPointerOperandType()) << ") | " << *(II->getType()) << " -> " << *(II->getResultElementType()) << " }" << NORMAL << "\n";
 
-        errs() << "\tIndices = " << (II->getNumOperands() - 1) << ": ";
-        errs() << "\t";
-        for (unsigned int operd = 1; operd < II->getNumOperands(); operd++)
-          errs() << *(II->getOperand(operd)) << " ; ";
-        errs() << "\n";
+        // errs() << "\tIndices = " << (II->getNumOperands() - 1) << ": ";
+        // errs() << "\t";
+        // for (unsigned int operd = 1; operd < II->getNumOperands(); operd++)
+          // errs() << *(II->getOperand(operd)) << " ; ";
+        // errs() << "\n";
 
         // we're accessing the pointer at an offset != 0, classify it as SEQ
         if (!(II->hasAllZeroIndices()))
         {
-          std::string ptrTypeName = TheState.ClassifyPointerVariable(Ptr, VariableStates::Seq);
-          recordPtrTypes(ptrTypeName, Ptr);
+          Type* pointerOpType = II->getPointerOperand()->getType();
+          if (pointerOpType->isPointerTy())
+          pointerOpType = pointerOpType->getPointerElementType();
+          {
+            if (!pointerOpType->isStructTy())
+            {
+              std::string ptrTypeName = TheState.ClassifyPointerVariable(Ptr, VariableStates::Seq);
+              recordPtrTypes(ptrTypeName, Ptr);
+            }
+          }
         }
 
         // register the new variable and set size for resulting value
@@ -736,8 +812,7 @@ namespace NesCheck
               Value *Offset = getOffsetForGEPInst(II);
               if (varinfo->size->getType() != Offset->getType())
               {
-                errs() << RED << "!!! varinfo->size->getType() (" << *(varinfo->size->getType()) << ") != Offset->getType() (" << *(Offset->getType()) << ")\n"
-                       << NORMAL;
+                // errs() << RED << "!!! varinfo->size->getType() (" << *(varinfo->size->getType()) << ") != Offset->getType() (" << *(Offset->getType()) << ")\n" << NORMAL;
               }
               otherSize = Builder->CreateSub(varinfo->size, Offset);
             }
@@ -753,8 +828,7 @@ namespace NesCheck
       {
         Type *srcT = II->getSrcTy();
         Type *dstT = II->getDestTy();
-        errs() << "(>) " << *II << "\t" << DETAIL << " // { " << *srcT << " " << countIndirections(srcT) << " into " << *dstT << " " << countIndirections(dstT) << " }"
-               << "" << NORMAL << "\n";
+        // errs() << "(>) " << *II << "\t" << DETAIL << " // { " << *srcT << " " << countIndirections(srcT) << " into " << *dstT << " " << countIndirections(dstT) << " }" << "" << NORMAL << "\n";
         if (srcT->isPointerTy())
         {
           VariableInfo *varinfo = TheState.GetPointerVariableInfo(II->getOperand(0));
@@ -772,14 +846,14 @@ namespace NesCheck
             {
               if (isa<BitCastInst>(II) && isa<ConstantInt>(varinfo->size) && ((ConstantInt *)varinfo->size)->getZExtValue() == 1)
                 TheState.SetSizeForPointerVariable(II->getOperand(0), getSizeForValue(II));
-              
+
               std::string ptrTypeName = TheState.ClassifyPointerVariable(II->getOperand(0), VariableStates::Dyn);
               recordPtrTypes(ptrTypeName, II->getOperand(0));
               ptrTypeName = TheState.ClassifyPointerVariable(II, VariableStates::Dyn);
               recordPtrTypes(ptrTypeName, II);
             }
-            else
-              errs() << "=> Ignored classification of variable since we have no operand\n";
+            // else
+              // errs() << "=> Ignored classification of variable since we have no operand\n";
           }
 
           // propagate size metadata
@@ -789,7 +863,7 @@ namespace NesCheck
           }
           else
           {
-            errs() << "!!! DON'T KNOW variable or doesn't have size\n";
+            // errs() << "!!! DON'T KNOW variable or doesn't have size\n";
           }
         }
       }
@@ -811,7 +885,7 @@ namespace NesCheck
     bool rewriteCallSite(Instruction *Call)
     {
       ++FunctionCallSitesRewritten;
-      errs() << "Rewriting Call " << *Call << "\n";
+      // errs() << "Rewriting Call " << *Call << "\n";
 
       // Copy the existing arguments
       std::vector<Value *> Args;
@@ -828,20 +902,20 @@ namespace NesCheck
       for (unsigned i = 0, e = FTy->getNumParams(); i != e; ++i, ++AI)
       {
         Value *varr = AI->get();
-        errs() << "Arg: " << *varr << "\n";
+        // errs() << "Arg: " << *varr << "\n";
 
         if (needsRewritten(varr->getType()))
         {
           VariableInfo *varinfo;
           while (!(varinfo = TheState.GetPointerVariableInfo(varr)) && isa<LoadInst>(varr))
             varr = ((LoadInst *)varr)->getPointerOperand();
-          errs() << "Rewriting Call " << *Call << "\n";
+          // errs() << "Rewriting Call " << *Call << "\n";
           if (!varinfo && isa<Constant>(varr))
             varinfo = TheState.SetSizeForPointerVariable(varr, getSizeForValue(varr));
           if (varinfo != NULL)
             SpecificNewArgs.push_back(varinfo->size);
         }
-        errs() << "AI at " << AI << "\n";
+        // errs() << "AI at " << AI << "\n";
         Args.push_back(*AI);
       }
 
@@ -881,7 +955,7 @@ namespace NesCheck
       // The original function returned a pointer, so the new function returns the pointer and its size
       if (needsRewritten(Call->getType()))
       {
-        errs() << "Updating return values of the call\n";
+        // errs() << "Updating return values of the call\n";
         // Split the values
         llvm::Value *OrigRet = llvm::ExtractValueInst::Create(NewCall, 0, "origret", Before);
         llvm::Value *NewRet = llvm::ExtractValueInst::Create(NewCall, 1, "sizeret", Before);
@@ -895,7 +969,7 @@ namespace NesCheck
         Call->replaceAllUsesWith(NewCall);
       }
 
-      errs() << "Call " << *Call << " replaced with " << *NewCall << "\n";
+      // errs() << "Call " << *Call << " replaced with " << *NewCall << "\n";
 
       // Finally, remove the old call from the program, reducing the use-count of F
       Call->eraseFromParent();
@@ -942,8 +1016,8 @@ namespace NesCheck
         }
 
         // skip functions used with function pointer in structs for now, cause it's a mess
-        errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName() << '\n';
-        errs() << "SKIPPED function rewriting because of whitelisting\n";
+        // errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName() << '\n';
+        // errs() << "SKIPPED function rewriting because of whitelisting\n";
         return F;
       }
 
@@ -965,7 +1039,7 @@ namespace NesCheck
         return F;
 
       ++FunctionSignaturesRewritten;
-      errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName() << '\n';
+      // errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName() << '\n';
 
       // starts changing the signature for this function by creating a new one and moving everything over there
 
@@ -1016,8 +1090,7 @@ namespace NesCheck
       llvm::Function::arg_iterator NAI = FirstNewArgIter;
       for (Argument *newarg : newArgs)
       {
-        errs() << "NAI: " << *NAI << " - "
-               << "newarg name: " << newarg->getName() << "\n";
+        // errs() << "NAI: " << *NAI << " - " << "newarg name: " << newarg->getName() << "\n";
         NAI->takeName(newarg);
         NAI++;
       }
@@ -1025,7 +1098,7 @@ namespace NesCheck
       // Splice the body of the old function right into the new function, leaving the old rotting hulk of the function empty.
       NF->getBasicBlockList().splice(NF->begin(), F->getBasicBlockList());
 
-      errs() << "New signature: " << *(NF->getFunctionType()) << "\n";
+      // errs() << "New signature: " << *(NF->getFunctionType()) << "\n";
 
       // if we changed the return type, then we will have to pimp all return instructions
       if (needsRewritten(OldRetTy))
@@ -1115,6 +1188,9 @@ namespace NesCheck
     bool runOnModule(Module &M) override
     {
       bool changed = false;
+      _DDA = &getAnalysis<pdg::DataAccessAnalysis>();
+      _PDG = _DDA->getPDG();
+      BoundaryFuncNames = _DDA->getSDA()->getBoundaryFuncNames();
 
       srand(time(NULL));
 
@@ -1214,91 +1290,18 @@ namespace NesCheck
         // analyze all functions and populate Instrumentation WorkList
         analyzeFunction(F);
       }
-
+      _DDA->getKSplitStats()->printStats();
+      // dumpRecordedTypes();
       printStats();
-
-      bool isConverged = false;
-      std::set<StringRef> functionsToAnalyze;
-      Function *F = NULL;
-      errs() << "\n\n\n\n*********** WORKLIST **************\n\n";
-      //Worklist algorithm - run until it converges
-      while (!isConverged)
-      {
-        //Compute the functions that need to be analyzed
-        for (auto it = TheState.Variables.begin(); it != TheState.Variables.end(); it++)
-        {
-          if (it->second.isGlobal && it->second.didClassificationChange)
-          {
-            //Analyze the dependent functions
-            errs() << "Dependent functions [ " << it->first << "] :";
-            for (auto nameIt = it->second.dependentFunctions.begin(); nameIt != it->second.dependentFunctions.end(); nameIt++)
-            {
-              functionsToAnalyze.insert(functionsToAnalyze.begin(), *nameIt);
-              errs() << (*nameIt) << " ";
-            }
-            errs() << "\n";;
-            it->second.didClassificationChange = false;
-          }
-        }
-
-        //Stop when you reach steady state
-        isConverged = functionsToAnalyze.empty();
-        for (auto nameIt = functionsToAnalyze.begin(); nameIt != functionsToAnalyze.end(); nameIt++)
-        {
-          //Analyze functions
-          F = M.getFunction(*nameIt);
-          if (F != NULL)
-          {
-            isCurrentFunctionWhitelisted = isWhitelisted(F);
-            isCurrentFunctionWhitelistedForInstrumentation =
-                isCurrentFunctionWhitelisted || isWhitelistedForInstrumentation(F);
-            // analyze all functions and populate Instrumentation WorkList
-            analyzeFunction(F);
-          }
-        }
-        functionsToAnalyze.clear();
-      }
-      dumpRecordedTypes();
-
-      errs() << "\n\n*********\n REMOVING OLD FUNCTIONS\n";
-      for (Function *F : FunctionsToRemove)
-      {
-        if (F->getNumUses() > 0)
-        {
-          // if there are some uses left, we need to keep this function and make it call the right one (we'll lose metadata)
-          // (ideally there should never be uses left around, but let's use this workaround for now)
-          errs() << "Leftover uses of " << F->getName() << "(" << F->getNumUses() << "): \n";
-          std::vector<Instruction *> leftoveruses;
-          for (Value::user_iterator UI = F->user_begin(), E = F->user_end(); UI != E; ++UI)
-            if (Instruction *instr = dyn_cast<Instruction>(*UI))
-            {
-              leftoveruses.push_back(instr);
-            }
-
-          for (Value *U : leftoveruses)
-          {
-            //printLineNumberForInstruction((Instruction*)U);
-            errs() << " " << *U << "\n";
-          }
-        }
-        else
-        {
-          // if there are no more uses left, erase the function
-          F->eraseFromParent();
-        }
-      }
-
-      printStats();
-
       return changed;
     }
 
     void getAnalysisUsage(AnalysisUsage &AU) const override
     {
       AU.addRequired<TargetLibraryInfoWrapperPass>();
+      AU.addRequired<pdg::DataAccessAnalysis>();
     }
   };
   char NesCheckPass::ID = 0;
   static RegisterPass<NesCheckPass> X("nescheck", "nesCheck - CCured analysis + dynamic instrumentation");
 }
-

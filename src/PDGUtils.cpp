@@ -2,6 +2,10 @@
 
 using namespace llvm;
 
+static std::set<std::string> dataWriteLibFuncs = {
+  "__memcpy"
+};
+
 StructType *pdg::pdgutils::getStructTypeFromGEP(GetElementPtrInst &gep)
 {
   Value *baseAddr = gep.getPointerOperand();
@@ -141,6 +145,18 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
       if (!isa<Argument>(si->getValueOperand()) && si->getPointerOperand() == &v)
         return true;
     }
+
+    if (CallInst *ci = dyn_cast<CallInst>(user))
+    {
+      auto called_func = getCalledFunc(*ci);
+      if (called_func == nullptr)
+        continue;
+      if (dataWriteLibFuncs.find(called_func->getName().str()) != dataWriteLibFuncs.end())
+      {
+        errs() << "find call func name: " << called_func->getName() << " - " << ci->getFunction()->getName() << "\n";
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -149,7 +165,7 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
 
 inst_iterator pdg::pdgutils::getInstIter(Instruction &i)
 {
-  Function* f = i.getFunction();
+  Function *f = i.getFunction();
   for (auto inst_iter = inst_begin(f); inst_iter != inst_end(f); inst_iter++)
   {
     if (&*inst_iter == &i)
@@ -160,9 +176,9 @@ inst_iterator pdg::pdgutils::getInstIter(Instruction &i)
 
 std::set<Instruction *> pdg::pdgutils::getInstructionBeforeInst(Instruction &i)
 {
-  Function* f = i.getFunction();
+  Function *f = i.getFunction();
   auto stop = getInstIter(i);
-  std::set<Instruction*> insts_before;
+  std::set<Instruction *> insts_before;
   for (auto inst_iter = inst_begin(f); inst_iter != inst_end(f); inst_iter++)
   {
     if (inst_iter == stop)
@@ -174,11 +190,11 @@ std::set<Instruction *> pdg::pdgutils::getInstructionBeforeInst(Instruction &i)
 
 std::set<Instruction *> pdg::pdgutils::getInstructionAfterInst(Instruction &i)
 {
-  Function* f = i.getFunction();
-  std::set<Instruction*> insts_after;
+  Function *f = i.getFunction();
+  std::set<Instruction *> insts_after;
   auto start = getInstIter(i);
   if (start == inst_end(f))
-    return  insts_after;
+    return insts_after;
   start++;
   for (auto inst_iter = start; inst_iter != inst_end(f); inst_iter++)
   {
@@ -205,7 +221,7 @@ std::set<Value *> pdg::pdgutils::computeAliasForRetVal(Value &val, Function &F)
   val_queue.push(&val);
   while (!val_queue.empty())
   {
-    Value* cur_val = val_queue.front();
+    Value *cur_val = val_queue.front();
     val_queue.pop();
 
     for (auto instI = inst_begin(F); instI != inst_end(F); ++instI)
@@ -249,8 +265,8 @@ AliasResult pdg::pdgutils::queryAliasUnderApproximate(Value &v1, Value &v2)
     if (bci->getOperand(0) == &v2)
       return MustAlias;
   }
-  // handle load instruction  
-  if (LoadInst* li = dyn_cast<LoadInst>(&v1))
+  // handle load instruction
+  if (LoadInst *li = dyn_cast<LoadInst>(&v1))
   {
     auto load_addr = li->getPointerOperand();
     for (auto user : load_addr->users())
@@ -299,13 +315,11 @@ std::string pdg::pdgutils::stripFuncNameVersionNumber(std::string func_name)
   return func_name.substr(0, deli_pos);
 }
 
-
-
 std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
 {
   std::string parent_type_name = "";
   std::string node_field_name = "";
-  TreeNode* parent_node = tree_node.getParentNode();
+  TreeNode *parent_node = tree_node.getParentNode();
   if (parent_node != nullptr)
   {
     auto parent_di_type = dbgutils::stripMemberTag(*parent_node->getDIType());
@@ -315,7 +329,7 @@ std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
 
   if (!tree_node.getDIType())
     return parent_type_name;
-  DIType* node_di_type = dbgutils::stripAttributes(*tree_node.getDIType());
+  DIType *node_di_type = dbgutils::stripAttributes(*tree_node.getDIType());
   node_field_name = dbgutils::getSourceLevelVariableName(*node_di_type);
 
   return (parent_type_name + node_field_name);
@@ -369,4 +383,36 @@ std::string pdg::pdgutils::rtrim(std::string s)
 std::string pdg::pdgutils::trimStr(std::string s)
 {
   return ltrim(rtrim(s));
+}
+
+bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
+{
+  Type *ty = gv.getType();
+  if (auto t = dyn_cast<PointerType>(ty))
+    ty = t->getPointerElementType();
+  if (ArrayType *arr_ty = dyn_cast<ArrayType>(ty))
+  {
+    if (!arr_ty->getElementType()->isAggregateType())
+      return false;
+    auto arr_len = arr_ty->getNumElements();
+    if (!gv.hasInitializer())
+      return false;
+    auto initializer = gv.getInitializer();
+    // check if all elements other than the last one has non zero value
+    bool non_zero_prev = true;
+    for (unsigned i = 0; i < arr_ty->getNumElements() - 1; ++i)
+    {
+      if (initializer->getAggregateElement(i)->isZeroValue())
+      {
+        non_zero_prev = false;
+        break;
+      }
+    }
+    // check if the last element is zero value
+    auto last_ele = initializer->getAggregateElement(arr_len - 1);
+
+    if (non_zero_prev && last_ele->isZeroValue())
+      return true;
+  }
+  return false;
 }

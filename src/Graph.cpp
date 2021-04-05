@@ -88,6 +88,8 @@ void pdg::ProgramGraph::build(Module &M)
   for (auto &global_var : M.getGlobalList())
   {
     auto global_var_type = global_var.getType();
+    if (pdgutils::isSentinelType(global_var))
+      errs() << "find sentinal type: " << global_var << "\n";
     if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
       continue;
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
@@ -247,6 +249,8 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
       DIType *global_var_di_type = dbgutils::getGlobalVarDIType(*gv);
       if (!global_var_di_type)
         return nullptr;
+      auto global_type = gv->getType();
+
       return dbgutils::getBaseDIType(*global_var_di_type);
     }
   }

@@ -44,14 +44,15 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
     if (&inst == &*inst_iter)
       continue;
     auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
-    // auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
-    if (anders_aa_result != NoAlias)
+    auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
+    if (anders_aa_result != NoAlias || alias_result != NoAlias)
     {
       Node* src = g.getNode(inst);
       Node* dst = g.getNode(*inst_iter);
       if (src == nullptr || dst == nullptr)
         continue;
       src->addNeighbor(*dst, EdgeType::DATA_ALIAS);
+      dst->addNeighbor(*src, EdgeType::DATA_ALIAS);
     }
   }
 }

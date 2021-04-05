@@ -19,7 +19,7 @@ void AnalysisState::RegisterVariable(const VariableMapKeyType *Decl) {
     if (Variables.count(Decl)) return;
     Variables[Decl].classification = VariableStates::Safe;
     Variables[Decl].size = llvm::ConstantInt::get(sizetype, 0);
-    errs() << GREEN << "\t=>(Register) Classified " << getIdentifyingName(Decl) << " as SAFE" << NORMAL << "\n";
+    // errs() << GREEN << "\t=>(Register) Classified " << getIdentifyingName(Decl) << " as SAFE" << NORMAL << "\n";
 }
 
 std::string AnalysisState::ClassifyPointerVariable(const VariableMapKeyType* Decl, VariableStates ptrType) {
@@ -31,9 +31,9 @@ std::string AnalysisState::ClassifyPointerVariable(const VariableMapKeyType* Dec
         Variables[Decl].classification = ptrType;
         if(Variables[Decl].isGlobal)
             Variables[Decl].didClassificationChange = true;
-        errs() << GREEN << "\t=> Classified " << getIdentifyingName(Decl) << " as " << ptrTypeName << NORMAL << "\n";
+        // errs() << GREEN << "\t=> Classified " << getIdentifyingName(Decl) << " as " << ptrTypeName << NORMAL << "\n";
     } else {
-        errs() << GRAY << "\t=> Ignored classification of " << getIdentifyingName(Decl) << " as " << ptrTypeName << NORMAL << "\n";
+        // errs() << GRAY << "\t=> Ignored classification of " << getIdentifyingName(Decl) << " as " << ptrTypeName << NORMAL << "\n";
     }
     return ptrTypeName;
 }
@@ -46,14 +46,14 @@ VariableInfo * AnalysisState::SetSizeForPointerVariable(const VariableMapKeyType
         // Variables[Decl].hasSize = true;
         Variables[Decl].size = size;
     }
-    errs() << GREEN << "\t=> Size of " << getIdentifyingName(Decl) << " set to " << *(Variables[Decl].size) << NORMAL << "\n";
+    // errs() << GREEN << "\t=> Size of " << getIdentifyingName(Decl) << " set to " << *(Variables[Decl].size) << NORMAL << "\n";
     return &(Variables[Decl]);
 }
 void AnalysisState::SetExplicitSizeVariableForPointerVariable(const VariableMapKeyType *Decl, Value *explicitSize) {
     RegisterVariable(Decl);
     Variables[Decl].hasExplicitSizeVariable = (explicitSize != NULL);
     Variables[Decl].explicitSizeVariable = explicitSize;
-    errs() << GREEN << "\t=> Explicit size variable for " << getIdentifyingName(Decl) << " set to " << *(Variables[Decl].explicitSizeVariable) << NORMAL << "\n";
+    // errs() << GREEN << "\t=> Explicit size variable for " << getIdentifyingName(Decl) << " set to " << *(Variables[Decl].explicitSizeVariable) << NORMAL << "\n";
 }
 
 void AnalysisState::SetInstantiatedExplicitSizeVariable(const VariableMapKeyType *Ref, bool v) {
@@ -66,11 +66,10 @@ void AnalysisState::SetHasMetadataTableEntry(const VariableMapKeyType *Ref) {
     Variables[Ref].hasMetadataTableEntry = true;
 }
 
-
 VariableInfo * AnalysisState::GetPointerVariableInfo(VariableMapKeyType *Decl) {
-    errs() << GRAY << "\tGetting VarInfo for " << getIdentifyingName(Decl) << "... ";
+    // errs() << GRAY << "\tGetting VarInfo for " << getIdentifyingName(Decl) << "... ";
     if (isa<ConstantPointerNull>(Decl)) {
-        errs() << "ConstantPointer NULL type creating new temp variable info.\n" << NORMAL;
+        // errs() << "ConstantPointer NULL type creating new temp variable info.\n" << NORMAL;
         VariableInfo* info = new VariableInfo;
         //Attempted BUG FIX - ENUM ISSUE ( NEW STRUCT VARIABLE WITH DEFAULT ENUM VALUE WILL APPARENTLY LEAD TO UNDEFINED BEHAVIOUR)
         info->classification = VariableStates::Unknown;
@@ -78,10 +77,10 @@ VariableInfo * AnalysisState::GetPointerVariableInfo(VariableMapKeyType *Decl) {
         return info;
     }
     if (Variables.count(Decl)) {
-        errs() << "found.\n" << NORMAL;
+        // errs() << "found.\n" << NORMAL;
         return &(Variables[Decl]);
     }
-    errs() << RED << "NOT FOUND!\n" << NORMAL;
+    // errs() << RED << "NOT FOUND!\n" << NORMAL;
     return NULL;
 }
 
