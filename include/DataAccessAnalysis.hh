@@ -54,6 +54,10 @@ namespace pdg
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
+    bool isAllocator(llvm::Value &val);
+    std::string computeAllocCallerAnnotation(TreeNode &tree_node);
+    bool isWrittenWithNewObjFromCallee(TreeNode &tree_node);
+    std::set<Node *> findAllocator(TreeNode &tree_node);
     void printContainerOfStats();
     KSplitStats *getKSplitStats() { return _ksplit_stats; }
     SharedDataAnalysis *getSDA() { return _SDA; }

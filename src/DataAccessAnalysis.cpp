@@ -12,6 +12,12 @@ void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
   AU.setPreservesAll();
 }
 
+static std::set<std::string> KernelAllocators = {
+    "kzalloc",
+    "kmalloc",
+    "kvzalloc"
+};
+
 bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 {
   _module = &M;
@@ -426,7 +432,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
-    rpc_str = rpc_str + arg_type_name + " " + anno_str + arg_name;
+    rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + arg_name;
     _ksplit_stats->collectStats(*arg_di_type, annotations);
     if (i != arg_list.size() - 1)
       rpc_str += ", ";
@@ -464,6 +470,20 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
   {
     if (_SDA->isFieldUsedInStringOps(tree_node))
       annotations.insert("[string]");
+    if (tree_node.getAccessTags().size() == 0)
+    {
+      bool is_used = false;
+      for (auto addr_var : tree_node.getAddrVars())
+      {
+        if (!addr_var->user_empty())
+        {
+          is_used = true;
+          break;
+        }
+      }
+      if (!is_used)
+        annotations.insert("[unused]");
+    }
   }
   // for field, also check for global use info for this field
   else
@@ -482,13 +502,128 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
     }
   }
 
-  // if (hasAllocator(tree_node))
-  //   annotations.insert("alloc[callee]");
+  if (dbgutils::isStructPointerType(*tree_node.getDIType()))
+  {
+    std::string caller_alloc_anno = computeAllocCallerAnnotation(tree_node);
+    annotations.insert(caller_alloc_anno);
 
-  // if (isWrittenWithNewObject(tree_node))
-  //   annotations.insert("alloc[caller]");
+    if (isWrittenWithNewObjFromCallee(tree_node))
+      annotations.insert("alloc[caller]");
+  }
 
   return annotations;
+}
+
+bool pdg::DataAccessAnalysis::isAllocator(Value &v)
+{
+  if (CallInst *ci = dyn_cast<CallInst>(&v))
+  {
+    auto called_func = pdgutils::getCalledFunc(*ci);
+    if (called_func == nullptr)
+      return false;
+    auto called_func_name = called_func->getName().str();
+    if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
+      return true;
+  }
+  return false;
+}
+
+std::set<pdg::Node *> pdg::DataAccessAnalysis::findAllocator(TreeNode &tree_node)
+{
+  std::queue<Node *> node_queue;
+  std::set<EdgeType> search_edges = {
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_RET,
+      EdgeType::DATA_ALIAS};
+
+  std::set<Node *> allocator_nodes;
+  std::set<Node *> seen_nodes;
+  node_queue.push(&tree_node);
+  while (!node_queue.empty())
+  {
+    auto current_node = node_queue.front();
+    node_queue.pop();
+    // back tracing
+    if (seen_nodes.find(current_node) != seen_nodes.end())
+      continue;
+    seen_nodes.insert(current_node);
+    for (auto in_edge : current_node->getInEdgeSet())
+    {
+      if (search_edges.find(in_edge->getEdgeType()) == search_edges.end())
+        continue;
+      auto in_neighbor = in_edge->getSrcNode();
+      node_queue.push(in_neighbor);
+      if (in_neighbor->getValue() == nullptr)
+        continue;
+      if (CallInst *ci = dyn_cast<CallInst>(in_neighbor->getValue()))
+      {
+        auto called_func = pdgutils::getCalledFunc(*ci);
+        if (called_func == nullptr)
+          continue;
+        if (KernelAllocators.find(called_func->getName().str()) != KernelAllocators.end())
+          allocator_nodes.insert(in_neighbor);
+      }
+    }
+  }
+  return allocator_nodes;
+}
+
+std::string pdg::DataAccessAnalysis::computeAllocCallerAnnotation(TreeNode &tree_node)
+{
+  auto allocators = findAllocator(tree_node);
+  if (!allocators.empty())
+    return "alloc[caller]";
+  // finds all actual nodes that connect to this formal tree node
+  // auto param_in_neighbors = tree_node.getInNeighborsWithDepType(EdgeType::PARAMETER_IN);
+  // for (auto in_neighbor : param_in_neighbors)
+  // {
+  //   if (in_neighbor->getNodeType() != GraphNodeType::ACTUAL_IN)
+  //     continue;
+  //   TreeNode *t = static_cast<TreeNode *>(in_neighbor);
+  //   for (auto addr_var : t->getAddrVars())
+  //   {
+  //     if (CallInst *ci = dyn_cast<CallInst>(addr_var))
+  //     {
+  //       auto called_func = pdgutils::getCalledFunc(*ci);
+  //       if (called_func == nullptr)
+  //         continue;
+  //       auto called_func_name = called_func->getName().str();
+  //       if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
+  //         return true;
+  //     }
+
+  //     for (auto user : addr_var->users())
+  //     {
+  //       if (CallInst *ci = dyn_cast<CallInst>(user))
+  //       {
+  //         auto called_func = pdgutils::getCalledFunc(*ci);
+  //         if (called_func == nullptr)
+  //           continue;
+  //         auto called_func_name = called_func->getName().str();
+  //         if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
+  //           return true;
+  //       }
+  //     }
+  //   }
+  // }
+  return "";
+}
+
+bool pdg::DataAccessAnalysis::isWrittenWithNewObjFromCallee(TreeNode &tree_node)
+{
+  for (auto addr_var : tree_node.getAddrVars())
+  {
+    for (auto user : addr_var->users())
+    {
+      if (StoreInst *si = dyn_cast<StoreInst>(user))
+      {
+        auto value_operand = si->getValueOperand();
+        if (isAllocator(*value_operand))
+          return true;
+      }
+    }
+  }
+  return false;
 }
 
 void pdg::DataAccessAnalysis::constructGlobalOpStructStr()

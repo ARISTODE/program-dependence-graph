@@ -135,6 +135,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     auto formal_in_tree = fw.getArgFormalInTree(*formal_arg);
     _PDG->addTreeNodesToGraph(*actual_in_tree);
     connectInTrees(actual_in_tree, formal_in_tree, EdgeType::PARAMETER_IN);
+
     // step 3: connect actual out -> formal out
     auto actual_out_tree = cw.getArgActualOutTree(*actual_arg);
     auto formal_out_tree = fw.getArgFormalOutTree(*formal_arg);
@@ -367,7 +368,17 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actual_i
       if (!_PDG->hasNode(*addr_var))
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
+      auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
       addr_var_node->addNeighbor(*current_node, EdgeType::PARAMETER_IN);
+      for (auto alias_node : alias_nodes)
+      {
+        auto alias_node_val = alias_node->getValue();
+        if (alias_node_val != nullptr)
+        {
+          alias_node->addNeighbor(*current_node, EdgeType::PARAMETER_IN);
+          current_node->addAddrVar(*alias_node_val);
+        }
+      }
     }
 
     for (auto child_node : current_node->getChildNodes())

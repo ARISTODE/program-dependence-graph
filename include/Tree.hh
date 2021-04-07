@@ -64,7 +64,7 @@ namespace pdg
     void setBaseVal(llvm::Value &v) { _base_val = &v; }
 
   private:
-    llvm::Value* _base_val;
+    llvm::Value *_base_val;
     TreeNode *_root_node;
     int _size;
   };

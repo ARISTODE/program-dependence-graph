@@ -27,7 +27,7 @@ std::set<pdg::Node *> pdg::Node::getInNeighborsWithDepType(pdg::EdgeType edge_ty
   for (auto edge : _in_edge_set)
   {
     if (edge->getEdgeType() == edge_type)
-      in_neighbors_with_dep_type.insert(edge->getDstNode());
+      in_neighbors_with_dep_type.insert(edge->getSrcNode());
   }
   return in_neighbors_with_dep_type;
 }

@@ -152,10 +152,7 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
       if (called_func == nullptr)
         continue;
       if (dataWriteLibFuncs.find(called_func->getName().str()) != dataWriteLibFuncs.end())
-      {
-        errs() << "find call func name: " << called_func->getName() << " - " << ci->getFunction()->getName() << "\n";
         return true;
-      }
     }
   }
   return false;

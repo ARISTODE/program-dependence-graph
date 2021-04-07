@@ -4,6 +4,7 @@
 #include "PDGEdge.hh"
 #include "PDGEnums.hh"
 #include <set>
+#include <unordered_set>
 #include <iterator>
 
 namespace pdg
