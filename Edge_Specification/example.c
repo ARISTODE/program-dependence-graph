@@ -8,7 +8,7 @@ static unsigned int i;
 
 void greeter (char *str, int* s) {
     char* p = str;
-    static int sample_static = 1;
+    static int sample = 1;
     printf("%s\n", p);
     printf(", welcome!\n");
     *s = 15;
