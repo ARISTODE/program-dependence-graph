@@ -40,6 +40,12 @@ namespace pdg
     DATA_READ,
     DATA_WRITE
   };
+
+  enum class DomainTag
+  {
+    KERNEL_DOMAIN,
+    DRIVER_DOMAIN
+  };
 }
 
 #endif

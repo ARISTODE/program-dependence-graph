@@ -413,3 +413,35 @@ bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
   }
   return false;
 }
+
+bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
+{
+  auto di_type = tree_node.getDIType();
+  if (di_type == nullptr)
+    return false;
+  if (!dbgutils::isVoidPointerType(*di_type))
+    return false;
+
+  unsigned cast_count = 0;
+  for (auto addr_var : tree_node.getAddrVars())
+  {
+    for (auto user : addr_var->users())
+    {
+      if (isa<BitCastInst>(user))
+      {
+        cast_count += 1;
+        break;
+      }
+    }
+  }
+
+  if (cast_count > 1)
+    return true;
+  return false;
+}
+
+bool pdg::pdgutils::isFileExist(std::string file_name)
+{
+  std::ifstream in_file(file_name);
+  return in_file.good();
+}

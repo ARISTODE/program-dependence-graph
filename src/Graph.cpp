@@ -89,7 +89,13 @@ void pdg::ProgramGraph::build(Module &M)
   {
     auto global_var_type = global_var.getType();
     if (pdgutils::isSentinelType(global_var))
+    {
       errs() << "find sentinal type: " << global_var << "\n";
+      for (auto user : global_var.users())
+      {
+        errs() << "sentinel user: " << *user << "\n";
+      }
+    }
     if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
       continue;
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);

@@ -10,13 +10,16 @@ namespace pdg
   {
   public:
     KSplitStats() = default;
-    void increaseSharedPtr() { _shared_ptr_num++; }
-    void increaseSafePtr() { _safe_ptr_num++; }
+    void increaseSharedPtrNum() { _shared_ptr_num++; }
+    void increaseSafePtrNum() { _safe_ptr_num++; }
     void increaseVoidPtrNum() { _void_ptr_num++; }
+    void increaseUnhandledVoidPtrNum() { _unhandled_void_ptr_num++; }
     void increaseStringNum() { _string_num++; }
     void increaseArrayNum() { _array_num++; }
+    void increaseUnhandledArrayNum() { _unhandled_array_num++; }
     void increaseFuncPtrNum() { _func_ptr_num++; }
-    void increaseWildPtrNum() { _wild_ptr_num++; }
+    void increaseNonVoidWildPtrNum() { _non_void_wild_ptr_num++; }
+    void increaseVoidWildPtrNum() { _void_wild_ptr_num++; }
     void increaseUnknownPtrNum() { _unknown_ptr_num++; }
     void collectStats(llvm::DIType &dt, std::set<std::string> &annotations);
     void printStats();
@@ -25,10 +28,13 @@ namespace pdg
     unsigned _shared_ptr_num = 0;
     unsigned _safe_ptr_num = 0;
     unsigned _void_ptr_num = 0;
+    unsigned _unhandled_void_ptr_num = 0;
     unsigned _handled_void_ptr_num = 0;
     unsigned _string_num = 0;
     unsigned _array_num = 0;
-    unsigned _wild_ptr_num = 0;
+    unsigned _unhandled_array_num = 0;
+    unsigned _non_void_wild_ptr_num = 0;
+    unsigned _void_wild_ptr_num = 0;
     unsigned _unknown_ptr_num = 0;
     unsigned _func_ptr_num = 0;
   };
@@ -53,11 +59,11 @@ namespace pdg
     void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_projion_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
-    std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
+    std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
     bool isAllocator(llvm::Value &val);
-    std::string computeAllocCallerAnnotation(TreeNode &tree_node);
+    std::string computeAllocCallerAnnotation(TreeNode &tree_node, bool is_ret = false);
     bool isWrittenWithNewObjFromCallee(TreeNode &tree_node);
-    std::set<Node *> findAllocator(TreeNode &tree_node);
+    std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
     void printContainerOfStats();
     KSplitStats *getKSplitStats() { return _ksplit_stats; }
     SharedDataAnalysis *getSDA() { return _SDA; }

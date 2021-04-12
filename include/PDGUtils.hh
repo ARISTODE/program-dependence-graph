@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <queue>
+#include <fstream>
 
 namespace pdg
 {
@@ -21,6 +22,7 @@ namespace pdg
     bool hasReadAccess(llvm::Value &v);
     bool hasWriteAccess(llvm::Value &v);
     bool isSentinelType(llvm::GlobalVariable &gv);
+    bool isVoidPointerHasMultipleCasts(TreeNode &tree_node);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
@@ -36,5 +38,6 @@ namespace pdg
     std::string ltrim(std::string str);
     std::string rtrim(std::string str);
     std::string trimStr(std::string str);
+    bool isFileExist(std::string file_name);
   } // namespace pdgutils
 } // namespace pdg

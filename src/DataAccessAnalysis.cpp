@@ -15,7 +15,8 @@ void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 static std::set<std::string> KernelAllocators = {
     "kzalloc",
     "kmalloc",
-    "kvzalloc"
+    "kvzalloc",
+    "__kmalloc"
 };
 
 bool pdg::DataAccessAnalysis::runOnModule(Module &M)
@@ -38,7 +39,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   }
 
   idl_file << "module kernel {\n";
-  for (auto F : _SDA->getBoundaryFuncs())
+for (auto F : _SDA->getBoundaryFuncs())
   {
     if (F->isDeclaration())
       continue;
@@ -84,6 +85,7 @@ std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Va
 
 void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node)
 {
+  
   // special hanlding for function pointers
   if (tree_node.getDIType() != nullptr && dbgutils::isFuncPointerType(*tree_node.getDIType()))
   {
@@ -108,8 +110,13 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node)
     // n->dump();
     if (n->getValue() != nullptr)
     {
-      // errs() << *n->getValue() << "\n";
       auto acc_tags = computeDataAccessTagsForVal(*n->getValue());
+      if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
+      {
+        auto func = i->getFunction();
+        
+      }
+
       for (auto acc_tag : acc_tags)
       {
         tree_node.addAccessTag(acc_tag);
@@ -210,6 +217,8 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       anno_str += anno;
 
     _ksplit_stats->collectStats(*field_di_type, annotations);
+    if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
+      _ksplit_stats->increaseUnhandledVoidPtrNum();
 
     if (dbgutils::isStructPointerType(*field_di_type))
     {
@@ -375,11 +384,25 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
   // first generate for return value
   DIType *func_ret_di_type = fw->getReturnValDIType();
   std::string ret_type_str = "";
+  std::string anno_str = "";
   if (func_ret_di_type != nullptr)
   {
     ret_type_str = dbgutils::getSourceLevelTypeName(*func_ret_di_type, true);
     if (dbgutils::isStructPointerType(*func_ret_di_type))
       ret_type_str = "projection ret_" + ret_type_str;
+    
+    auto ret_tree_formal_in_root_node = fw->getRetFormalInTree()->getRootNode();
+    if (ret_tree_formal_in_root_node != nullptr)
+    {
+      auto ret_annotations = inferTreeNodeAnnotations(*ret_tree_formal_in_root_node, true);
+      _ksplit_stats->collectStats(*func_ret_di_type, ret_annotations);
+      for (auto anno : ret_annotations)
+      {
+        anno_str += anno;
+      }
+      if (pdgutils::isVoidPointerHasMultipleCasts(*ret_tree_formal_in_root_node))
+        _ksplit_stats->increaseUnhandledVoidPtrNum();
+    }
   }
   else
   {
@@ -402,7 +425,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
 
   auto ioremap_ann = handleIoRemap(F, ret_type_str);
 
-  rpc_str = rpc_prefix + " " + ret_type_str + ioremap_ann + " " + called_func_name + "( ";
+  rpc_str = rpc_prefix + " " + ret_type_str + ioremap_ann + " " + anno_str + " " + called_func_name + "( ";
   auto arg_list = fw->getArgList();
   for (unsigned i = 0; i < arg_list.size(); i++)
   {
@@ -433,7 +456,11 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
     for (auto anno : annotations)
       anno_str += anno;
     rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + arg_name;
+
     _ksplit_stats->collectStats(*arg_di_type, annotations);
+    if (pdgutils::isVoidPointerHasMultipleCasts(*root_node))
+      _ksplit_stats->increaseUnhandledVoidPtrNum();
+
     if (i != arg_list.size() - 1)
       rpc_str += ", ";
   }
@@ -463,7 +490,7 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
   idl_file << "}\n";
 }
 
-std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode &tree_node)
+std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret)
 {
   std::set<std::string> annotations;
   if (tree_node.isRootNode())
@@ -504,8 +531,9 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
 
   if (dbgutils::isStructPointerType(*tree_node.getDIType()))
   {
-    std::string caller_alloc_anno = computeAllocCallerAnnotation(tree_node);
-    annotations.insert(caller_alloc_anno);
+    std::string caller_alloc_anno = computeAllocCallerAnnotation(tree_node, is_ret);
+    if (!caller_alloc_anno.empty())
+      annotations.insert(caller_alloc_anno);
 
     if (isWrittenWithNewObjFromCallee(tree_node))
       annotations.insert("alloc[caller]");
@@ -522,16 +550,17 @@ bool pdg::DataAccessAnalysis::isAllocator(Value &v)
     if (called_func == nullptr)
       return false;
     auto called_func_name = called_func->getName().str();
+    called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
     if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
       return true;
   }
   return false;
 }
 
-std::set<pdg::Node *> pdg::DataAccessAnalysis::findAllocator(TreeNode &tree_node)
+std::set<pdg::Node *> pdg::DataAccessAnalysis::findAllocator(TreeNode &tree_node, bool is_forward)
 {
   std::queue<Node *> node_queue;
-  std::set<EdgeType> search_edges = {
+  std::set<EdgeType> search_edge_types = {
       EdgeType::PARAMETER_IN,
       EdgeType::DATA_RET,
       EdgeType::DATA_ALIAS};
@@ -547,65 +576,51 @@ std::set<pdg::Node *> pdg::DataAccessAnalysis::findAllocator(TreeNode &tree_node
     if (seen_nodes.find(current_node) != seen_nodes.end())
       continue;
     seen_nodes.insert(current_node);
-    for (auto in_edge : current_node->getInEdgeSet())
+    auto search_edges = is_forward ? current_node->getOutEdgeSet() : current_node->getInEdgeSet();
+    for (auto edge : search_edges)
     {
-      if (search_edges.find(in_edge->getEdgeType()) == search_edges.end())
+      if (search_edge_types.find(edge->getEdgeType()) == search_edge_types.end())
         continue;
-      auto in_neighbor = in_edge->getSrcNode();
-      node_queue.push(in_neighbor);
-      if (in_neighbor->getValue() == nullptr)
+      auto target_node = is_forward ? edge->getDstNode() : edge->getSrcNode();
+      node_queue.push(target_node);
+      if (target_node->getValue() == nullptr)
         continue;
-      if (CallInst *ci = dyn_cast<CallInst>(in_neighbor->getValue()))
+      if (CallInst *ci = dyn_cast<CallInst>(target_node->getValue()))
       {
         auto called_func = pdgutils::getCalledFunc(*ci);
         if (called_func == nullptr)
           continue;
-        if (KernelAllocators.find(called_func->getName().str()) != KernelAllocators.end())
-          allocator_nodes.insert(in_neighbor);
+        auto called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+        if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
+          allocator_nodes.insert(target_node);
       }
     }
   }
   return allocator_nodes;
 }
 
-std::string pdg::DataAccessAnalysis::computeAllocCallerAnnotation(TreeNode &tree_node)
+std::string pdg::DataAccessAnalysis::computeAllocCallerAnnotation(TreeNode &tree_node, bool is_ret)
 {
-  auto allocators = findAllocator(tree_node);
+  // if is ret arg, find the allocator forward
+  auto allocators = findAllocator(tree_node, is_ret);
   if (!allocators.empty())
+  {
+    for (auto allocator : allocators)
+    {
+      Value* allocator_val = allocator->getValue();
+      assert(allocator_val != nullptr && "cannot compute alloc caller annotation for empty val!\n");
+      std::string alloc_str = "";
+      if (Instruction *i = dyn_cast<Instruction>(allocator_val))
+      {
+        for (auto op_iter = i->op_begin(); op_iter != i->op_end(); ++op_iter)
+        {
+          errs() << "allocator op: " << *i << " - " << **op_iter << "\n";
+        }
+      }
+    }
     return "alloc[caller]";
-  // finds all actual nodes that connect to this formal tree node
-  // auto param_in_neighbors = tree_node.getInNeighborsWithDepType(EdgeType::PARAMETER_IN);
-  // for (auto in_neighbor : param_in_neighbors)
-  // {
-  //   if (in_neighbor->getNodeType() != GraphNodeType::ACTUAL_IN)
-  //     continue;
-  //   TreeNode *t = static_cast<TreeNode *>(in_neighbor);
-  //   for (auto addr_var : t->getAddrVars())
-  //   {
-  //     if (CallInst *ci = dyn_cast<CallInst>(addr_var))
-  //     {
-  //       auto called_func = pdgutils::getCalledFunc(*ci);
-  //       if (called_func == nullptr)
-  //         continue;
-  //       auto called_func_name = called_func->getName().str();
-  //       if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
-  //         return true;
-  //     }
+  }
 
-  //     for (auto user : addr_var->users())
-  //     {
-  //       if (CallInst *ci = dyn_cast<CallInst>(user))
-  //       {
-  //         auto called_func = pdgutils::getCalledFunc(*ci);
-  //         if (called_func == nullptr)
-  //           continue;
-  //         auto called_func_name = called_func->getName().str();
-  //         if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
-  //           return true;
-  //       }
-  //     }
-  //   }
-  // }
   return "";
 }
 
@@ -613,6 +628,8 @@ bool pdg::DataAccessAnalysis::isWrittenWithNewObjFromCallee(TreeNode &tree_node)
 {
   for (auto addr_var : tree_node.getAddrVars())
   {
+    if (isAllocator(*addr_var))
+      return true;
     for (auto user : addr_var->users())
     {
       if (StoreInst *si = dyn_cast<StoreInst>(user))
@@ -686,15 +703,20 @@ void pdg::DataAccessAnalysis::printContainerOfStats()
 void pdg::KSplitStats::collectStats(DIType &dt, std::set<std::string> &annotations)
 {
   if (dbgutils::isVoidPointerType(dt))
+  {
     increaseVoidPtrNum();
+    increaseSharedPtrNum();
+  }
   else if (dbgutils::isArrayType(dt))
     increaseArrayNum();
   else if (dbgutils::isFuncPointerType(dt))
+  {
     increaseFuncPtrNum();
+  }
   else if (annotations.find("[string]") != annotations.end())
     increaseStringNum();
   else if (dbgutils::isPointerType(dt))
-    increaseSharedPtr();
+    increaseSharedPtrNum();
 }
 
 void pdg::KSplitStats::printStats()
@@ -702,10 +724,13 @@ void pdg::KSplitStats::printStats()
   errs() << "shared ptr fields: " << _shared_ptr_num << "\n";
   errs() << "safe ptr num: " << _safe_ptr_num << "\n";
   errs() << "void ptr num: " << _void_ptr_num << "\n";
+  errs() << "unhandled void ptr num: " << _unhandled_void_ptr_num << "\n";
   errs() << "string num: " << _string_num << "\n";
   errs() << "array num: " << _array_num << "\n";
+  errs() << "unhandled array num: " << _unhandled_array_num << "\n";
   errs() << "func ptr num: " << _func_ptr_num << "\n";
-  errs() << "wild ptr num: " << _wild_ptr_num << "\n";
+  errs() << "non void wild ptr num: " << _non_void_wild_ptr_num << "\n";
+  errs() << "void wild ptr num: " << _void_wild_ptr_num << "\n";
   errs() << "unknown num: " << _unknown_ptr_num << "\n";
 }
 

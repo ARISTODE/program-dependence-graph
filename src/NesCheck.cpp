@@ -425,35 +425,40 @@ namespace NesCheck
         {
           pdg::TreeNode* tn = static_cast<pdg::TreeNode*>(in_edge->getSrcNode());
           tree_nodes.insert(tn);
+          break;
         }
       }
 
       for (auto tree_node : tree_nodes)
       {
         auto field_id = pdg::pdgutils::computeTreeNodeID(*tree_node);
-        // if (!_DDA->getSDA()->isSharedFieldID(field_id))
-        //   continue;
+        if (!_DDA->getSDA()->isSharedFieldID(field_id) && !tree_node->isRootNode())
+          continue;
         if (ProcessedNodes.find(tree_node) != ProcessedNodes.end())
           continue;
         ProcessedNodes.insert(tree_node);
         if (ptrType == "SAFE")
         {
-          _DDA->getKSplitStats()->increaseSafePtr();
+          _DDA->getKSplitStats()->increaseSafePtrNum();
           // SafePtrs.insert(ptr);
         }
         else if (ptrType == "SEQ")
         {
           if (!pdg::dbgutils::isArrayType(*tree_node->getDIType()))
-            _DDA->getKSplitStats()->increaseArrayNum();
+            _DDA->getKSplitStats()->increaseUnhandledArrayNum();
         }
         else if (ptrType == "DYN")
         {
-          // if (!pdg::dbgutils::isVoidPointerType(*tree_node->getDIType()))
-          // {
+          if (!pdg::dbgutils::isVoidPointerType(*tree_node->getDIType()))
+          {
           if (Instruction *i = dyn_cast<Instruction>(ptr))
             errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << "\n";
-          _DDA->getKSplitStats()->increaseWildPtrNum();
-          // }
+          _DDA->getKSplitStats()->increaseNonVoidWildPtrNum();
+          }
+          else
+          {
+            _DDA->getKSplitStats()->increaseVoidWildPtrNum();
+          }
           // WildPtrs.insert(ptr);
         }
         else if (ptrType == "UNKNOWN")

@@ -281,6 +281,8 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
       return "s32";
     return getSourceLevelTypeName(*getBaseDIType(dt), is_raw);
   }
+  case dwarf::DW_TAG_union_type:
+    return "union";
   default:
   {
     if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
