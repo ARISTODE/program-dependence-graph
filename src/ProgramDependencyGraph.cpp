@@ -33,6 +33,14 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   if (!ptaw.hasPTASetup())
     ptaw.setupPTA(M);
   unsigned func_size = 0;
+
+  // connect global tree with addr vars
+  for (auto pair : _PDG->getGlobalVarTreeMap())
+  {
+    auto tree = pair.second;
+    connectGlobalTreeWithAddrVars(*tree);
+  }
+
   for (auto &F : M)
   {
     if (F.isDeclaration())
@@ -243,12 +251,58 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
 }
 
 // ====== connect tree with variables ======
+void pdg::ProgramDependencyGraph::connectGlobalTreeWithAddrVars(Tree &global_var_tree)
+{
+  TreeNode* root_node = global_var_tree.getRootNode();
+  std::queue<TreeNode*> node_queue;
+  node_queue.push(root_node);
+  
+  while (!node_queue.empty())
+  {
+    TreeNode* current_node = node_queue.front();
+    node_queue.pop();
+    TreeNode* parent_node = current_node->getParentNode();
+    std::unordered_set<Value*> parent_node_addr_vars;
+    if (parent_node != nullptr)
+      parent_node_addr_vars = parent_node->getAddrVars();
+    
+    for (auto addr_var : current_node->getAddrVars())
+    {
+      if (!_PDG->hasNode(*addr_var))
+        continue;
+      auto addr_var_node = _PDG->getNode(*addr_var);
+      current_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
+      auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+      for (auto alias_node : alias_nodes)
+      {
+        Value* alias_node_val = alias_node->getValue();
+        if (alias_node_val == nullptr)
+          continue;
+        if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
+          continue;
+        if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(alias_node_val))
+        {
+          if (!gep->hasAllZeroIndices())
+            continue;
+        }
+        current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
+        current_node->addAddrVar(*alias_node_val);
+      }
+    }
+
+    for (auto child_node : current_node->getChildNodes())
+    {
+      node_queue.push(child_node);
+    }
+  }
+}
+
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_in_tree)
 {
   TreeNode* root_node = formal_in_tree.getRootNode();
   std::queue<TreeNode*> node_queue;
   node_queue.push(root_node);
-   
+  
   while (!node_queue.empty())
   {
     TreeNode* current_node = node_queue.front();

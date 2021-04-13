@@ -440,6 +440,23 @@ bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
   return false;
 }
 
+bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)
+{
+  if (ConstantExpr *ce = dyn_cast<ConstantExpr>(&v))
+  {
+    Instruction* i = ce->getAsInstruction();
+    for (auto op_iter = i->op_begin(); op_iter != i->op_end(); ++op_iter)
+    {
+      if (GlobalVariable *gv = dyn_cast<GlobalVariable>(*op_iter))
+      {
+        if (isSentinelType(*gv))
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool pdg::pdgutils::isFileExist(std::string file_name)
 {
   std::ifstream in_file(file_name);

@@ -16,6 +16,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
   // read driver/kernel domian funcs
   setupStrOps();
+  readSentinelFields();
   setupDriverFuncs(M);
   setupKernelFuncs(M);
   // get boundary functions
@@ -28,6 +29,11 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   buildTreesForSharedStructDIType(M);
   // generate shared field id
   computeSharedFieldID();
+  computeSharedGlobalVars();
+  for (auto shared_var : _shared_global_vars)
+  {
+    errs() << "Shared global var: " << *shared_var << "\n";
+  }
   // dumpSharedFieldID();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
@@ -101,30 +107,6 @@ std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file
 
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()
 {
-  // scan fro global structs
-  for (auto &global_var : _module->getGlobalList())
-  {
-    SmallVector<DIGlobalVariableExpression *, 4> sv;
-    if (!global_var.hasInitializer())
-      continue;
-    DIGlobalVariable *di_gv = nullptr;
-    global_var.getDebugInfo(sv);
-    for (auto di_expr : sv)
-    {
-      if (di_expr->getVariable()->getName() == global_var.getName())
-        di_gv = di_expr->getVariable(); // get global variable from global expression
-    }
-    if (!di_gv)
-      continue;
-    auto gv_di_type = di_gv->getType();
-    auto gv_lowest_di_type = dbgutils::getLowestDIType(*gv_di_type);
-    if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
-      continue;
-    auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type, true);
-    if (_driver_global_struct_types.find(gv_di_type_name) != _driver_global_struct_types.end())
-      _shared_struct_di_types.insert(gv_lowest_di_type);
-  }
-
   std::set<std::string> driver_struct_type_names;
   for (auto func : _driver_domain_funcs)
   {
@@ -150,7 +132,10 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       if (lowest_di_type == nullptr)
         continue;
       if (dbgutils::isStructType(*lowest_di_type))
-        driver_struct_type_names.insert(dbgutils::getSourceLevelTypeName(*lowest_di_type));
+      {
+        std::string di_type_name = dbgutils::getSourceLevelTypeName(*lowest_di_type, true);
+        driver_struct_type_names.insert(pdgutils::stripVersionTag(di_type_name));
+      }
     }
   }
   errs() << " === driver side struct types ===\n";
@@ -175,12 +160,15 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       {
         DIType *lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
         assert(lowest_di_type != nullptr && "null lowest di type (computeSharedStructTypes)\n");
-        std::string struct_type_name = dbgutils::getSourceLevelTypeName(*lowest_di_type);
+        std::string struct_type_name = dbgutils::getSourceLevelTypeName(*lowest_di_type, true);
         struct_type_name = pdgutils::stripVersionTag(struct_type_name);
         if (processed_struct_names.find(struct_type_name) != processed_struct_names.end())
           continue;
         processed_struct_names.insert(struct_type_name);
-        if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end())
+        // check driver global type
+        bool is_driver_global_struct_type = (_driver_global_struct_types.find(struct_type_name) != _driver_global_struct_types.end());
+
+        if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end() || is_driver_global_struct_type)
           _shared_struct_di_types.insert(lowest_di_type);
       }
     }
@@ -392,12 +380,46 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
   }
 }
 
+void pdg::SharedDataAnalysis::computeSharedGlobalVars()
+{
+  for (auto &global_var : _module->getGlobalList())
+  {
+    bool used_in_kernel = false;
+    bool used_in_driver = false;
+    for (auto user : global_var.users())
+    {
+      if (Instruction *i = dyn_cast<Instruction>(user))
+      {
+        auto func = i->getFunction();
+        if (_kernel_domain_funcs.find(func) != _kernel_domain_funcs.end())
+          used_in_kernel = true;
+        else
+          used_in_driver = true;
+      }
+      if (used_in_kernel && used_in_driver)
+      {
+        _shared_global_vars.insert(&global_var);
+        break;
+      }
+    }
+  }
+}
+
 void pdg::SharedDataAnalysis::dumpSharedFieldID()
 {
   errs() << "dumping shared field id\n";
   for (auto id : _shared_field_id)
   {
     errs() << id << "\n";
+  }
+}
+
+void pdg::SharedDataAnalysis::readSentinelFields()
+{
+  std::ifstream ReadFile("sentinel_fields");
+  for (std::string line; std::getline(ReadFile, line);)
+  {
+    _sentinel_fields.insert(line);
   }
 }
 

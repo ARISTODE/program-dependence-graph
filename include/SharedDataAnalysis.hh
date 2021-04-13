@@ -24,6 +24,8 @@ namespace pdg
     void setupBoundaryFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
     std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
+    std::set<std::string> &getSentinelFields() { return _sentinel_fields; }
+    bool isSentinelField(std::string &s) { return _sentinel_fields.find(s) != _sentinel_fields.end(); }
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     void computeSharedStructDITypes();
     void computeGlobalStructTypeNames();
@@ -39,8 +41,10 @@ namespace pdg
     bool isSharedStructType(std::string s) { return _shared_struct_type_names.find(s) != _shared_struct_type_names.end(); }
     // void computeSharedDataVars();
     void computeSharedFieldID();
+    void computeSharedGlobalVars();
     std::set<std::string> getGlobalStructDITypeNames() { return _global_struct_di_type_names; }
     void dumpSharedFieldID();
+    void readSentinelFields();
     ProgramGraph *getPDG() { return _PDG; }
     // some side tests
     void printPingPongCalls(llvm::Module &M);
@@ -49,7 +53,7 @@ namespace pdg
   private:
     ProgramGraph *_PDG;
     llvm::Module* _module;
-    std::set<llvm::Value *> _shared_data_vars;
+    std::set<llvm::GlobalVariable *> _shared_global_vars;
     std::set<llvm::DIType *> _shared_struct_di_types;
     std::set<llvm::Function *> _driver_domain_funcs;
     std::set<llvm::Function *> _kernel_domain_funcs;
@@ -62,6 +66,7 @@ namespace pdg
     std::set<std::string> _global_struct_di_type_names;
     std::set<std::string> _shared_struct_type_names;
     std::set<std::string> _driver_global_struct_types;
+    std::set<std::string> _sentinel_fields;
   };
 } // namespace pdg
 #endif

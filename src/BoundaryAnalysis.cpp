@@ -102,6 +102,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
       continue;
     auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type, true);
+    gv_di_type_name = pdgutils::stripVersionTag(gv_di_type_name);
     if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
       continue;
     driver_global_struct_types << gv_di_type_name << "\n";
@@ -118,11 +119,13 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
       auto struct_element = global_var.getInitializer()->getAggregateElement(i);
       if (struct_element == nullptr)
         continue;
-
       if (DIType *struct_field_di_type = dyn_cast<DIType>(typeArrRef[i]))
       {
         // if the field is a function pointer, directly print it to map
         std::string field_type_name = struct_element->getName().str();
+        if (pdgutils::isUserOfSentinelTypeVal(*struct_element))
+          _sentinel_fields.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
+
         if (!field_type_name.empty())
         {
           std::string field_source_name = dbgutils::getSourceLevelVariableName(*struct_field_di_type);
@@ -145,6 +148,7 @@ void pdg::BoundaryAnalysis::dumpToFiles()
   dumpToFile("driver_funcs", _driver_domain_funcs);
   dumpToFile("exported_funcs", _exported_funcs);
   dumpToFile("exported_func_ptrs", _exported_func_ptrs);
+  dumpToFile("sentinel_fields", _sentinel_fields);
 }
 
 void pdg::BoundaryAnalysis::dumpToFile(std::string file_name, std::vector<std::string> &names)

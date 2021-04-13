@@ -26,6 +26,7 @@ namespace pdg
 
   private:
     std::set<std::string> _black_list_func_names;
+    std::vector<std::string> _sentinel_fields;
     std::vector<std::string> _imported_funcs;
     std::vector<std::string> _exported_funcs;
     std::vector<std::string> _driver_domain_funcs;

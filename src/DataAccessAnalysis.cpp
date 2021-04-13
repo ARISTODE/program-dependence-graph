@@ -85,9 +85,10 @@ std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Va
 
 void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node)
 {
-  
-  // special hanlding for function pointers
-  if (tree_node.getDIType() != nullptr && dbgutils::isFuncPointerType(*tree_node.getDIType()))
+  std::string field_var_name = dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
+  bool is_sentinel_type = _SDA->isSentinelField(field_var_name);
+  // special hanlding for function pointers and sentinel type
+  if (tree_node.getDIType() != nullptr && (dbgutils::isFuncPointerType(*tree_node.getDIType()) || is_sentinel_type))
   {
     tree_node.addAccessTag(AccessTag::DATA_READ);
   }
@@ -205,7 +206,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     std::string field_id = pdgutils::computeTreeNodeID(*child_node);
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
     bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
-    if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField)
+
+    bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
+    if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField && !is_sentinel_field)
       continue;
 
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
@@ -215,12 +218,18 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
-
+    
     _ksplit_stats->collectStats(*field_di_type, annotations);
     if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
       _ksplit_stats->increaseUnhandledVoidPtrNum();
 
-    if (dbgutils::isStructPointerType(*field_di_type))
+    if (is_sentinel_field)
+    {
+      fields_projection_str << indent_level << "array<" << field_type_name << ", "
+                            << "null> " << field_var_name << ";\n";
+      node_queue.push(child_node);
+    }
+    else if (dbgutils::isStructPointerType(*field_di_type))
     {
       std::string field_name_prefix = "";
       if (field_var_name.find("_ops") != std::string::npos)
@@ -612,10 +621,10 @@ std::string pdg::DataAccessAnalysis::computeAllocCallerAnnotation(TreeNode &tree
       std::string alloc_str = "";
       if (Instruction *i = dyn_cast<Instruction>(allocator_val))
       {
-        for (auto op_iter = i->op_begin(); op_iter != i->op_end(); ++op_iter)
-        {
-          errs() << "allocator op: " << *i << " - " << **op_iter << "\n";
-        }
+        // for (auto op_iter = i->op_begin(); op_iter != i->op_end(); ++op_iter)
+        // {
+        //   errs() << "allocator op: " << *i << " - " << **op_iter << "\n";
+        // }
       }
     }
     return "alloc[caller]";

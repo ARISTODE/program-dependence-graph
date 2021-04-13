@@ -58,6 +58,7 @@ namespace pdg
     typedef std::unordered_map<llvm::Function *, FunctionWrapper *> FuncWrapperMap;
     typedef std::unordered_map<llvm::CallInst *, CallWrapper *> CallWrapperMap;
     typedef std::unordered_map<Node *, llvm::DIType *> NodeDIMap;
+    typedef std::unordered_map<llvm::GlobalVariable*, Tree*> GlobalVarTreeMap;
 
     ProgramGraph() = default;
     ProgramGraph(const ProgramGraph &) = delete;
@@ -73,6 +74,7 @@ namespace pdg
     FuncWrapperMap &getFuncWrapperMap() { return _func_wrapper_map; }
     CallWrapperMap &getCallWrapperMap() { return _call_wrapper_map; }
     NodeDIMap &getNodeDIMap() { return _node_di_type_map; }
+    GlobalVarTreeMap &getGlobalVarTreeMap() { return _global_var_tree_map; }
     void build(llvm::Module &M) override;
     bool hasFuncWrapper(llvm::Function &F) { return _func_wrapper_map.find(&F) != _func_wrapper_map.end(); }
     bool hasCallWrapper(llvm::CallInst &ci) { return _call_wrapper_map.find(&ci) != _call_wrapper_map.end(); }
@@ -86,6 +88,7 @@ namespace pdg
   private:
     FuncWrapperMap _func_wrapper_map;
     CallWrapperMap _call_wrapper_map;
+    GlobalVarTreeMap _global_var_tree_map;
     NodeDIMap _node_di_type_map;
   };
 } // namespace pdg

@@ -70,6 +70,11 @@ void pdg::DataDependencyGraph::addDefUseEdges(Instruction &inst)
   }
 }
 
+void pdg::DataDependencyGraph::addDefUseEdgesForGlobalVars(Module &M)
+{
+  
+}
+
 void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
 {
   if (!isa<LoadInst>(&inst))

@@ -88,22 +88,25 @@ void pdg::ProgramGraph::build(Module &M)
   for (auto &global_var : M.getGlobalList())
   {
     auto global_var_type = global_var.getType();
-    if (pdgutils::isSentinelType(global_var))
-    {
-      errs() << "find sentinal type: " << global_var << "\n";
-      for (auto user : global_var.users())
-      {
-        errs() << "sentinel user: " << *user << "\n";
-      }
-    }
     if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
       continue;
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;
-    Node * n = new Node(global_var, GraphNodeType::GLOBAL_VAR);
+    TreeNode * n = new TreeNode(global_var, GraphNodeType::GLOBAL_VAR);
+    // add addr var for global
+    for (auto user : global_var.users())
+    {
+      if (Instruction *i = dyn_cast<Instruction>(user))
+        n->addAddrVar(*i);
+    }
+
     _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
+    Tree* global_tree = new Tree(global_var);
+    global_tree->setRootNode(*n);
+    global_tree->build();
+    _global_var_tree_map.insert(std::make_pair(&global_var, global_tree));
   }
 
   for (auto &F : M)

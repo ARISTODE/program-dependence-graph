@@ -13,6 +13,7 @@ namespace pdg
   class TreeNode : public Node
   {
     public:
+      TreeNode(llvm::Value &val, GraphNodeType node_type) : Node(val, node_type) {};
       TreeNode(const TreeNode& tree_node); 
       TreeNode(llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type);
       TreeNode(llvm::Function &f, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type);
