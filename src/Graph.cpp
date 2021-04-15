@@ -15,7 +15,6 @@ pdg::Node *pdg::GenericGraph::getNode(Value &v)
   return _val_node_map[&v];
 }
 
-
 // ===== Graph Traversal =====
 
 // DFS search
@@ -69,11 +68,11 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, 
     if (visited.find(current_node) != visited.end())
       continue;
     visited.insert(current_node);
+    ret.insert(current_node);
     for (auto out_edge : current_node->getOutEdgeSet())
     {
       if (edge_type != out_edge->getEdgeType())
         continue;
-      ret.insert(current_node);
       node_queue.push(out_edge->getDstNode());
     }
   }

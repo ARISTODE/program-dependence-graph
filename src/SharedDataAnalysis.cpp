@@ -30,11 +30,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   computeSharedGlobalVars();
-  for (auto shared_var : _shared_global_vars)
-  {
-    errs() << "Shared global var: " << *shared_var << "\n";
-  }
-  // dumpSharedFieldID();
+  dumpSharedFieldID();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
@@ -138,11 +134,11 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       }
     }
   }
-  errs() << " === driver side struct types ===\n";
-  for (auto t : driver_struct_type_names)
-  {
-    errs() << "\t" << t << "\n";
-  }
+  // errs() << " === driver side struct types ===\n";
+  // for (auto t : driver_struct_type_names)
+  // {
+  //   errs() << "\t" << t << "\n";
+  // }
   std::set<std::string> processed_struct_names;
   for (auto func : _kernel_domain_funcs)
   {
@@ -174,11 +170,11 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
     }
   }
   // errs() << "found " << _shared_struct_di_types.size() << " shared struct types\n";
-  errs() << " ==== shared types ====\n";
-  for (auto t : _shared_struct_di_types)
-  {
-    errs() << "\t" << dbgutils::getSourceLevelTypeName(*t) << "\n";
-  }
+  // errs() << " ==== shared types ====\n";
+  // for (auto t : _shared_struct_di_types)
+  // {
+  //   errs() << "\t" << dbgutils::getSourceLevelTypeName(*t) << "\n";
+  // }
 }
 
 void pdg::SharedDataAnalysis::computeGlobalStructTypeNames()

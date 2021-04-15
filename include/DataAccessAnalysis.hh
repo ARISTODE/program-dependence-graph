@@ -49,14 +49,14 @@ namespace pdg
     llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
     std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
     void computeExportedFuncsPtrNameMap();
-    void computeDataAccessForTreeNode(TreeNode &tree_node);
     void computeDataAccessForTree(Tree *tree);
+    void computeDataAccessForTreeNode(TreeNode &tree_node);
     void computeIntraProcDataAccess(llvm::Function &F);
     void computeInterProcDataAccess(llvm::Function &F);
     void generateIDLForFunc(llvm::Function &F);
     void generateRpcForFunc(llvm::Function &F);
     void generateIDLFromArgTree(Tree *arg_tree, bool is_ret = false);
-    void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_projion_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+    void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
@@ -74,7 +74,8 @@ namespace pdg
     SharedDataAnalysis *_SDA;
     ProgramGraph *_PDG;
     PDGCallGraph *_call_graph;
-    std::ofstream idl_file;
+    std::ofstream _idl_file;
+    std::ofstream _sync_stub_file;
     std::set<std::string> _seen_func_ops;
     std::string _ops_struct_proj_str;
     std::map<std::string, std::string> _exported_funcs_ptr_name_map;

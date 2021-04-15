@@ -35,6 +35,8 @@ namespace pdg
       int numOfChild() { return _children.size(); }
       bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
+      void setAccessInAtomicRegion() { _is_accessed_in_atomic_region = true; }
+      bool isAccessedInAtomicRegion() { return _is_accessed_in_atomic_region; }
       void dump() override;
 
     private:
@@ -45,6 +47,7 @@ namespace pdg
       std::vector<TreeNode *> _children;
       std::unordered_set<llvm::Value *> _addr_vars;
       std::set<AccessTag> _acc_tag_set;
+      bool _is_accessed_in_atomic_region = false;
   };
 
   class Tree

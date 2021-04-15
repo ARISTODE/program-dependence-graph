@@ -3,7 +3,7 @@
 #include "LLVMEssentials.hh"
 #include "llvm/Analysis/CallGraph.h"
 #include "PDGUtils.hh"
-#include "SharedDataAnalysis.hh"
+#include "DataAccessAnalysis.hh"
 #include "PDGCallGraph.hh"
 #include <map>
 #include <unordered_set>
@@ -41,12 +41,18 @@ namespace pdg
     bool isAtomicOperation(llvm::Instruction &i);
     bool isAliasOfBoundaryPtrs(llvm::Value &v);
     std::set<llvm::Value*> computeBoundaryAliasPtrs(llvm::Value &v);
+    // sync stub generation
+    void generateSyncStubForTree(Tree* tree, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str);
+    void generateSyncStubProjFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
     void dumpCS();
     void dumpAtomicOps();
     std::set<llvm::Instruction*> computeInstsInCS(CSPair cs_pair);
+    std::set<llvm::Function *> getFuncsNeedSynStubGen() { return _funcs_need_sync_stub_gen; }
+    bool isFuncNeedSyncStubGen(llvm::Function &F) { return _funcs_need_sync_stub_gen.find(&F) == _funcs_need_sync_stub_gen.end(); }
 
   private:
     SharedDataAnalysis* _SDA;
+    DataAccessAnalysis* _DAA;
     CSMap _critical_sections;
     LockMap _lock_map;
     AtomicOpSet _atomic_operations;
@@ -55,7 +61,10 @@ namespace pdg
     int _warning_cs_count;
     int _warning_atomic_op_count;
     int _cs_warning_count;
-    std::set<std::string> processed_func_names;
+    std::set<std::string> _processed_func_names;
+    std::set<llvm::Function*> _funcs_need_sync_stub_gen;
+    std::map<llvm::Instruction*, Tree*> _sync_data_inst_tree_map;
+    std::ofstream _sync_stub_file;
   };
 } // namespace pdg
 

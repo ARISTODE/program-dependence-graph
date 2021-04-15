@@ -143,7 +143,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     auto formal_in_tree = fw.getArgFormalInTree(*formal_arg);
     _PDG->addTreeNodesToGraph(*actual_in_tree);
     connectInTrees(actual_in_tree, formal_in_tree, EdgeType::PARAMETER_IN);
-
+    
     // step 3: connect actual out -> formal out
     auto actual_out_tree = cw.getArgActualOutTree(*actual_arg);
     auto formal_out_tree = fw.getArgFormalOutTree(*formal_arg);
@@ -473,7 +473,7 @@ void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actual_
   }
 }
 
-void pdg::ProgramDependencyGraph::connectTreeNode(TreeNode& src_node, TreeNode& dst_node, EdgeType edge_type)
+void pdg::ProgramDependencyGraph::connectTreeNode(TreeNode &src_node, TreeNode &dst_node, EdgeType edge_type)
 {
   std::queue<std::pair<TreeNode *, TreeNode *>> node_pairs_queue;
   node_pairs_queue.push(std::make_pair(&src_node, &dst_node));
@@ -483,6 +483,7 @@ void pdg::ProgramDependencyGraph::connectTreeNode(TreeNode& src_node, TreeNode& 
     node_pairs_queue.pop();
     TreeNode *src = current_node_pair.first;
     TreeNode *dst = current_node_pair.second;
+
     src->addNeighbor(*dst, edge_type);
     if (src->numOfChild() == dst->numOfChild())
     {
@@ -554,7 +555,6 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
         }
       }
     }
-    
     // stop connecting rest nodes with addr vars if not field sensitive
     if (!FieldSensitive) 
       break;
