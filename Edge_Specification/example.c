@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-char __attribute__((annotate("sensitive"))) *key ;
+char __attribute__((annotate("secret"))) *key ;
 char *ciphertext;
 static unsigned int i;
 
@@ -29,7 +29,7 @@ int __attribute__((annotate("sensitive"))) encrypt (char *plaintext, int sz) {
 
 int main (){
     int age = 10;
-	char __attribute__((annotate("sensitive")))username[20];
+	char __attribute__((annotate("confidential")))username[20];
     char text[1024];
 	printf("Enter username: ");
 	scanf("%19s",username);

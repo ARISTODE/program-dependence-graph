@@ -11,14 +11,16 @@ target triple = "x86_64-unknown-linux-gnu"
 @ciphertext = common dso_local global i8* null, align 8, !dbg !16
 @.str.2 = private unnamed_addr constant [10 x i8] c"sensitive\00", section "llvm.metadata"
 @.str.3 = private unnamed_addr constant [10 x i8] c"example.c\00", section "llvm.metadata"
-@.str.4 = private unnamed_addr constant [17 x i8] c"Enter username: \00", align 1
-@.str.5 = private unnamed_addr constant [5 x i8] c"%19s\00", align 1
-@.str.6 = private unnamed_addr constant [18 x i8] c"Enter plaintext: \00", align 1
-@.str.7 = private unnamed_addr constant [7 x i8] c"%1023s\00", align 1
-@.str.8 = private unnamed_addr constant [14 x i8] c"Cipher text: \00", align 1
-@.str.9 = private unnamed_addr constant [4 x i8] c"%x \00", align 1
-@.str.10 = private unnamed_addr constant [22 x i8] c"encryption length: %d\00", align 1
-@llvm.global.annotations = appending global [2 x { i8*, i8*, i8*, i32 }] [{ i8*, i8*, i8*, i32 } { i8* bitcast (i32 (i8*, i32)* @encrypt to i8*), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.2, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 23 }, { i8*, i8*, i8*, i32 } { i8* bitcast (i8** @key to i8*), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.2, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 5 }], section "llvm.metadata"
+@.str.4 = private unnamed_addr constant [13 x i8] c"confidential\00", section "llvm.metadata"
+@.str.5 = private unnamed_addr constant [17 x i8] c"Enter username: \00", align 1
+@.str.6 = private unnamed_addr constant [5 x i8] c"%19s\00", align 1
+@.str.7 = private unnamed_addr constant [18 x i8] c"Enter plaintext: \00", align 1
+@.str.8 = private unnamed_addr constant [7 x i8] c"%1023s\00", align 1
+@.str.9 = private unnamed_addr constant [14 x i8] c"Cipher text: \00", align 1
+@.str.10 = private unnamed_addr constant [4 x i8] c"%x \00", align 1
+@.str.11 = private unnamed_addr constant [22 x i8] c"encryption length: %d\00", align 1
+@.str.12 = private unnamed_addr constant [7 x i8] c"secret\00", section "llvm.metadata"
+@llvm.global.annotations = appending global [2 x { i8*, i8*, i8*, i32 }] [{ i8*, i8*, i8*, i32 } { i8* bitcast (i32 (i8*, i32)* @encrypt to i8*), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.2, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 23 }, { i8*, i8*, i8*, i32 } { i8* bitcast (i8** @key to i8*), i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str.12, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 5 }], section "llvm.metadata"
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local void @greeter(i8* %0, i32* %1) #0 !dbg !2 {
@@ -150,16 +152,16 @@ define dso_local i32 @main() #0 !dbg !94 {
   store i32 10, i32* %2, align 4, !dbg !98
   call void @llvm.dbg.declare(metadata [20 x i8]* %3, metadata !99, metadata !DIExpression()), !dbg !103
   %6 = bitcast [20 x i8]* %3 to i8*, !dbg !104
-  call void @llvm.var.annotation(i8* %6, i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.2, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 32), !dbg !104
+  call void @llvm.var.annotation(i8* %6, i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.4, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 32), !dbg !104
   call void @llvm.dbg.declare(metadata [1024 x i8]* %4, metadata !105, metadata !DIExpression()), !dbg !109
-  %7 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @.str.4, i64 0, i64 0)), !dbg !110
+  %7 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @.str.5, i64 0, i64 0)), !dbg !110
   %8 = getelementptr inbounds [20 x i8], [20 x i8]* %3, i64 0, i64 0, !dbg !111
-  %9 = call i32 (i8*, ...) @__isoc99_scanf(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.5, i64 0, i64 0), i8* %8), !dbg !112
+  %9 = call i32 (i8*, ...) @__isoc99_scanf(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.6, i64 0, i64 0), i8* %8), !dbg !112
   %10 = getelementptr inbounds [20 x i8], [20 x i8]* %3, i64 0, i64 0, !dbg !113
   call void @greeter(i8* %10, i32* %2), !dbg !114
-  %11 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([18 x i8], [18 x i8]* @.str.6, i64 0, i64 0)), !dbg !115
+  %11 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([18 x i8], [18 x i8]* @.str.7, i64 0, i64 0)), !dbg !115
   %12 = getelementptr inbounds [1024 x i8], [1024 x i8]* %4, i64 0, i64 0, !dbg !116
-  %13 = call i32 (i8*, ...) @__isoc99_scanf(i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str.7, i64 0, i64 0), i8* %12), !dbg !117
+  %13 = call i32 (i8*, ...) @__isoc99_scanf(i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str.8, i64 0, i64 0), i8* %12), !dbg !117
   %14 = getelementptr inbounds [1024 x i8], [1024 x i8]* %4, i64 0, i64 0, !dbg !118
   %15 = call i64 @strlen(i8* %14) #7, !dbg !119
   %16 = trunc i64 %15 to i32, !dbg !119
@@ -171,7 +173,7 @@ define dso_local i32 @main() #0 !dbg !94 {
   %20 = trunc i64 %19 to i32, !dbg !125
   %21 = call i32 @encrypt(i8* %17, i32 %20), !dbg !126
   store i32 %21, i32* %5, align 4, !dbg !122
-  %22 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.8, i64 0, i64 0)), !dbg !127
+  %22 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.9, i64 0, i64 0)), !dbg !127
   store i32 0, i32* @i, align 4, !dbg !128
   br label %23, !dbg !130
 
@@ -190,7 +192,7 @@ define dso_local i32 @main() #0 !dbg !94 {
   %33 = getelementptr inbounds i8, i8* %30, i64 %32, !dbg !137
   %34 = load i8, i8* %33, align 1, !dbg !137
   %35 = sext i8 %34 to i32, !dbg !137
-  %36 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.9, i64 0, i64 0), i32 %35), !dbg !139
+  %36 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.10, i64 0, i64 0), i32 %35), !dbg !139
   br label %37, !dbg !139
 
 37:                                               ; preds = %29
@@ -201,7 +203,7 @@ define dso_local i32 @main() #0 !dbg !94 {
 
 40:                                               ; preds = %23
   %41 = load i32, i32* %5, align 4, !dbg !144
-  %42 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([22 x i8], [22 x i8]* @.str.10, i64 0, i64 0), i32 %41), !dbg !145
+  %42 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([22 x i8], [22 x i8]* @.str.11, i64 0, i64 0), i32 %41), !dbg !145
   ret i32 0, !dbg !146
 }
 
@@ -329,7 +331,7 @@ attributes #7 = { nounwind readonly }
 !100 = !DICompositeType(tag: DW_TAG_array_type, baseType: !7, size: 160, elements: !101)
 !101 = !{!102}
 !102 = !DISubrange(count: 20)
-!103 = !DILocation(line: 32, column: 45, scope: !94)
+!103 = !DILocation(line: 32, column: 48, scope: !94)
 !104 = !DILocation(line: 32, column: 2, scope: !94)
 !105 = !DILocalVariable(name: "text", scope: !94, file: !3, line: 33, type: !106)
 !106 = !DICompositeType(tag: DW_TAG_array_type, baseType: !7, size: 8192, elements: !107)
