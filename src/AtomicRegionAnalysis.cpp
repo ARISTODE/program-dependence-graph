@@ -58,8 +58,8 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   }
   _sync_stub_file << "}\n";
   _sync_stub_file.close();
-  // errs() << "CS Warning: " << _warning_cs_count << "/" << _critical_sections.size() << "\n";
-  // errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << "/" << _atomic_operations.size() << "\n";
+  errs() << "CS Warning: " << _warning_cs_count << "/" << _critical_sections.size() << "\n";
+  errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << "/" << _atomic_operations.size() << "\n";
   return false;
 }
 
@@ -151,8 +151,6 @@ void pdg::AtomicRegionAnalysis::computeCriticalSections(Module &M)
     if (F.isDeclaration())
       continue;
     auto cs_in_func = computeCSInFunc(F); // find cs in each defined functions
-    if (cs_in_func.size() != 0)
-      _funcs_need_sync_stub_gen.insert(&F);
     _critical_sections.insert(cs_in_func.begin(), cs_in_func.end());
   }
 }
@@ -211,7 +209,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
     for (auto inst : insts_in_cs)
     {
       std::set<std::string> modified_names;
-      Value* accessed_val = nullptr;
+      Value *accessed_val = nullptr;
       if (LoadInst *li = dyn_cast<LoadInst>(inst))
         accessed_val = li->getPointerOperand();
       if (StoreInst *st = dyn_cast<StoreInst>(inst))
@@ -222,20 +220,20 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       // obtianed the modified value (address)
       if (accessed_node == nullptr)
         continue;
-      for (auto in_neighbor : accessed_node->getInNeighborsWithDepType(EdgeType::PARAMETER_IN))
-      {
-        TreeNode* formal_param_in_node = (TreeNode*)in_neighbor;
-        formal_param_in_node->setAccessInAtomicRegion();
-        if (_sync_data_inst_tree_map.find(cs_pair.first) == _sync_data_inst_tree_map.end())
-          _sync_data_inst_tree_map.insert(std::make_pair(cs_pair.first, formal_param_in_node->getTree()));
-      }
-
       // computeModifedNames(*val_node, modified_names);
       // Function *f = si->getFunction();
       // scenerio 1: check if a modified value could be a pointer alias of boundary pointers
-      // auto alias_boundary_ptrs = computeBoundaryAliasPtrs(*modified_val);
-      // if (!alias_boundary_ptrs.empty())
-      // {
+      auto alias_boundary_ptrs = computeBoundaryAliasPtrs(*accessed_val);
+      if (!alias_boundary_ptrs.empty())
+      {
+        for (auto in_neighbor : accessed_node->getInNeighborsWithDepType(EdgeType::PARAMETER_IN))
+        {
+          TreeNode *formal_param_in_node = (TreeNode *)in_neighbor;
+          formal_param_in_node->setAccessInAtomicRegion();
+          if (_sync_data_inst_tree_map.find(cs_pair.first) == _sync_data_inst_tree_map.end())
+            _sync_data_inst_tree_map.insert(std::make_pair(cs_pair.first, formal_param_in_node->getTree()));
+        }
+      }
       //   printWarningCS(cs_pair, *modified_val, *f, modified_names, "ALIAS");
       //   errs() << " ===================== ALIAS PTR ================\n";
       //   for (auto alias_ptr : alias_boundary_ptrs)

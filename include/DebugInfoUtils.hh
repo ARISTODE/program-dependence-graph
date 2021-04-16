@@ -9,9 +9,10 @@ namespace pdg
   namespace dbgutils
   {
     bool isPointerType(llvm::DIType &dt);
-    bool isStructType(llvm::DIType &dt);
+    bool isUnionPointerType(llvm::DIType &dt);
     bool isUnionType(llvm::DIType &dt);
     bool isStructPointerType(llvm::DIType &dt);
+    bool isStructType(llvm::DIType &dt);
     bool isFuncPointerType(llvm::DIType &dt);
     bool isProjectableType(llvm::DIType &dt);
     bool hasSameDIName(llvm::DIType& d1, llvm::DIType &d2);

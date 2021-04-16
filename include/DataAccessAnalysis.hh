@@ -59,10 +59,10 @@ namespace pdg
     void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
-    std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
+    std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
     bool isAllocator(llvm::Value &val);
-    std::string computeAllocCallerAnnotation(TreeNode &tree_node, bool is_ret = false);
-    bool isWrittenWithNewObjFromCallee(TreeNode &tree_node);
+    std::string computeAllocCallerAnnotation(TreeNode &tree_node);
+    std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
     std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
     void printContainerOfStats();
     KSplitStats *getKSplitStats() { return _ksplit_stats; }

@@ -46,6 +46,19 @@ bool pdg::dbgutils::isStructType(DIType &dt)
   return (dt.getTag() == dwarf::DW_TAG_structure_type);
 }
 
+bool pdg::dbgutils::isUnionPointerType(DIType& dt)
+{
+  if (isPointerType(dt))
+  {
+    DIType *lowest_di_type = getLowestDIType(dt);
+    if (lowest_di_type == nullptr)
+      return false;
+    if (isUnionType(*lowest_di_type))
+      return true;
+  }
+  return false;
+}
+
 bool pdg::dbgutils::isUnionType(DIType& dt)
 {
   return (dt.getTag() == dwarf::DW_TAG_union_type);
@@ -219,8 +232,8 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
     if (!base_type)
       return "void";
     std::string base_type_name = getSourceLevelTypeName(*base_type, is_raw);
-    if (base_type_name == "struct" && !is_raw)
-      base_type_name = "struct " + dt.getName().str();
+    if (base_type_name == "struct" || base_type_name == "union" && !is_raw)
+      base_type_name = base_type_name + dt.getName().str();
     return base_type_name;
   }
   // assert(!type_name.empty() && !var_name.empty() && "cannot generation idl from empty var/type name!");
@@ -282,7 +295,11 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
     return getSourceLevelTypeName(*getBaseDIType(dt), is_raw);
   }
   case dwarf::DW_TAG_union_type:
-    return "union";
+  {
+    if (dt.getName().empty())
+      return is_raw ? "" : "union";
+    return is_raw ? dt.getName().str() : "union " + dt.getName().str();
+  }
   default:
   {
     if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
