@@ -82,3 +82,13 @@ bool pdg::Node::isAddrVarNode()
   }
   return false;
 }
+
+pdg::Node *pdg::Node::getAbstractTreeNode()
+{
+  for (auto in_edge : _in_edge_set)
+  {
+    if (in_edge->getEdgeType() == EdgeType::PARAMETER_IN && in_edge->getSrcNode()->getNodeType() == GraphNodeType::FORMAL_IN)
+      return in_edge->getSrcNode();
+  }
+  return nullptr;
+}

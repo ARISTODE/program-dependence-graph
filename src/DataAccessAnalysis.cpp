@@ -12,13 +12,6 @@ void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
   AU.setPreservesAll();
 }
 
-static std::set<std::string> KernelAllocators = {
-    "kzalloc",
-    "kmalloc",
-    "kvzalloc",
-    "__kmalloc"
-};
-
 bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 {
   _module = &M;
@@ -38,6 +31,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     // computeInterProcDataAccess(F);
   }
 
+  computeAllocSizeAnnos(M);
   _idl_file << "module kernel {\n";
   for (auto F : _SDA->getBoundaryFuncs())
   {
@@ -53,6 +47,93 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _idl_file.close();
   // printContainerOfStats();
   return false;
+}
+
+pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n)
+{
+  std::queue<Node *> node_queue;
+  std::set<EdgeType> search_edge_types = {
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_ALIAS};
+  node_queue.push(&n);
+  std::set<Node *> seen_nodes;
+  while (!node_queue.empty())
+  {
+    auto current_node = node_queue.front();
+    node_queue.pop();
+    if (seen_nodes.find(current_node) != seen_nodes.end())
+      continue;
+    seen_nodes.insert(current_node);
+    auto out_edges = current_node->getOutEdgeSet();
+    for (auto out_edge : out_edges)
+    {
+      if (search_edge_types.find(out_edge->getEdgeType()) == search_edge_types.end())
+        continue;
+      auto target_node = out_edge->getDstNode();
+      if (target_node->getNodeType() == GraphNodeType::FORMAL_IN)
+        return target_node;
+    }
+  }
+  return nullptr;
+}
+
+void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
+{
+  std::string alloc_str = "";
+  std::string size_str = "";
+  if (CallInst *ci = dyn_cast<CallInst>(&allocator))
+  {
+    // get size operand
+    auto size_operand = ci->getArgOperand(0);
+    assert(size_operand != nullptr && "allocator has null size operand!\n");
+    if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+    {
+      auto alloc_size = cons_int->getSExtValue();
+      size_str += std::to_string(alloc_size);
+    }
+    else
+      size_str += "var_size";
+
+    // get GP flag
+    auto gp_flag_operand = ci->getArgOperand(1);
+    assert(gp_flag_operand != nullptr && "allocator has null gp operand!\n");
+    if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+    {
+      auto gp_flag = cons_int->getSExtValue();
+      size_str = size_str + ", " + std::to_string(gp_flag);
+    }
+    else
+      size_str = size_str + ", " + "var_gp";
+  }
+
+  auto val_node = _PDG->getNode(allocator);
+  assert(val_node != nullptr && "cannot generate size anno str for null node\n");
+  if (val_node->isAddrVarNode())
+  {
+    alloc_str = std::string("alloc_sized") + std::string("(caller, ") + size_str + std::string(")");
+    auto param_tree_node = val_node->getAbstractTreeNode();
+    TreeNode *tn = (TreeNode *)param_tree_node;
+    tn->setAllocStr(alloc_str);
+  }
+  else
+  {
+    alloc_str = std::string("alloc_sized") + std::string("(callee, ") + size_str + std::string(")");
+    auto first_cross_domain_param_node = findFirstCrossDomainParamNode(*val_node);
+    if (first_cross_domain_param_node != nullptr)
+    {
+      TreeNode *tn = (TreeNode *)first_cross_domain_param_node;
+      tn->setAllocStr(alloc_str);
+    }
+  }
+}
+
+void pdg::DataAccessAnalysis::computeAllocSizeAnnos(Module &M)
+{
+  auto allocators = _PDG->getAllocators();
+  for (auto allocator : allocators)
+  {
+    propagateAllocSizeAnno(*allocator);
+  }
 }
 
 void pdg::DataAccessAnalysis::computeExportedFuncsPtrNameMap()
@@ -185,7 +266,7 @@ Four cases:
 3. pointer to aggregate type
 4. aggregate type
 */
-void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_string_ostream &fields_projection_str, raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level)
+void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_string_ostream &fields_projection_str, raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name)
 {
   DIType *node_di_type = tree_node.getDIType();
   assert(node_di_type != nullptr && "cannot generate IDL for node with null DIType\n");
@@ -232,15 +313,15 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     {
       std::string field_name_prefix = "";
       if (field_var_name.find("_ops") != std::string::npos)
-      {
         field_name_prefix = "_global_";
-      }
+
       fields_projection_str << indent_level
                             << "projection "
+                            << parent_struct_type_name
+                            << "_"
                             << field_name_prefix
-                            << field_type_name
-                            << (field_type_name.back() == '*' ? "*" : " ")
-                            << " "
+                            << field_var_name
+                            << "* "
                             << field_var_name
                             << ";\n";
       node_queue.push(child_node);
@@ -253,14 +334,15 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       std::string nested_struct_str;
       raw_string_ostream field_nested_struct_proj(nested_struct_str);
 
-      generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t");
+      generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t", field_type_name);
 
       fields_projection_str << indent_level << "projection " << field_type_name << " " << field_var_name << ";\n";
 
       nested_struct_proj_str
+          << indent_level
           << "projection < struct "
           << field_type_name
-          << "> " << field_type_name << "{\n"
+          << "> " << field_type_name << " {\n"
           << nested_fields_proj.str()
           << indent_level
           << "}"
@@ -300,6 +382,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
   while (!node_queue.empty())
   {
     TreeNode *current_node = node_queue.front();
+    TreeNode *parent_node = current_node->getParentNode();
     node_queue.pop();
     DIType *node_di_type = current_node->getDIType();
     DIType *node_lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
@@ -327,7 +410,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
     if (dbgutils::isPointerType(*dbgutils::stripMemberTag(*node_di_type)) && !current_node->getChildNodes().empty())
       current_node = current_node->getChildNodes()[0];
     // errs() << "generate idl for node: " << proj_type_name << "\n";
-    generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t");
+    generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t", proj_type_name);   
     // handle funcptr ops struct specifically
     _idl_file << nested_struct_projection_str.str();
     if (proj_type_name.find("_ops") != std::string::npos)
@@ -349,15 +432,24 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
       if (is_ret)
         proj_var_name = "ret_" + proj_var_name;
 
+      // parent_struct name
+      std::string parent_struct_type_name = "";
+      if (parent_node != nullptr)
+        parent_struct_type_name = dbgutils::getSourceLevelTypeName(*parent_node->getDIType(), true);
+      if (!parent_struct_type_name.empty())
+        parent_struct_type_name += "_";
+
+      // union / struct prefix generation
       std::string type_prefix = "struct";
       if (dbgutils::isUnionPointerType(*node_di_type))
         type_prefix = "union";
 
       _idl_file << "\tprojection < "
-                << type_prefix 
+                << type_prefix
                 << " "
                 << proj_type_name
                 << " > "
+                << parent_struct_type_name
                 << proj_var_name
                 << " {\n"
                 << fields_projection_str.str()
@@ -479,6 +571,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
 
 void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
 {
+  _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   auto func_iter = func_wrapper_map.find(&F);
   assert(func_iter != func_wrapper_map.end() && "no function wrapper found (IDL-GEN)!");
@@ -538,163 +631,177 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
     }
   }
 
-  if (dbgutils::isStructPointerType(*tree_node.getDIType()))
-  {
-    std::string alloc_caller_anno = computeAllocCallerAnnotation(tree_node);
-    if (!alloc_caller_anno.empty())
-      annotations.insert(alloc_caller_anno);
+  if (!tree_node.getAllocStr().empty())
+    annotations.insert(tree_node.getAllocStr());
+  // if (dbgutils::isStructPointerType(*tree_node.getDIType()))
+  // {
+  //   std::string alloc_caller_anno = computeAllocCallerAnnotation(tree_node);
+  //   if (!alloc_caller_anno.empty())
+  //     annotations.insert(alloc_caller_anno);
 
-    std::string alloc_callee_anno = computeAllocCalleeAnnotation(tree_node);
-    if (!alloc_callee_anno.empty())
-      annotations.insert(alloc_callee_anno);
-  }
+  //   std::string alloc_callee_anno = computeAllocCalleeAnnotation(tree_node);
+  //   if (!alloc_callee_anno.empty())
+  //     annotations.insert(alloc_callee_anno);
+  // }
 
   return annotations;
 }
 
-bool pdg::DataAccessAnalysis::isAllocator(Value &v)
-{
-  if (CallInst *ci = dyn_cast<CallInst>(&v))
-  {
-    auto called_func = pdgutils::getCalledFunc(*ci);
-    if (called_func == nullptr)
-      return false;
-    auto called_func_name = called_func->getName().str();
-    called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
-    if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
-      return true;
-  }
-  return false;
-}
+// bool pdg::DataAccessAnalysis::isAllocator(Value &v)
+// {
+//   if (CallInst *ci = dyn_cast<CallInst>(&v))
+//   {
+//     auto called_func = pdgutils::getCalledFunc(*ci);
+//     if (called_func == nullptr)
+//       return false;
+//     auto called_func_name = called_func->getName().str();
+//     called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
+//     if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
+//       return true;
+//   }
+//   return false;
+// }
 
-std::set<pdg::Node *> pdg::DataAccessAnalysis::findAllocator(TreeNode &tree_node, bool is_forward)
-{
-  std::queue<Node *> node_queue;
-  std::set<EdgeType> search_edge_types = {
-      EdgeType::PARAMETER_IN,
-      EdgeType::DATA_RET,
-      EdgeType::DATA_ALIAS};
+// std::set<pdg::Node *> pdg::DataAccessAnalysis::findAllocator(TreeNode &tree_node, bool is_forward)
+// {
+//   std::queue<Node *> node_queue;
+//   std::set<EdgeType> search_edge_types = {
+//       EdgeType::PARAMETER_IN,
+//       EdgeType::DATA_RET,
+//       EdgeType::DATA_ALIAS};
 
-  std::set<Node *> allocator_nodes;
-  std::set<Node *> seen_nodes;
-  node_queue.push(&tree_node);
-  while (!node_queue.empty())
-  {
-    auto current_node = node_queue.front();
-    node_queue.pop();
-    // back tracing
-    if (seen_nodes.find(current_node) != seen_nodes.end())
-      continue;
-    seen_nodes.insert(current_node);
-    auto search_edges = is_forward ? current_node->getOutEdgeSet() : current_node->getInEdgeSet();
-    for (auto edge : search_edges)
-    {
-      if (search_edge_types.find(edge->getEdgeType()) == search_edge_types.end())
-        continue;
-      auto target_node = is_forward ? edge->getDstNode() : edge->getSrcNode();
-      node_queue.push(target_node);
-      if (target_node->getValue() == nullptr)
-        continue;
-      if (CallInst *ci = dyn_cast<CallInst>(target_node->getValue()))
-      {
-        auto called_func = pdgutils::getCalledFunc(*ci);
-        if (called_func == nullptr)
-          continue;
-        auto called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
-        if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
-          allocator_nodes.insert(target_node);
-      }
-    }
-  }
-  return allocator_nodes;
-}
+//   std::set<Node *> allocator_nodes;
+//   std::set<Node *> seen_nodes;
+//   node_queue.push(&tree_node);
+//   while (!node_queue.empty())
+//   {
+//     auto current_node = node_queue.front();
+//     node_queue.pop();
+//     // back tracing
+//     if (seen_nodes.find(current_node) != seen_nodes.end())
+//       continue;
+//     seen_nodes.insert(current_node);
+//     auto search_edges = is_forward ? current_node->getOutEdgeSet() : current_node->getInEdgeSet();
+//     for (auto edge : search_edges)
+//     {
+//       if (search_edge_types.find(edge->getEdgeType()) == search_edge_types.end())
+//         continue;
+//       auto target_node = is_forward ? edge->getDstNode() : edge->getSrcNode();
+//       node_queue.push(target_node);
+//       if (target_node->getValue() == nullptr)
+//         continue;
+//       if (CallInst *ci = dyn_cast<CallInst>(target_node->getValue()))
+//       {
+//         auto called_func = pdgutils::getCalledFunc(*ci);
+//         if (called_func == nullptr)
+//           continue;
+//         auto called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+//         if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
+//           allocator_nodes.insert(target_node);
+//       }
+//     }
+//   }
+//   return allocator_nodes;
+// }
 
-std::string pdg::DataAccessAnalysis::computeAllocCallerAnnotation(TreeNode &tree_node)
-{
-  // find the allocator forward
-  std::string alloc_str = "";
-  auto allocators = findAllocator(tree_node, true);
-  for (auto allocator : allocators)
-  {
-    Value *allocator_val = allocator->getValue();
-    assert(allocator_val != nullptr && "cannot compute alloc caller annotation for empty val!\n");
-    std::string size_str = "";
-    if (CallInst *ci = dyn_cast<CallInst>(allocator_val))
-    {
-      // get size operand
-      auto size_operand = ci->getArgOperand(0);
-      assert(size_operand != nullptr && "allocator has null size operand!\n");
-      if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
-      {
-        auto alloc_size = cons_int->getSExtValue();
-        size_str += std::to_string(alloc_size);
-      }
-      else
-        size_str += "var_size";
+// std::string pdg::DataAccessAnalysis::computeAllocCallerAnnotation(TreeNode &tree_node)
+// {
+//   // find the allocator forward
+//   std::string alloc_str = "";
+//   auto allocators = findAllocator(tree_node, true);
+//   for (auto allocator : allocators)
+//   {
+//     Value *allocator_val = allocator->getValue();
+//     assert(allocator_val != nullptr && "cannot compute alloc caller annotation for empty val!\n");
+//     std::string size_str = "";
+//     if (CallInst *ci = dyn_cast<CallInst>(allocator_val))
+//     {
+//       // get size operand
+//       auto size_operand = ci->getArgOperand(0);
+//       assert(size_operand != nullptr && "allocator has null size operand!\n");
+//       if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+//       {
+//         auto alloc_size = cons_int->getSExtValue();
+//         size_str += std::to_string(alloc_size);
+//       }
+//       else
+//         size_str += "var_size";
 
-      // get GP flag
-      auto gp_flag_operand = ci->getArgOperand(1);
-      assert(gp_flag_operand != nullptr && "allocator has null gp operand!\n");
-      if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
-      {
-        auto gp_flag = cons_int->getSExtValue();
-        size_str = size_str + ", " + std::to_string(gp_flag);
-      }
-      else
-        size_str = size_str + ", " + "var_gp";
+//       // get GP flag
+//       auto gp_flag_operand = ci->getArgOperand(1);
+//       assert(gp_flag_operand != nullptr && "allocator has null gp operand!\n");
+//       if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+//       {
+//         auto gp_flag = cons_int->getSExtValue();
+//         size_str = size_str + ", " + std::to_string(gp_flag);
+//       }
+//       else
+//         size_str = size_str + ", " + "var_gp";
 
-      if (!size_str.empty())
-      {
-        alloc_str = std::string("alloc_sized") + std::string("(caller, ") + size_str + std::string(")");
-        break;
-      }
-    }
-    if (alloc_str.empty())
-      alloc_str = "alloc_sized(caller)";
-  }
+//       if (!size_str.empty())
+//       {
+//         alloc_str = std::string("alloc_sized") + std::string("(caller, ") + size_str + std::string(")");
+//         break;
+//       }
+//     }
+//     if (alloc_str.empty())
+//       alloc_str = "alloc_sized(caller)";
+//   }
 
-  return alloc_str;
-}
+//   return alloc_str;
+// }
 
-std::string pdg::DataAccessAnalysis::computeAllocCalleeAnnotation(TreeNode &tree_node)
-{
-  // find the allocator backward
-  std::string alloc_str = "";
-  auto allocators = findAllocator(tree_node);
-  for (auto allocator : allocators)
-  {
-    Value *allocator_val = allocator->getValue();
-    assert(allocator_val != nullptr && "cannot compute alloc caller annotation for empty val!\n");
-    std::string size_str = "";
-    if (CallInst *ci = dyn_cast<CallInst>(allocator_val))
-    {
-      // get size operand
-      auto size_operand = ci->getArgOperand(0);
-      assert(size_operand != nullptr && "allocator has null size operand!\n");
-      if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
-      {
-        auto alloc_size = cons_int->getSExtValue();
-        size_str += std::to_string(alloc_size);
-        // get GP flag
-        auto gp_flag_operand = ci->getArgOperand(1);
-        assert(gp_flag_operand != nullptr && "allocator has null gp operand!\n");
-        if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
-        {
-          auto gp_flag = cons_int->getSExtValue();
-          size_str = size_str + ", " + std::to_string(gp_flag);
-        }
-      }
-      if (!size_str.empty())
-      {
-        alloc_str = std::string("alloc_sized") + std::string("(callee,") + size_str + std::string(")");
-        break;
-      }
-    }
-  }
+// std::string pdg::DataAccessAnalysis::computeAllocCalleeAnnotation(TreeNode &tree_node)
+// {
+//   // find the allocator backward
+//   std::string alloc_str = "";
+//   auto allocators = findAllocator(tree_node);
+//   for (auto allocator : allocators)
+//   {
+//     Value *allocator_val = allocator->getValue();
+//     assert(allocator_val != nullptr && "cannot compute alloc caller annotation for empty val!\n");
+//     std::string size_str = "";
+//     if (CallInst *ci = dyn_cast<CallInst>(allocator_val))
+//     {
+//       if (_current_processing_func == "get_device")
+//       {
+//         auto caller_node = _call_graph->getNode(*ci->getFunction());
+//         assert(caller_node != nullptr && "cannot print call path for null caller\n");
+//         auto target_func = _module->getFunction("get_device");
+//         if (target_func != nullptr)
+//         {
+//           auto callee_node = _call_graph->getNode(*target_func);
+//           assert(callee_node != nullptr && "cannot print call path for null callee\n");
+//           errs() << "caller: " << ci->getFunction()->getName() << ": \n";
+//           _call_graph->printPaths(*caller_node, *callee_node);
+//         }
+//       }
+//       // get size operand
+//       auto size_operand = ci->getArgOperand(0);
+//       assert(size_operand != nullptr && "allocator has null size operand!\n");
+//       if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+//       {
+//         auto alloc_size = cons_int->getSExtValue();
+//         size_str += std::to_string(alloc_size);
+//         // get GP flag
+//         auto gp_flag_operand = ci->getArgOperand(1);
+//         assert(gp_flag_operand != nullptr && "allocator has null gp operand!\n");
+//         if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+//         {
+//           auto gp_flag = cons_int->getSExtValue();
+//           size_str = size_str + ", " + std::to_string(gp_flag);
+//         }
+//       }
+//       if (!size_str.empty())
+//       {
+//         alloc_str = std::string("alloc_sized") + std::string("(callee, ") + size_str + std::string(")");
+//         break;
+//       }
+//     }
+//   }
 
-  return alloc_str;
-}
-
+//   return alloc_str;
+// }
 
 void pdg::DataAccessAnalysis::constructGlobalOpStructStr()
 {

@@ -2,6 +2,13 @@
 
 using namespace llvm;
 
+static std::set<std::string> KernelAllocators = {
+    "kzalloc",
+    "kmalloc",
+    "kvzalloc",
+    "__kmalloc"
+};
+
 // Generic Graph
 bool pdg::GenericGraph::hasNode(Value &v)
 {
@@ -119,6 +126,17 @@ void pdg::ProgramGraph::build(Module &M)
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
       addNode(*n);
+      if (CallInst *ci = dyn_cast<CallInst>(&*inst_iter))
+      {
+        auto called_func = pdgutils::getCalledFunc(*ci);
+        if (called_func != nullptr)
+        {
+          std::string called_func_name = called_func->getName().str();
+          called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
+          if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
+            _allocators.insert(ci);
+        }
+      }
     }
     func_w->buildFormalTreeForArgs();
     func_w->buildFormalTreesForRetVal();

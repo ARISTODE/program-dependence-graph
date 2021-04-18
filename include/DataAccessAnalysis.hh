@@ -48,6 +48,9 @@ namespace pdg
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
     std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
+    pdg::Node *findFirstCrossDomainParamNode(Node &n);
+    void propagateAllocSizeAnno(llvm::Value &allocator);
+    void computeAllocSizeAnnos(llvm::Module &M);
     void computeExportedFuncsPtrNameMap();
     void computeDataAccessForTree(Tree *tree);
     void computeDataAccessForTreeNode(TreeNode &tree_node);
@@ -56,7 +59,7 @@ namespace pdg
     void generateIDLForFunc(llvm::Function &F);
     void generateRpcForFunc(llvm::Function &F);
     void generateIDLFromArgTree(Tree *arg_tree, bool is_ret = false);
-    void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+    void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
@@ -82,6 +85,7 @@ namespace pdg
     std::map<std::string, std::set<std::string>> _global_ops_fields_map;
     std::set<llvm::Instruction *> _container_of_insts;
     KSplitStats *_ksplit_stats;
+    std::string _current_processing_func = "";
   };
 }
 

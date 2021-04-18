@@ -37,6 +37,8 @@ namespace pdg
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
       void setAccessInAtomicRegion() { _is_accessed_in_atomic_region = true; }
       bool isAccessedInAtomicRegion() { return _is_accessed_in_atomic_region; }
+      void setAllocStr(std::string str) { _alloc_str = str; }
+      std::string getAllocStr() { return _alloc_str; }
       void dump() override;
 
     private:
@@ -48,6 +50,7 @@ namespace pdg
       std::unordered_set<llvm::Value *> _addr_vars;
       std::set<AccessTag> _acc_tag_set;
       bool _is_accessed_in_atomic_region = false;
+      std::string _alloc_str;
   };
 
   class Tree

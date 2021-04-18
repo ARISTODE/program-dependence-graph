@@ -84,12 +84,14 @@ namespace pdg
     llvm::DIType *computeNodeDIType(Node &n);
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
+    std::set<llvm::Value *> &getAllocators() { return _allocators; }
 
   private:
     FuncWrapperMap _func_wrapper_map;
     CallWrapperMap _call_wrapper_map;
     GlobalVarTreeMap _global_var_tree_map;
     NodeDIMap _node_di_type_map;
+    std::set<llvm::Value *> _allocators;
   };
 } // namespace pdg
 

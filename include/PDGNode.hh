@@ -63,6 +63,7 @@ namespace pdg
     bool hasInNeighborWithEdgeType(Node &n, EdgeType edge_type);
     bool hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type);
     bool isAddrVarNode();
+    Node* getAbstractTreeNode();
     virtual ~Node() = default;
     virtual void dump() { llvm::errs() << _func->getName() << " - " << *_val << "\n"; }
 
