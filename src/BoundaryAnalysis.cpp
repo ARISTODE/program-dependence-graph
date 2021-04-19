@@ -129,6 +129,8 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
         if (!field_type_name.empty())
         {
           std::string field_source_name = dbgutils::getSourceLevelVariableName(*struct_field_di_type);
+          // concate the ptr name with the outer ops struct name
+          field_source_name = gv_di_type_name + "_" + field_source_name;
           if (dbgutils::isFuncPointerType(*struct_field_di_type))
           {
             _exported_func_ptrs.push_back(field_source_name);

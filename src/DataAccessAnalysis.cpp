@@ -271,6 +271,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
   DIType *node_di_type = tree_node.getDIType();
   assert(node_di_type != nullptr && "cannot generate IDL for node with null DIType\n");
   std::string root_di_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
+  std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*node_di_type, true);
   DIType *node_lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
   if (!node_lowest_di_type || !dbgutils::isProjectableType(*node_lowest_di_type))
     return;
@@ -352,13 +353,14 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
     {
-      if (_exported_funcs_ptr_name_map.find(field_var_name) == _exported_funcs_ptr_name_map.end())
+      std::string func_ptr_name = root_di_type_name_raw + "_" + field_var_name;
+      if (_exported_funcs_ptr_name_map.find(func_ptr_name) == _exported_funcs_ptr_name_map.end())
         continue;
-      std::string exported_func_name = _exported_funcs_ptr_name_map[field_var_name];
+      std::string exported_func_name = _exported_funcs_ptr_name_map[func_ptr_name];
       Function *called_func = _module->getFunction(exported_func_name);
       if (called_func == nullptr)
         continue;
-      fields_projection_str << indent_level << "rpc_ptr " << field_var_name << " " << field_var_name << ";\n";
+      fields_projection_str << indent_level << "rpc_ptr " << func_ptr_name << " " << func_ptr_name << ";\n";
     }
     else
     {
@@ -409,7 +411,6 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
     // for pointer to aggregate type, retrive the child node(pointed object), and generate projection
     if (dbgutils::isPointerType(*dbgutils::stripMemberTag(*node_di_type)) && !current_node->getChildNodes().empty())
       current_node = current_node->getChildNodes()[0];
-    // errs() << "generate idl for node: " << proj_type_name << "\n";
     generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t", proj_type_name);   
     // handle funcptr ops struct specifically
     _idl_file << nested_struct_projection_str.str();
@@ -571,7 +572,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
 
 void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
 {
-  _current_processing_func = F.getName().str();
+  // _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   auto func_iter = func_wrapper_map.find(&F);
   assert(func_iter != func_wrapper_map.end() && "no function wrapper found (IDL-GEN)!");
