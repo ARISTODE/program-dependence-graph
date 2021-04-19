@@ -20,6 +20,7 @@ namespace pdg
     llvm::Function* getCalledFunc(llvm::CallInst &call_inst);
     bool hasReadAccess(llvm::Value &v);
     bool hasWriteAccess(llvm::Value &v);
+    bool isStaticFuncVar(llvm::GlobalVariable &gv, llvm::Module &M);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);

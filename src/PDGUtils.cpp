@@ -145,6 +145,23 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
   return false;
 }
 
+bool pdg::pdgutils::isStaticFuncVar(GlobalVariable &gv, Module &M)
+{
+  auto gv_name = gv.getName().str();
+  if (gv_name.empty())
+    return false;
+
+  size_t pos = 0;
+  pos = gv_name.find(".", pos + 1);
+  if (pos != std::string::npos)
+  {
+    std::string func_name = gv_name.substr(0, pos);
+    if (M.getFunction(func_name) != nullptr)
+      return true;
+  }
+  return false;
+}
+
 // ==== inst iterator related funcs =====
 
 inst_iterator pdg::pdgutils::getInstIter(Instruction &i)

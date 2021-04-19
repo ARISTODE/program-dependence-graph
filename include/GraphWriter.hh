@@ -35,43 +35,41 @@ namespace llvm
       {
       case pdg::GraphNodeType::FUNC_ENTRY:
         return "<<ENTRY>> " + func->getName().str();
-      case pdg::GraphNodeType::FORMAL_IN:
+      case pdg::GraphNodeType::PARAM_FORMALIN:
       {
         pdg::pdgutils::printTreeNodesLabel(node, OS, "FORMAL_IN");
         return OS.str();
       }
-      case pdg::GraphNodeType::FORMAL_OUT:
+      case pdg::GraphNodeType::PARAM_FORMALOUT:
       {
         pdg::pdgutils::printTreeNodesLabel(node, OS, "FORMAL_OUT");
         return OS.str();
       }
-      case pdg::GraphNodeType::ACTUAL_IN:
+      case pdg::GraphNodeType::PARAM_ACTUALIN:
       {
         pdg::pdgutils::printTreeNodesLabel(node, OS, "ACTUAL_IN");
         return OS.str();
       }
-      case pdg::GraphNodeType::ACTUAL_OUT:
+      case pdg::GraphNodeType::PARAM_ACTUALOUT:
       {
         pdg::pdgutils::printTreeNodesLabel(node, OS, "ACTUAL_OUT");
         return OS.str();
       }
-      case pdg::GraphNodeType::INST:
+      case pdg::GraphNodeType::INST_OTHER:
       {
         if (Instruction *i = dyn_cast<Instruction>(node_val))
         {
           OS << *i;
           return OS.str(); // print the instruction literal
         }
-        break;
       }
-      case pdg::GraphNodeType::INST_CALL:
+      case pdg::GraphNodeType::INST_FUNCALL:
       {
         if (Instruction *i = dyn_cast<Instruction>(node_val))
         {
           OS << *i;
           return OS.str(); // print the instruction literal
         }
-        break;
       }
       case pdg::GraphNodeType::INST_RET:
       {
@@ -80,27 +78,34 @@ namespace llvm
           OS << *i;
           return OS.str(); // print the instruction literal
         }
-        break;
       }
-      case pdg::GraphNodeType::INST_ANNO_LOCAL:
+      case pdg::GraphNodeType::INST_BR:
       {
-          OS << "Local Anno: " << *node_val;
-          return OS.str();
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str(); // print the instruction literal
+        }
       }
-      case pdg::GraphNodeType::INST_ANNO_GLOBAL:
+      case pdg::GraphNodeType::ANNO_VAR:
       {
-          OS << "Global Anno: " << *node_val;
-          return OS.str();
+        OS << "Local Anno: " << *node_val;
+        return OS.str();
       }
-      case pdg::GraphNodeType::GLOBALVAR_GLOBL:
+      case pdg::GraphNodeType::ANNO_GLOBAL:
       {
-          OS << "global var: " << *node_val;
-          return OS.str();
+        OS << "Global Anno: " << *node_val;
+        return OS.str();
       }
-      case pdg::GraphNodeType::GLOBALVAR_LOCAL:
+      case pdg::GraphNodeType::VAR_STATICGLOBAL:
       {
-          OS << "static var: " << *node_val;
-          return OS.str();
+        OS << "global var: " << *node_val;
+        return OS.str();
+      }
+      case pdg::GraphNodeType::VAR_STATICFUNCTION:
+      {
+        OS << "static var: " << *node_val;
+        return OS.str();
       }
       default:
         break;
@@ -137,6 +142,8 @@ namespace llvm
         return "style=dotted,label = \"{D_RAW}\" ";
       case pdg::EdgeType::DATA_RET:
         return "style=dashed, color=\"red\", label =\"{D_RET}\"";
+      case pdg::EdgeType::ANNO_GLOBAL:
+        return "style=dashed, color=\"green\", label =\"{ANNO_GLOB}\"";
       case pdg::EdgeType::ANNO_VAR:
         return "style=dashed, color=\"green\", label =\"{ANNO_VAR}\"";
       default:

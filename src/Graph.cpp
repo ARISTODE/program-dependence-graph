@@ -65,7 +65,11 @@ void pdg::ProgramGraph::build(Module &M)
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;
-    Node * n = new Node(global_var, GraphNodeType::GLOBALVAR_GLOBL);
+    GraphNodeType node_type = GraphNodeType::VAR_STATICGLOBAL;
+    if (pdgutils::isStaticFuncVar(global_var, M))
+      node_type = GraphNodeType::VAR_STATICFUNCTION;
+
+    Node * n = new Node(global_var, GraphNodeType::VAR_STATICGLOBAL);
     _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
   }
@@ -79,13 +83,15 @@ void pdg::ProgramGraph::build(Module &M)
     FunctionWrapper *func_w = new FunctionWrapper(&F);
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
-      GraphNodeType node_type = GraphNodeType::INST;
+      GraphNodeType node_type = GraphNodeType::INST_OTHER;
       if (isAnnotationCallInst(*inst_iter))
-        node_type = GraphNodeType::INST_ANNO_LOCAL;
+        node_type = GraphNodeType::ANNO_VAR;
       if (isa<ReturnInst>(&*inst_iter))
         node_type = GraphNodeType::INST_RET;
       if (isa<CallInst>(&*inst_iter))
-        node_type = GraphNodeType::INST_CALL;
+        node_type = GraphNodeType::INST_FUNCALL;
+      if (isa<BranchInst>(&*inst_iter))
+        node_type = GraphNodeType::INST_BR;
       Node *n = new Node(*inst_iter, node_type);
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
@@ -299,7 +305,7 @@ void pdg::ProgramGraph::buildGlobalAnnotationNodes(Module &M)
   auto global_annos = M.getNamedGlobal("llvm.global.annotations");
   if (global_annos)
   {
-    Node* global_anno_node = new Node(*global_annos, GraphNodeType::INST_ANNO_GLOBAL);
+    Node* global_anno_node = new Node(*global_annos, GraphNodeType::ANNO_GLOBAL);
     _val_node_map.insert(std::pair<Value *, Node *>(global_annos, global_anno_node));
     addNode(*global_anno_node);
     auto casted_array = cast<ConstantArray>(global_annos->getOperand(0));
@@ -313,7 +319,7 @@ void pdg::ProgramGraph::buildGlobalAnnotationNodes(Module &M)
         Node *n = getNode(*annotated_gv);
         if (n == nullptr)
         {
-          n = new Node(*annotated_gv, GraphNodeType::GLOBALVAR_GLOBL);
+          n = new Node(*annotated_gv, GraphNodeType::VAR_STATICGLOBAL);
           _val_node_map.insert(std::pair<Value *, Node *>(annotated_gv, n));
           addNode(*n);
         }
