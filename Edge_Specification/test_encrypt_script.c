@@ -6,10 +6,7 @@ char __attribute__((annotate("sensitive"))) *key ;
 char *ciphertext;
 unsigned int i;
 
-void greeter (char *str, int* s) {
-    char* p = str;
-    printf("%s\n", p);
-    printf(", welcome!\n");
+void greeter (int* s) {
     *s = 15;
 }
 
@@ -31,7 +28,7 @@ int main (){
 	char __attribute__((annotate("sensitive"))) username[20], text[1024];
 	printf("Enter username: ");
 	scanf("%19s",username);
-	greeter(username, &age);
+	greeter(&age);
 	printf("Enter plaintext: ");
 	scanf("%1023s",text);
 

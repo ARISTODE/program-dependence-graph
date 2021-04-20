@@ -12,7 +12,6 @@ void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 
 bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 {
-  auto start = std::chrono::high_resolution_clock::now();
   _module = &M;
   _SDA = &getAnalysis<SharedDataAnalysis>();
   _PDG = _SDA->getPDG();
@@ -41,8 +40,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   idl_file << "\n}";
   errs() << "Finish analyzing data access info.";
   idl_file.close();
-  auto stop = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
   // printContainerOfStats();
   errs() << "data analysis pass takes: " << duration.count() << "\n";
   return false;
