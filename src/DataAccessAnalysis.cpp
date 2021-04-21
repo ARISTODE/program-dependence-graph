@@ -172,7 +172,9 @@ std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Va
   if (pdgutils::hasReadAccess(val))
     acc_tags.insert(AccessTag::DATA_READ);
   if (pdgutils::hasWriteAccess(val))
+  {
     acc_tags.insert(AccessTag::DATA_WRITE);
+  }
   return acc_tags;
 }
 
@@ -196,11 +198,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   auto addr_vars = tree_node.getAddrVars();
   for (auto addr_var : addr_vars)
   {
-    // if (_current_processing_func == "blk_mq_alloc_tag_set")
-    //   errs() << "addr var blk mq: " << field_var_name << " - " << *addr_var << "\n";
     if (Instruction *i = dyn_cast<Instruction>(addr_var))
     {
-      if (_SDA->isKernelFunc(*(i->getFunction())))
+      if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
         continue;
     }
     auto acc_tags = computeDataAccessTagsForVal(*addr_var);
@@ -218,10 +218,8 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
     {
       if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
       {
-        if (_SDA->isKernelFunc(*(i->getFunction())))
+        if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
           continue;
-        //   if (_current_processing_func == "blk_mq_alloc_tag_set")
-        //     errs() << "inter blk mq: " << field_var_name << " - " << *i << " - " << i->getFunction()->getName() << "\n";
       }
       auto acc_tags = computeDataAccessTagsForVal(*n->getValue());
       for (auto acc_tag : acc_tags)
@@ -289,7 +287,6 @@ void pdg::DataAccessAnalysis::computeDataAccessForGlobalTree(Tree *tree)
 void pdg::DataAccessAnalysis::computeIntraProcDataAccess(Function &F)
 {
   // errs() << "compute intra for func: " << F.getName() << "\n";
-  _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   if (func_wrapper_map.find(&F) == func_wrapper_map.end())
     return;
@@ -358,11 +355,12 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     // compute access attributes
-    auto annotations = inferTreeNodeAnnotations(tree_node);
+    auto annotations = inferTreeNodeAnnotations(*child_node);
+    
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
-    
+
     _ksplit_stats->collectStats(*field_di_type, annotations);
     if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
       _ksplit_stats->increaseUnhandledVoidPtrNum();
@@ -737,11 +735,10 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
 
   for (auto acc_tag : tree_node.getAccessTags())
   {
+    if (acc_tag == AccessTag::DATA_READ)
+      annotations.insert("[in]");
     if (acc_tag == AccessTag::DATA_WRITE)
-    {
       annotations.insert("[out]");
-      break;
-    }
   }
 
   if (!tree_node.getAllocStr().empty())
