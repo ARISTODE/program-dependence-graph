@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-char __attribute__((annotate("secret"))) *key ;
+char __attribute__((annotate("blue"))) *key ;
 char *ciphertext;
 static unsigned int i;
 
@@ -20,7 +20,7 @@ void initkey (int sz) {
 	for (i=0; i<sz; i++) key[i]= 1;
 }
 
-int __attribute__((annotate("sensitive"))) encrypt (char *plaintext, int sz) {
+int __attribute__((annotate("green"))) encrypt (char *plaintext, int sz) {
 	ciphertext = (char *) (malloc (sz));
 	for (i=0; i<sz; i++)
 		ciphertext[i]=plaintext[i] ^ key[i];
@@ -28,9 +28,9 @@ int __attribute__((annotate("sensitive"))) encrypt (char *plaintext, int sz) {
 }
 
 int main (){
-    int age = 10;
-	char __attribute__((annotate("confidential")))username[20];
-    char text[1024];
+   	int age = 10;
+	char __attribute__((annotate("orange")))username[20];
+        char text[1024];
 	printf("Enter username: ");
 	scanf("%19s",username);
 	greeter(username, &age);
@@ -42,6 +42,6 @@ int main (){
 	printf("Cipher text: ");
 	for (i=0; i<strlen(text); i++)
 		printf("%x ",ciphertext[i]);
-    printf("encryption length: %d", sz);
-    return 0;
+    	printf("encryption length: %d", sz);
+    	return 0;
 }
