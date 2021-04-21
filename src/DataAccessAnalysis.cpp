@@ -47,6 +47,8 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   for (auto pair : _PDG->getGlobalVarTreeMap())
   {
     Tree* tree = pair.second;
+    if (!globalVarHasAccessInDriver(*pair.first))
+      continue;
     computeDataAccessForGlobalTree(tree);
     _global_var_access_info << "====== global" << pair.first->getName().str() << " ======== \n";
     generateIDLFromGlobalVarTree(*pair.first, tree);
@@ -105,15 +107,18 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
       size_str += "var_size";
 
     // get GP flag
-    auto gp_flag_operand = ci->getArgOperand(1);
-    assert(gp_flag_operand != nullptr && "allocator has null gp operand!\n");
-    if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+    if (ci->data_operands_size() > 1)
     {
-      auto gp_flag = cons_int->getSExtValue();
-      size_str = size_str + ", " + std::to_string(gp_flag);
+      auto gp_flag_operand = ci->getArgOperand(1);
+      assert(gp_flag_operand != nullptr && "allocator has null gp operand!\n");
+      if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
+      {
+        auto gp_flag = cons_int->getSExtValue();
+        size_str = size_str + ", " + std::to_string(gp_flag);
+      }
+      else
+        size_str = size_str + ", " + "var_gp";
     }
-    else
-      size_str = size_str + ", " + "var_gp";
   }
 
   auto val_node = _PDG->getNode(allocator);
@@ -753,6 +758,20 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
   // }
 
   return annotations;
+}
+
+bool pdg::DataAccessAnalysis::globalVarHasAccessInDriver(GlobalVariable &gv)
+{
+  for (auto user : gv.users())
+  {
+    if (Instruction *i = dyn_cast<Instruction>(user))
+    {
+      auto func = i->getFunction();
+      if (_SDA->isDriverFunc(*func))
+        return true;
+    }
+  }
+  return false;
 }
 
 // bool pdg::DataAccessAnalysis::isAllocator(Value &v)

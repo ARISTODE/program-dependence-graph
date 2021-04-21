@@ -65,7 +65,7 @@ namespace pdg
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
-    bool isAllocator(llvm::Value &val);
+    bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
     std::string computeAllocCallerAnnotation(TreeNode &tree_node);
     std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
     std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
