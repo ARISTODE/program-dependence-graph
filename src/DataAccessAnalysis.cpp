@@ -21,6 +21,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _ksplit_stats = new KSplitStats();
   computeExportedFuncsPtrNameMap();
   _idl_file.open("kernel.idl");
+  _global_var_access_info.open("global_var_access_info.idl");
   // intra-procedural analysis
   for (auto &F : M)
   {
@@ -42,6 +43,15 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 
   constructGlobalOpStructStr();
   _idl_file << _ops_struct_proj_str << "\n";
+
+  for (auto pair : _PDG->getGlobalVarTreeMap())
+  {
+    Tree* tree = pair.second;
+    computeDataAccessForGlobalTree(tree);
+    _global_var_access_info << "====== global" << pair.first->getName().str() << " ======== \n";
+    generateIDLFromGlobalVarTree(*pair.first, tree);
+  }
+
   _idl_file << "\n}";
   errs() << "Finish analyzing data access info.";
   _idl_file.close();
@@ -147,9 +157,6 @@ void pdg::DataAccessAnalysis::computeExportedFuncsPtrNameMap()
     Function *pointed_func = _module->getFunction(line2);
     if (pointed_func == nullptr || pointed_func->isDeclaration())
       continue;
-    auto kernel_func = _SDA->getKernelFuncs();
-    if (kernel_func.find(pointed_func) != kernel_func.end())
-      continue;
     _exported_funcs_ptr_name_map[line1] = line2; // key: registered driver side function, value: the registered function pointer name
   }
 }
@@ -164,7 +171,7 @@ std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Va
   return acc_tags;
 }
 
-void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node)
+void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node)
 {
   std::string field_var_name = dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
   bool is_sentinel_type = _SDA->isSentinelField(field_var_name);
@@ -184,6 +191,13 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node)
   auto addr_vars = tree_node.getAddrVars();
   for (auto addr_var : addr_vars)
   {
+    // if (_current_processing_func == "blk_mq_alloc_tag_set")
+    //   errs() << "addr var blk mq: " << field_var_name << " - " << *addr_var << "\n";
+    if (Instruction *i = dyn_cast<Instruction>(addr_var))
+    {
+      if (_SDA->isKernelFunc(*(i->getFunction())))
+        continue;
+    }
     auto acc_tags = computeDataAccessTagsForVal(*addr_var);
     for (auto acc_tag : acc_tags)
     {
@@ -197,6 +211,13 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node)
   {
     if (n->getValue() != nullptr)
     {
+      if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
+      {
+        if (_SDA->isKernelFunc(*(i->getFunction())))
+          continue;
+        //   if (_current_processing_func == "blk_mq_alloc_tag_set")
+        //     errs() << "inter blk mq: " << field_var_name << " - " << *i << " - " << i->getFunction()->getName() << "\n";
+      }
       auto acc_tags = computeDataAccessTagsForVal(*n->getValue());
       for (auto acc_tag : acc_tags)
       {
@@ -224,9 +245,46 @@ void pdg::DataAccessAnalysis::computeDataAccessForTree(Tree *tree)
   }
 }
 
+void pdg::DataAccessAnalysis::computeDataAccessForGlobalTree(Tree *tree)
+{
+  TreeNode *root_node = tree->getRootNode();
+  assert(root_node != nullptr && "cannot compute access info for empty tree!");
+  std::queue<TreeNode *> node_queue;
+  node_queue.push(root_node);
+  while (!node_queue.empty())
+  {
+    TreeNode *current_node = node_queue.front();
+    node_queue.pop();
+    bool is_accessed_in_driver = false;
+    for (auto addr_var : current_node->getAddrVars())
+    {
+      if (Instruction *i = dyn_cast<Instruction>(addr_var))
+      {
+        auto func = i->getFunction();
+        if (_SDA->isDriverFunc(*func))
+        {
+          is_accessed_in_driver = true;
+          break;
+        }
+      }
+    }
+
+    if (!is_accessed_in_driver)
+      continue;
+
+    computeDataAccessForTreeNode(*current_node, true);
+    for (auto child_node : current_node->getChildNodes())
+    {
+      node_queue.push(child_node);
+    }
+  }
+}
+
+
 void pdg::DataAccessAnalysis::computeIntraProcDataAccess(Function &F)
 {
   // errs() << "compute intra for func: " << F.getName() << "\n";
+  _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   if (func_wrapper_map.find(&F) == func_wrapper_map.end())
     return;
@@ -360,7 +418,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       Function *called_func = _module->getFunction(exported_func_name);
       if (called_func == nullptr)
         continue;
-      fields_projection_str << indent_level << "rpc_ptr " << func_ptr_name << " " << func_ptr_name << ";\n";
+      fields_projection_str << indent_level << "rpc_ptr " << func_ptr_name << " " << field_var_name << ";\n";
     }
     else
     {
@@ -369,7 +427,57 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
   }
 }
 
-void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret)
+void pdg::DataAccessAnalysis::generateIDLFromGlobalVarTree(GlobalVariable& gv, Tree* tree)
+{
+  if (!tree)
+    return;
+  TreeNode *root_node = tree->getRootNode();
+  DIType *root_node_di_type = root_node->getDIType();
+  assert(root_node_di_type != nullptr && "cannot generate projection for global with null di type\n");
+  DIType *root_node_lowest_di_type = dbgutils::getLowestDIType(*root_node_di_type);
+  if (!root_node_lowest_di_type || !dbgutils::isProjectableType(*root_node_lowest_di_type))
+  {
+    auto type_name = dbgutils::getSourceLevelTypeName(*root_node_di_type);
+    auto var_name = gv.getName().str();
+    std::string anno = "";
+    std::set<AccessTag> acc_tags;
+    for (auto addr_var : root_node->getAddrVars())
+    {
+      for (auto user : addr_var->users())
+      {
+        if (Instruction *i = dyn_cast<Instruction>(user))
+        {
+          auto func = i->getFunction();
+          if (!_SDA->isDriverFunc(*func))
+            continue;
+          if (LoadInst *li = dyn_cast<LoadInst>(user))
+          {
+            if (li->getPointerOperand() == &gv)
+              acc_tags.insert(AccessTag::DATA_READ);
+          }
+          else if (StoreInst *si = dyn_cast<StoreInst>(user))
+          {
+            if (si->getPointerOperand() == &gv)
+              acc_tags.insert(AccessTag::DATA_WRITE);
+          }
+        }
+      }
+    }
+
+    for (auto acc_tag : acc_tags)
+    {
+      if (acc_tag == AccessTag::DATA_READ)
+        anno += "[in]";
+      if (acc_tag == AccessTag::DATA_WRITE)
+        anno += "[out]";
+    }
+    _global_var_access_info << "global " << anno << " " << type_name << " " << var_name << "\n";
+  }
+  else
+    generateIDLFromArgTree(tree, _global_var_access_info);
+}
+
+void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret)
 {
   if (!arg_tree)
     return;
@@ -413,7 +521,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
       current_node = current_node->getChildNodes()[0];
     generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t", proj_type_name);   
     // handle funcptr ops struct specifically
-    _idl_file << nested_struct_projection_str.str();
+    output_file << nested_struct_projection_str.str();
     if (proj_type_name.find("_ops") != std::string::npos)
     {
       if (_global_ops_fields_map.find(proj_type_name) == _global_ops_fields_map.end())
@@ -445,7 +553,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, bool is_ret
       if (dbgutils::isUnionPointerType(*node_di_type))
         type_prefix = "union";
 
-      _idl_file << "\tprojection < "
+      output_file << "\tprojection < "
                 << type_prefix
                 << " "
                 << proj_type_name
@@ -572,7 +680,6 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
 
 void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
 {
-  // _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   auto func_iter = func_wrapper_map.find(&F);
   assert(func_iter != func_wrapper_map.end() && "no function wrapper found (IDL-GEN)!");
@@ -582,13 +689,13 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
   // generate projection for return value
   auto ret_arg_tree = fw->getRetFormalInTree();
   if (dbgutils::getFuncRetDIType(F) != nullptr)
-    generateIDLFromArgTree(ret_arg_tree, true);
+    generateIDLFromArgTree(ret_arg_tree, _idl_file, true);
   //generate projection for each argument
   auto arg_tree_map = fw->getArgFormalInTreeMap();
   for (auto iter = arg_tree_map.begin(); iter != arg_tree_map.end(); iter++)
   {
     auto arg_tree = iter->second;
-    generateIDLFromArgTree(arg_tree);
+    generateIDLFromArgTree(arg_tree, _idl_file);
   }
   _idl_file << "}\n";
 }

@@ -18,9 +18,11 @@ namespace pdg
     void setupDriverFuncs(llvm::Module &M);
     void setupStrOps();
     void readDriverGlobalStrucTypes();
-    std::set<llvm::Function *> &getDriverFuncs() { return _driver_domain_funcs; }
     void setupKernelFuncs(llvm::Module &M);
+    std::set<llvm::Function *> &getDriverFuncs() { return _driver_domain_funcs; }
+    bool isDriverFunc(llvm::Function &F) { return (_driver_domain_funcs.find(&F) != _driver_domain_funcs.end()); }
     std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
+    bool isKernelFunc(llvm::Function &F) { return (_kernel_domain_funcs.find(&F) != _kernel_domain_funcs.end()); }
     void setupBoundaryFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
     std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }

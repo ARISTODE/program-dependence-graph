@@ -53,12 +53,14 @@ namespace pdg
     void computeAllocSizeAnnos(llvm::Module &M);
     void computeExportedFuncsPtrNameMap();
     void computeDataAccessForTree(Tree *tree);
-    void computeDataAccessForTreeNode(TreeNode &tree_node);
+    void computeDataAccessForGlobalTree(Tree *tree);
+    void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false);
     void computeIntraProcDataAccess(llvm::Function &F);
     void computeInterProcDataAccess(llvm::Function &F);
     void generateIDLForFunc(llvm::Function &F);
     void generateRpcForFunc(llvm::Function &F);
-    void generateIDLFromArgTree(Tree *arg_tree, bool is_ret = false);
+    void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
+    void generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret = false);
     void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
@@ -78,6 +80,7 @@ namespace pdg
     ProgramGraph *_PDG;
     PDGCallGraph *_call_graph;
     std::ofstream _idl_file;
+    std::ofstream _global_var_access_info;
     std::ofstream _sync_stub_file;
     std::set<std::string> _seen_func_ops;
     std::string _ops_struct_proj_str;

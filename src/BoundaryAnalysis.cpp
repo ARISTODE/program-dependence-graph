@@ -97,6 +97,8 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     }
     if (!di_gv)
       continue;
+    // if (!global_var.isConstant())
+    //   _driver_global_names.push_back(global_var.getName().str());
     auto gv_di_type = di_gv->getType();
     auto gv_lowest_di_type = dbgutils::getLowestDIType(*gv_di_type);
     if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
@@ -151,6 +153,7 @@ void pdg::BoundaryAnalysis::dumpToFiles()
   dumpToFile("exported_funcs", _exported_funcs);
   dumpToFile("exported_func_ptrs", _exported_func_ptrs);
   dumpToFile("sentinel_fields", _sentinel_fields);
+  // dumpToFile("driver_global_names", _driver_global_names);
 }
 
 void pdg::BoundaryAnalysis::dumpToFile(std::string file_name, std::vector<std::string> &names)

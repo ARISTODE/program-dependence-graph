@@ -85,7 +85,7 @@ namespace pdg
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
     std::set<llvm::Value *> &getAllocators() { return _allocators; }
-
+    
   private:
     FuncWrapperMap _func_wrapper_map;
     CallWrapperMap _call_wrapper_map;

@@ -94,18 +94,16 @@ void pdg::ProgramGraph::build(Module &M)
   for (auto &global_var : M.getGlobalList())
   {
     auto global_var_type = global_var.getType();
-    if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
+    if (global_var.isConstant())
       continue;
+    // if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
+    //   continue;
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;
     TreeNode * n = new TreeNode(global_var, GraphNodeType::GLOBAL_VAR);
     // add addr var for global
-    for (auto user : global_var.users())
-    {
-      if (Instruction *i = dyn_cast<Instruction>(user))
-        n->addAddrVar(*i);
-    }
+    n->addAddrVar(global_var);
 
     _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
