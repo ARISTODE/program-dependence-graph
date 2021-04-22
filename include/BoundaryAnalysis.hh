@@ -31,7 +31,7 @@ namespace pdg
     std::vector<std::string> _exported_funcs;
     std::vector<std::string> _driver_domain_funcs;
     std::vector<std::string> _exported_func_ptrs;
-    std::vector<std::string> _driver_global_names;
+    std::vector<std::string> _driver_globalvar_names;
   };
 } // namespace pdg
 

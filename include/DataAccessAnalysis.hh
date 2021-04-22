@@ -49,6 +49,7 @@ namespace pdg
     llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
     std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
     pdg::Node *findFirstCrossDomainParamNode(Node &n);
+    void readDriverDefinedGlobalVarNames(std::string file_name);
     void propagateAllocSizeAnno(llvm::Value &allocator);
     void computeAllocSizeAnnos(llvm::Module &M);
     void computeExportedFuncsPtrNameMap();
@@ -66,6 +67,7 @@ namespace pdg
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
     bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
+    bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);
     std::string computeAllocCallerAnnotation(TreeNode &tree_node);
     std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
     std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
@@ -89,6 +91,7 @@ namespace pdg
     std::set<llvm::Instruction *> _container_of_insts;
     KSplitStats *_ksplit_stats;
     std::string _current_processing_func = "";
+    std::set<std::string> _driver_defined_globalvar_names;
   };
 }
 
