@@ -354,6 +354,12 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       continue;
 
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
+    auto bw = 0;
+
+    if (field_di_type->isBitField()) {
+	bw = field_di_type->getSizeInBits();
+    }
+
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     // compute access attributes
     auto annotations = inferTreeNodeAnnotations(*child_node);
@@ -426,7 +432,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
     else
     {
-      fields_projection_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name << ";\n";
+      fields_projection_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name
+	      << ((bw > 0) ? (" : " + to_string(bw)) : "")
+	      << ";\n";
     }
   }
 }
@@ -575,6 +583,7 @@ static std::list<std::string> ioremap_fns = {
     "ioremap_nocache",
     "ioremap",
     "pci_ioremap_bar",
+    "pci_iomap",
 };
 
 //std::string pdg::DataAccessAnalysis::handleIoRemap(Function &F, std::string &ret_type_str)
