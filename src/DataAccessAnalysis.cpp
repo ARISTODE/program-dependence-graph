@@ -91,8 +91,8 @@ pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n)
 
 void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
 {
-  std::string alloc_str = "";
-  std::string size_str = "";
+  std::string alloc_str = "alloc";
+  std::string size_str = "<{{";
   if (CallInst *ci = dyn_cast<CallInst>(&allocator))
   {
     // get size operand
@@ -103,8 +103,6 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
       auto alloc_size = cons_int->getSExtValue();
       size_str += std::to_string(alloc_size);
     }
-    else
-      size_str += "var_size";
 
     // get GP flag
     if (ci->data_operands_size() > 1)
@@ -114,25 +112,28 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
       if (ConstantInt *cons_int = dyn_cast<ConstantInt>(size_operand))
       {
         auto gp_flag = cons_int->getSExtValue();
-        size_str = size_str + ", " + std::to_string(gp_flag);
+        size_str += std::string("}}, {{") + std::to_string(gp_flag);
       }
       else
-        size_str = size_str + ", " + "var_gp";
+        size_str += std::string("}}, {{") + std::string("(DEFAULT_GFP_FLAGS)");
+
+      size_str += "}}>";
     }
   }
 
   auto val_node = _PDG->getNode(allocator);
   assert(val_node != nullptr && "cannot generate size anno str for null node\n");
+  alloc_str += size_str;
   if (val_node->isAddrVarNode())
   {
-    alloc_str = std::string("alloc_sized") + std::string("(caller, ") + size_str + std::string(")");
+    alloc_str += std::string("(caller)");
     auto param_tree_node = val_node->getAbstractTreeNode();
     TreeNode *tn = (TreeNode *)param_tree_node;
     tn->setAllocStr(alloc_str);
   }
   else
   {
-    alloc_str = std::string("alloc_sized") + std::string("(callee, ") + size_str + std::string(")");
+    alloc_str += std::string("(callee)");
     auto first_cross_domain_param_node = findFirstCrossDomainParamNode(*val_node);
     if (first_cross_domain_param_node != nullptr)
     {
