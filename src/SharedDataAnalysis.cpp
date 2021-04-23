@@ -293,19 +293,30 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &tree_node)
   auto addr_vars = tree_node.getAddrVars();
   bool accessed_in_driver = false;
   bool accessed_in_kernel = false;
+  Function* driver_func = nullptr;
+  Function* kernel_func = nullptr;
   for (auto addr_var : addr_vars)
   {
     if (Instruction *i = dyn_cast<Instruction>(addr_var))
     {
       Function *f = i->getFunction();
       if (_driver_domain_funcs.find(f) != _driver_domain_funcs.end())
+      {
         accessed_in_driver = true;
+        driver_func = f;
+      }
       if (_kernel_domain_funcs.find(f) != _kernel_domain_funcs.end())
+      {
         accessed_in_kernel = true;
+        kernel_func = f;
+      }
     }
 
     if (accessed_in_driver && accessed_in_kernel)
+    {
+      errs() << "sid dump: " << pdgutils::computeTreeNodeID(tree_node) << " - (driver) " << driver_func->getName() << " - (kernel) " << kernel_func->getName() << "\n";
       return true;
+    }
   }
   return false;
 }
