@@ -41,7 +41,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   errs() << "Finish analyzing data access info.";
   idl_file.close();
   // printContainerOfStats();
-  errs() << "data analysis pass takes: " << duration.count() << "\n";
   return false;
 }
 

@@ -74,13 +74,15 @@ void pdg::TaintBoundaryAnalysis::computeBoundaryFuncs()
     Node* func_node = _call_graph->getNode(*taint_func);
     if (func_node == nullptr)
       continue;
-    auto callees = func_node->getOutNeighborsWithDepType(EdgeType::CONTROLDEP_CALLINV);
-    auto callers = func_node->getInNeighborsWithDepType(EdgeType::CONTROLDEP_CALLINV);
+    auto callees = func_node->getOutNeighborsWithDepType(EdgeType::CALL);
+    auto callers = func_node->getInNeighborsWithDepType(EdgeType::CALL);
+
     for (auto callee : callees)
     {
       Value* callee_val = callee->getValue();
       assert(callee_val != nullptr && "error processing nullptr func in PDGCallGraph! \n");
       Function* callee_func = cast<Function>(callee_val);
+      errs() << "callee: " << taint_func->getName() << " - " << callee_func->getName() << "\n";
       if (_taint_funcs.find(callee_func) == _taint_funcs.end())
       {
         _tainted_boundary_funcs.insert(taint_func->getName().str());
@@ -93,6 +95,7 @@ void pdg::TaintBoundaryAnalysis::computeBoundaryFuncs()
       Value* caller_val = caller->getValue();
       assert(caller_val != nullptr && "error processing nullptr func in PDGCallGraph! \n");
       Function* caller_func = cast<Function>(caller_val);
+      errs() << "caller: " << taint_func->getName() << " - " << caller_func->getName() << "\n";
       if (_taint_funcs.find(caller_func) == _taint_funcs.end())
       {
         _untainted_boundary_funcs.insert(caller_func->getName().str());

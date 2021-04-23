@@ -23,6 +23,7 @@ namespace pdg
     VAL_DEP,
     ANNO_FUNC,
     ANNO_VAR,
+    CALL,
     TYPE_OTHEREDGE
   };
 

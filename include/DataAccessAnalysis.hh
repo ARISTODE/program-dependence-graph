@@ -27,6 +27,7 @@ namespace pdg
       void constructGlobalOpStructStr();
       void computeContainerOfLocs(llvm::Function &F);
       std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
+      SharedDataAnalysis *getSDA() { return _SDA; }
       void printContainerOfStats();
 
     private:
