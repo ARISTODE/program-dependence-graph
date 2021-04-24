@@ -380,6 +380,7 @@ bool pdg::AtomicRegionAnalysis::isLockInst(Instruction &i)
     if (called_func == nullptr)
       return false;
     std::string lock_call_name = called_func->getName().str();
+    lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
     if (_lock_map.find(lock_call_name) != _lock_map.end())
       return true;
   }
@@ -394,6 +395,7 @@ bool pdg::AtomicRegionAnalysis::isUnlockInst(Instruction &i, std::string lock_in
     if (called_func == nullptr)
       return false;
     std::string unlock_call_name = called_func->getName().str();
+    unlock_call_name = pdgutils::stripFuncNameVersionNumber(unlock_call_name);
     if (_lock_map[lock_inst_name] == unlock_call_name)
       return true;
   }

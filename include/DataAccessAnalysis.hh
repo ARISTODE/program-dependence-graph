@@ -56,8 +56,7 @@ namespace pdg
     void computeDataAccessForTree(Tree *tree);
     void computeDataAccessForGlobalTree(Tree *tree);
     void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false);
-    void computeIntraProcDataAccess(llvm::Function &F);
-    void computeInterProcDataAccess(llvm::Function &F);
+    void computeDataAccessForFuncArgs(llvm::Function &F);
     void generateIDLForFunc(llvm::Function &F);
     void generateRpcForFunc(llvm::Function &F);
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
