@@ -191,12 +191,18 @@ std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Va
 
 void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node)
 {
+  std::string parent_node_type_name = "";
+  TreeNode *parent_node = tree_node.getParentNode();
+  if (parent_node != nullptr)
+    parent_node_type_name = dbgutils::getSourceLevelTypeName(*(parent_node->getDIType()), true);
+
   std::string field_var_name = dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
   bool is_sentinel_type = _SDA->isSentinelField(field_var_name);
   // special hanlding for function pointers and sentinel type
   if (tree_node.getDIType() != nullptr && (dbgutils::isFuncPointerType(*tree_node.getDIType()) || is_sentinel_type))
   {
-    if (_exported_funcs_ptr_name_map.find(field_var_name) != _exported_funcs_ptr_name_map.end())
+    std::string func_ptr_name = parent_node_type_name + "_" + field_var_name;
+    if (_exported_funcs_ptr_name_map.find(func_ptr_name) != _exported_funcs_ptr_name_map.end())
     {
       tree_node.addAccessTag(AccessTag::DATA_READ);
       auto parent_node = tree_node.getParentNode();
@@ -218,8 +224,6 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
         continue;
     }
     auto acc_tags = computeDataAccessTagsForVal(*addr_var);
-    if(_current_processing_func == "netif_wake_subqueue")
-      errs() << "intra: " << field_var_name << " - " << *addr_var << "\n";
     for (auto acc_tag : acc_tags)
     {
       tree_node.addAccessTag(acc_tag);
@@ -236,8 +240,6 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
       {
         if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
           continue;
-        if (_current_processing_func == "netif_wake_subqueue")
-          errs() << "inter: " << field_var_name << " - " << *i << " - " << i->getFunction()->getName() << "\n";
       }
       auto acc_tags = computeDataAccessTagsForVal(*n->getValue());
       for (auto acc_tag : acc_tags)
@@ -431,10 +433,10 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
     {
-      std::string func_ptr_name = root_di_type_name_raw + "_" + field_var_name;
-      if (_exported_funcs_ptr_name_map.find(field_var_name) == _exported_funcs_ptr_name_map.end())
+      std::string func_ptr_name = parent_struct_type_name + "_" + field_var_name;
+      if (_exported_funcs_ptr_name_map.find(func_ptr_name) == _exported_funcs_ptr_name_map.end())
         continue;
-      std::string exported_func_name = _exported_funcs_ptr_name_map[field_var_name];
+      std::string exported_func_name = _exported_funcs_ptr_name_map[func_ptr_name];
       Function *called_func = _module->getFunction(exported_func_name);
       if (called_func == nullptr)
         continue;

@@ -287,6 +287,8 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
     auto base_type = getBaseDIType(dt);
     if (!base_type)
       return "";
+    if (base_type->getName().str().empty())
+      return dt.getName().str();
     return getSourceLevelTypeName(*getBaseDIType(dt), is_raw);
   }
   case dwarf::DW_TAG_enumeration_type:
@@ -304,8 +306,8 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   }
   default:
   {
-    if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
-      return typeSwitchMap[dt.getName().str()];
+    // if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
+    //   return typeSwitchMap[dt.getName().str()];
     return dt.getName().str();
   }
   }
