@@ -12,6 +12,13 @@ void pdg::DataAccessAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
   AU.setPreservesAll();
 }
 
+void patchStringAnnotation(std::string &field_type_name, std::string &anno_str) {
+  if (anno_str == "[string]") {
+    field_type_name = "string *";
+    anno_str = "";
+  }
+}
+
 bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 {
   _module = &M;
@@ -444,6 +451,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
     else
     {
+      patchStringAnnotation(field_type_name, anno_str);
       fields_projection_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name
                             << ((bw > 0) ? (" : " + to_string(bw)) : "")
                             << ";\n";
@@ -696,6 +704,9 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
+
+    patchStringAnnotation(arg_type_name, anno_str);
+
     rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + arg_name;
 
     _ksplit_stats->collectStats(*arg_di_type, annotations);
@@ -818,7 +829,7 @@ void pdg::DataAccessAnalysis::constructGlobalOpStructStr()
     {
       proj_field_str = proj_field_str + "\t" + field_name + ";\n";
     }
-    std::string proj_str = "projection < struct " + proj_type_name + " > " + "_global_" + proj_type_name + " {\n" + proj_field_str + "};\n";
+    std::string proj_str = "projection < struct " + proj_type_name + " > " + "_global_" + proj_type_name + " {\n" + proj_field_str + "}\n";
     _ops_struct_proj_str += proj_str;
   }
 }

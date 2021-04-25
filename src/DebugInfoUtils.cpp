@@ -308,6 +308,9 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   {
     // if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
     //   return typeSwitchMap[dt.getName().str()];
+    if (dt.getName().str() == "_Bool") {
+	return "bool";
+    }
     return dt.getName().str();
   }
   }
