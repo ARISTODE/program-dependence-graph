@@ -829,7 +829,7 @@ void pdg::DataAccessAnalysis::constructGlobalOpStructStr()
     {
       proj_field_str = proj_field_str + "\t" + field_name + ";\n";
     }
-    std::string proj_str = "projection < struct " + proj_type_name + " > " + "_global_" + proj_type_name + " {\n" + proj_field_str + "};\n";
+    std::string proj_str = "projection < struct " + proj_type_name + " > " + "_global_" + proj_type_name + " {\n" + proj_field_str + "}\n";
     _ops_struct_proj_str += proj_str;
   }
 }
