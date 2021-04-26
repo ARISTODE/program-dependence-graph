@@ -70,22 +70,22 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
     return false;
   Module &module = *(gep.getFunction()->getParent());
   uint64_t gep_bit_offset = getGEPOffsetInBits(module, *struct_ty, gep);
+
   if (gep_bit_offset < 0)
     return false;
 
-  // TODO:  
-  // Value* lshr_op_inst = getLShrOnGep(gep);
-  // if (lshr_op_inst != nullptr)
-  // {
-  //   if (auto lshr = dyn_cast<UnaryOperator>(lshr_op_inst))
-  //   {
-  //     auto shift_bits = lshr->getOperand(1);        // constant int in llvm
-  //     if (ConstantInt *ci = dyn_cast<ConstantInt>(shift_bits))
-  //     {
-  //       gep_bit_offset += ci->getZExtValue(); // add the value as an unsigned integer
-  //     }
-  //   }
-  // }
+  Value* lshr_op_inst = getLShrOnGep(gep);
+  if (lshr_op_inst != nullptr)
+  {
+    if (auto lshr = dyn_cast<BinaryOperator>(lshr_op_inst))
+    {
+      auto shift_bits = lshr->getOperand(1);        // constant int in llvm
+      if (ConstantInt *ci = dyn_cast<ConstantInt>(shift_bits))
+      {
+        gep_bit_offset += ci->getZExtValue(); // add the value as an unsigned integer
+      }
+    }
+  }
 
   uint64_t di_type_bit_offset = dt.getOffsetInBits();
   if (gep_bit_offset == di_type_bit_offset)
@@ -357,7 +357,7 @@ Value *pdg::pdgutils::getLShrOnGep(GetElementPtrInst &gep)
     {
       for (auto user : li->users())
       {
-        if (isa<UnaryOperator>(user))
+        if (isa<BinaryOperator>(user))
           return user;
       }
     }
