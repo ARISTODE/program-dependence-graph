@@ -9,9 +9,9 @@ target triple = "x86_64-unknown-linux-gnu"
 @key = common dso_local global i8* null, align 8, !dbg !14
 @i = internal global i32 0, align 4, !dbg !18
 @ciphertext = common dso_local global i8* null, align 8, !dbg !16
-@.str.2 = private unnamed_addr constant [10 x i8] c"sensitive\00", section "llvm.metadata"
+@.str.2 = private unnamed_addr constant [10 x i8] c"green\00", section "llvm.metadata"
 @.str.3 = private unnamed_addr constant [10 x i8] c"example.c\00", section "llvm.metadata"
-@.str.4 = private unnamed_addr constant [13 x i8] c"confidential\00", section "llvm.metadata"
+@.str.4 = private unnamed_addr constant [13 x i8] c"orange\00", section "llvm.metadata"
 @.str.5 = private unnamed_addr constant [17 x i8] c"Enter username: \00", align 1
 @.str.6 = private unnamed_addr constant [5 x i8] c"%19s\00", align 1
 @.str.7 = private unnamed_addr constant [18 x i8] c"Enter plaintext: \00", align 1
@@ -19,7 +19,7 @@ target triple = "x86_64-unknown-linux-gnu"
 @.str.9 = private unnamed_addr constant [14 x i8] c"Cipher text: \00", align 1
 @.str.10 = private unnamed_addr constant [4 x i8] c"%x \00", align 1
 @.str.11 = private unnamed_addr constant [22 x i8] c"encryption length: %d\00", align 1
-@.str.12 = private unnamed_addr constant [7 x i8] c"secret\00", section "llvm.metadata"
+@.str.12 = private unnamed_addr constant [7 x i8] c"blue\00", section "llvm.metadata"
 @llvm.global.annotations = appending global [2 x { i8*, i8*, i8*, i32 }] [{ i8*, i8*, i8*, i32 } { i8* bitcast (i32 (i8*, i32)* @encrypt to i8*), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.2, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 23 }, { i8*, i8*, i8*, i32 } { i8* bitcast (i8** @key to i8*), i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str.12, i32 0, i32 0), i8* getelementptr inbounds ([10 x i8], [10 x i8]* @.str.3, i32 0, i32 0), i32 5 }], section "llvm.metadata"
 
 ; Function Attrs: noinline nounwind optnone uwtable
