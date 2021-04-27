@@ -162,6 +162,11 @@ bool pdg::pdgutils::isStaticFuncVar(GlobalVariable &gv, Module &M)
   return false;
 }
 
+bool pdg::pdgutils::isStaticGlobalVar(llvm::GlobalVariable &gv)
+{
+  return gv.hasInternalLinkage();
+}
+
 // ==== inst iterator related funcs =====
 
 inst_iterator pdg::pdgutils::getInstIter(Instruction &i)

@@ -65,11 +65,13 @@ void pdg::ProgramGraph::build(Module &M)
     DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;
-    GraphNodeType node_type = GraphNodeType::VAR_STATICGLOBAL;
+    GraphNodeType node_type = GraphNodeType::VAR_STATICALLOCGLOBALSCOPE;
     if (pdgutils::isStaticFuncVar(global_var, M))
-      node_type = GraphNodeType::VAR_STATICFUNCTION;
+      node_type = GraphNodeType::VAR_STATICALLOCFUNCTIONSCOPE;
+    else if (pdgutils::isStaticGlobalVar(global_var))
+      node_type = GraphNodeType::VAR_STATICALLOCMODULESCOPE;
 
-    Node * n = new Node(global_var, GraphNodeType::VAR_STATICGLOBAL);
+    Node * n = new Node(global_var, node_type);
     _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
   }
@@ -319,7 +321,7 @@ void pdg::ProgramGraph::buildGlobalAnnotationNodes(Module &M)
         Node *n = getNode(*annotated_gv);
         if (n == nullptr)
         {
-          n = new Node(*annotated_gv, GraphNodeType::VAR_STATICGLOBAL);
+          n = new Node(*annotated_gv, GraphNodeType::VAR_STATICALLOCGLOBALSCOPE);
           _val_node_map.insert(std::pair<Value *, Node *>(annotated_gv, n));
           addNode(*n);
         }

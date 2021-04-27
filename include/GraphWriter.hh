@@ -97,14 +97,19 @@ namespace llvm
         OS << "Global Anno: " << *node_val;
         return OS.str();
       }
-      case pdg::GraphNodeType::VAR_STATICGLOBAL:
+      case pdg::GraphNodeType::VAR_STATICALLOCGLOBALSCOPE:
       {
         OS << "global var: " << *node_val;
         return OS.str();
       }
-      case pdg::GraphNodeType::VAR_STATICFUNCTION:
+      case pdg::GraphNodeType::VAR_STATICALLOCMODULESCOPE:
       {
-        OS << "static var: " << *node_val;
+        OS << "static global var: " << *node_val;
+        return OS.str();
+      }
+      case pdg::GraphNodeType::VAR_STATICALLOCFUNCTIONSCOPE:
+      {
+        OS << "static func var: " << *node_val;
         return OS.str();
       }
       default:
