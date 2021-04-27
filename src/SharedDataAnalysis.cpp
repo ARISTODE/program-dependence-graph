@@ -20,6 +20,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   setupKernelFuncs(M);
   // get boundary functions
   setupBoundaryFuncs(M);
+  setupServerFuncs(M);
   // compute struct type passed through boundary (shared struct type)
   readDriverGlobalStrucTypes();
   computeSharedStructDITypes();
@@ -45,14 +46,19 @@ void pdg::SharedDataAnalysis::setupStrOps()
   _string_op_names.insert("kobject_set_name");
 }
 
+void pdg::SharedDataAnalysis::setupServerFuncs(Module &M)
+{
+  _server_funcs = readFuncsFromFile("exported_funcs", M);
+}
+
 void pdg::SharedDataAnalysis::setupDriverFuncs(Module &M)
 {
-  _driver_domain_funcs = readFuncsFromFile("driver_funcs", M);
+  _driver_domain_funcs = readFuncsFromFile("imported_funcs", M);
 }
 
 void pdg::SharedDataAnalysis::readDriverGlobalStrucTypes()
 {
-  ifstream driver_global_struct_types("driver_global_struct_types");
+  std::ifstream driver_global_struct_types("driver_global_struct_types");
   for (std::string line; std::getline(driver_global_struct_types, line);)
   {
     _driver_global_struct_types.insert(line);

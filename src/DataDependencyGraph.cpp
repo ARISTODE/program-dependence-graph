@@ -38,7 +38,7 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
   {
     if (&inst == &*inst_iter)
       continue;
-    
+     
     auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
     if (alias_result != NoAlias)
     {
@@ -114,6 +114,7 @@ AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Valu
       }
     }
   }
+  return NoAlias;
 }
 
   void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage & AU) const

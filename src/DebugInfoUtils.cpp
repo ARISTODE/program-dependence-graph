@@ -3,33 +3,34 @@
 using namespace llvm;
 
 static std::map<std::string, std::string> typeSwitchMap = {
-    {"_Bool", "bool"},
-    {"char", "s8"},
-    {"signed char", "s8"},
-    {"unsigned char", "u8"},
-    {"short", "u16"},
-    {"short int", "s16"},
-    {"signed short", "s16"},
-    {"unsigned short", "u16"},
-    {"signed short int", "s16"},
-    {"unsigned short int", "u16"},
-    {"int", "s32"},
-    {"signed", "s32"},
-    {"unsigned int", "u32"},
-    {"long", "s32"},
-    {"long int", "s32"},
-    {"signed long", "s32"},
-    {"signed long int", "s32"},
-    {"unsigned long", "u32"},
-    {"unsigned long int", "u32"},
-    {"long long unsigned int", "u64"},
-    {"long long", "s64"},
-    {"long long int", "s64"},
-    {"signed long long", "s64"},
-    {"signed long long int", "s64"},
-    {"unsigned long long", "u64"},
-    {"unsigned long long int", "u64"},
-    {"long unsigned int", "u64"},
+  {"int", "int64"}
+    // {"_Bool", "bool"},
+    // {"char", "s8"},
+    // {"signed char", "s8"},
+    // {"unsigned char", "u8"},
+    // {"short", "u16"},
+    // {"short int", "s16"},
+    // {"signed short", "s16"},
+    // {"unsigned short", "u16"},
+    // {"signed short int", "s16"},
+    // {"unsigned short int", "u16"},
+    // {"int", "s32"},
+    // {"signed", "s32"},
+    // {"unsigned int", "u32"},
+    // {"long", "s32"},
+    // {"long int", "s32"},
+    // {"signed long", "s32"},
+    // {"signed long int", "s32"},
+    // {"unsigned long", "u32"},
+    // {"unsigned long int", "u32"},
+    // {"long long unsigned int", "u64"},
+    // {"long long", "s64"},
+    // {"long long int", "s64"},
+    // {"signed long long", "s64"},
+    // {"signed long long int", "s64"},
+    // {"unsigned long long", "u64"},
+    // {"unsigned long long int", "u64"},
+    // {"long unsigned int", "u64"},
 };
 
 // ===== check types =====
@@ -262,8 +263,8 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   }
   default:
   {
-    // if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
-    //   return typeSwitchMap[dt.getName().str()];
+    if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
+      return typeSwitchMap[dt.getName().str()];
     return dt.getName().str();
   }
   }
