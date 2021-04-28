@@ -3,7 +3,7 @@
 using namespace llvm;
 
 static std::map<std::string, std::string> typeSwitchMap = {
-  {"int", "int64"}
+    {"int", "int64"}
     // {"_Bool", "bool"},
     // {"char", "s8"},
     // {"signed char", "s8"},
@@ -179,7 +179,7 @@ std::string pdg::dbgutils::getSourceLevelVariableName(DINode &di_node)
   return "";
 }
 
-std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
+std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw, bool enable_type_switch)
 {
   auto type_tag = dt.getTag();
   if (!type_tag)
@@ -263,7 +263,7 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   }
   default:
   {
-    if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
+    if (enable_type_switch && typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
       return typeSwitchMap[dt.getName().str()];
     return dt.getName().str();
   }

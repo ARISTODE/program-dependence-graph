@@ -15,31 +15,31 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _module = &M;
   _SDA = &getAnalysis<SharedDataAnalysis>();
   _PDG = _SDA->getPDG();
-  computeExportedFuncsPtrNameMap();
-  idl_file.open("kernel.idl");
-  // intra-procedural analysis
-  for (auto &F : M)
-  {
-    if (F.isDeclaration())
-      continue;
-    computeIntraProcDataAccess(F);
-    computeContainerOfLocs(F);
-    // computeInterProcDataAccess(F);
-  }
+  // computeExportedFuncsPtrNameMap();
+  // idl_file.open("kernel.idl");
+  // // intra-procedural analysis
+  // for (auto &F : M)
+  // {
+  //   if (F.isDeclaration())
+  //     continue;
+  //   computeIntraProcDataAccess(F);
+  //   computeContainerOfLocs(F);
+  //   // computeInterProcDataAccess(F);
+  // }
 
-  idl_file << "module kernel {\n";
-  for (auto F : _SDA->getBoundaryFuncs())
-  {
-    if (F->isDeclaration())
-      continue;
-    generateIDLForFunc(*F);
-  }
+  // idl_file << "module kernel {\n";
+  // for (auto F : _SDA->getBoundaryFuncs())
+  // {
+  //   if (F->isDeclaration())
+  //     continue;
+  //   generateIDLForFunc(*F);
+  // }
 
-  constructGlobalOpStructStr();
-  idl_file << _ops_struct_proj_str << "\n";
-  idl_file << "\n}";
-  errs() << "Finish analyzing data access info.";
-  idl_file.close();
+  // constructGlobalOpStructStr();
+  // idl_file << _ops_struct_proj_str << "\n";
+  // idl_file << "\n}";
+  // errs() << "Finish analyzing data access info.";
+  // idl_file.close();
   // printContainerOfStats();
   return false;
 }

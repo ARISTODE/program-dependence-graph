@@ -22,7 +22,7 @@ namespace pdg
     llvm::DIType *getGlobalVarDIType(llvm::GlobalVariable &gv);
     llvm::DIType *getFuncRetDIType(llvm::Function &F);
     std::string getSourceLevelVariableName(llvm::DINode &dt);
-    std::string getSourceLevelTypeName(llvm::DIType &dt, bool is_raw=false);
+    std::string getSourceLevelTypeName(llvm::DIType &dt, bool is_raw = false, bool enable_type_switch = false);
     std::string getSourceLevelTypeNameWithNoQualifer(llvm::DIType &dt);
     std::string getArgumentName(llvm::Argument &arg);
     std::set<llvm::DbgInfoIntrinsic *> collectDbgInstInFunc(llvm::Function &F);
