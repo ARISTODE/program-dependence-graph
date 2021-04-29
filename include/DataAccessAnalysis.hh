@@ -71,6 +71,7 @@ namespace pdg
     std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
     std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
     void printContainerOfStats();
+    DomainTag computeFuncDomainTag(llvm::Function &F);
     KSplitStats *getKSplitStats() { return _ksplit_stats; }
     SharedDataAnalysis *getSDA() { return _SDA; }
     ProgramGraph *getPDG() { return _PDG; }

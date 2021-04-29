@@ -44,7 +44,8 @@ namespace pdg
   enum class DomainTag
   {
     KERNEL_DOMAIN,
-    DRIVER_DOMAIN
+    DRIVER_DOMAIN,
+    NO_DOMAIN
   };
 }
 

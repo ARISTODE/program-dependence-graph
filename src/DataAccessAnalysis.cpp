@@ -198,6 +198,11 @@ std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Va
 
 void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node)
 {
+  auto func = tree_node.getFunc();
+  DomainTag boundary_func_domain_tag = DomainTag::NO_DOMAIN;
+  if (func != nullptr)
+    boundary_func_domain_tag = computeFuncDomainTag(*func);
+
   std::string parent_node_type_name = "";
   TreeNode *parent_node = tree_node.getParentNode();
   if (parent_node != nullptr)
@@ -206,7 +211,10 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   std::string field_var_name = dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
   bool is_sentinel_type = _SDA->isSentinelField(field_var_name);
   // special hanlding for function pointers and sentinel type
-  if (tree_node.getDIType() != nullptr && (dbgutils::isFuncPointerType(*tree_node.getDIType()) || is_sentinel_type))
+  if (is_sentinel_type)
+    tree_node.addAccessTag(AccessTag::DATA_READ);
+
+  if (tree_node.getDIType() != nullptr && (dbgutils::isFuncPointerType(*tree_node.getDIType())))
   {
     std::string func_ptr_name = parent_node_type_name + "_" + field_var_name;
     if (_exported_funcs_ptr_name_map.find(func_ptr_name) != _exported_funcs_ptr_name_map.end())
@@ -227,6 +235,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   {
     if (Instruction *i = dyn_cast<Instruction>(addr_var))
     {
+      
       if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
         continue;
     }
@@ -245,7 +254,13 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
     {
       if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
       {
+        auto inst_func = i->getFunction();
+        DomainTag func_tag = computeFuncDomainTag(*inst_func);
+        // assumption when computing access for global variable
         if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
+          continue;
+        // optimization for cross domain data accesses
+        if (boundary_func_domain_tag != DomainTag::NO_DOMAIN && func_tag != boundary_func_domain_tag)
           continue;
       }
       auto acc_tags = computeDataAccessTagsForVal(*n->getValue());
@@ -908,6 +923,14 @@ void pdg::KSplitStats::printStats()
   errs() << "non void wild ptr num: " << _non_void_wild_ptr_num << "\n";
   errs() << "void wild ptr num: " << _void_wild_ptr_num << "\n";
   errs() << "unknown num: " << _unknown_ptr_num << "\n";
+}
+
+pdg::DomainTag pdg::DataAccessAnalysis::computeFuncDomainTag(Function &F)
+{
+  if (_SDA->isDriverFunc(F))
+    return DomainTag::DRIVER_DOMAIN;
+  else 
+    return DomainTag::KERNEL_DOMAIN;
 }
 
 static RegisterPass<pdg::DataAccessAnalysis>
