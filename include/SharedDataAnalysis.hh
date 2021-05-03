@@ -29,6 +29,7 @@ namespace pdg
     std::set<std::string> &getSentinelFields() { return _sentinel_fields; }
     bool isSentinelField(std::string &s) { return _sentinel_fields.find(s) != _sentinel_fields.end(); }
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
+    std::set<llvm::Function *> computeBoundaryTransitiveClosure();
     void computeSharedStructDITypes();
     void computeGlobalStructTypeNames();
     void buildTreesForSharedStructDIType(llvm::Module &M);
@@ -55,6 +56,7 @@ namespace pdg
   private:
     ProgramGraph *_PDG;
     llvm::Module* _module;
+    PDGCallGraph* _call_graph;
     std::set<llvm::GlobalVariable *> _shared_global_vars;
     std::set<llvm::DIType *> _shared_struct_di_types;
     std::set<llvm::Function *> _driver_domain_funcs;

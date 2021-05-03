@@ -15,4 +15,11 @@
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+
+// opt option shared among passes
+namespace pdg
+{
+  extern bool EnableAnalysisStats;
+}
+
 #endif

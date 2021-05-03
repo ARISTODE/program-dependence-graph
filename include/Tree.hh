@@ -23,6 +23,8 @@ namespace pdg
       void setParentTreeNode(TreeNode *parent_node) { _parent_node = parent_node; }
       void setDILocalVariable(llvm::DILocalVariable &di_local_var) { _di_local_var = &di_local_var; }
       void addAddrVar(llvm::Value &v) { _addr_vars.insert(&v); }
+      void setCanOptOut(bool can_opt_out) { _can_opt_out = can_opt_out; }
+      bool getCanOptOut() { return _can_opt_out; }
       std::vector<TreeNode *> &getChildNodes() { return _children; }
       std::unordered_set<llvm::Value *> &getAddrVars() { return _addr_vars; }
       void computeDerivedAddrVarsFromParent();
@@ -50,6 +52,7 @@ namespace pdg
       std::unordered_set<llvm::Value *> _addr_vars;
       std::set<AccessTag> _acc_tag_set;
       bool _is_accessed_in_atomic_region = false;
+      bool _can_opt_out = false;
       std::string _alloc_str;
   };
 

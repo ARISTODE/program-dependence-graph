@@ -36,6 +36,8 @@ namespace pdg
     void printWarningCS(CSPair cs_pair, llvm::Value &v, llvm::Function &f, std::set<std::string> &modified_names, std::string source_type);
     void printWarningAtomicOp(llvm::Instruction &i, std::set<std::string> &modified_names, std::string source_type);
     bool isLockInst(llvm::Instruction &i);
+    bool isRcuLockInst(llvm::Instruction &i); // only read is counted for now
+    bool isSeqLockInst(llvm::Instruction &i);
     bool isUnlockInst(llvm::Instruction &i, std::string lock_inst_name);
     bool isAtomicAsmString(std::string str);
     bool isAtomicOperation(llvm::Instruction &i);
@@ -49,10 +51,12 @@ namespace pdg
     std::set<llvm::Instruction*> computeInstsInCS(CSPair cs_pair);
     std::set<llvm::Function *> getFuncsNeedSynStubGen() { return _funcs_need_sync_stub_gen; }
     bool isFuncNeedSyncStubGen(llvm::Function &F) { return _funcs_need_sync_stub_gen.find(&F) == _funcs_need_sync_stub_gen.end(); }
+    DataAccessAnalysis *getDAA() { return _DAA; }
 
   private:
-    SharedDataAnalysis* _SDA;
-    DataAccessAnalysis* _DAA;
+    SharedDataAnalysis *_SDA;
+    DataAccessAnalysis *_DAA;
+    KSplitStats *_ksplit_stats;
     CSMap _critical_sections;
     LockMap _lock_map;
     AtomicOpSet _atomic_operations;
@@ -62,8 +66,8 @@ namespace pdg
     int _warning_atomic_op_count;
     int _cs_warning_count;
     std::set<std::string> _processed_func_names;
-    std::set<llvm::Function*> _funcs_need_sync_stub_gen;
-    std::map<llvm::Instruction*, Tree*> _sync_data_inst_tree_map;
+    std::set<llvm::Function *> _funcs_need_sync_stub_gen;
+    std::map<llvm::Instruction *, Tree *> _sync_data_inst_tree_map;
     std::ofstream _sync_stub_file;
   };
 } // namespace pdg

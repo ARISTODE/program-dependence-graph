@@ -31,6 +31,7 @@ namespace pdg
     std::set<llvm::DbgInfoIntrinsic *> collectDbgInstInFunc(llvm::Function &F);
     std::set<llvm::DIType*> computeContainedStructTypes(llvm::DIType &dt);
     std::string getFuncSigName(llvm::DIType &dt, llvm::Function &F, std::string func_ptr_name);
+    unsigned computeDeepCopyFields(llvm::DIType &dt, bool only_count_pointer = false);
   } // namespace dbgutils
 } // namespace pdg
 

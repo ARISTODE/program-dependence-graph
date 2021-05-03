@@ -14,6 +14,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
 {
   _module = &M;
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
+  _call_graph = &PDGCallGraph::getInstance();
   // read driver/kernel domian funcs
   setupStrOps();
   readSentinelFields();
@@ -30,7 +31,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   computeSharedGlobalVars();
-  dumpSharedFieldID();
+  // dumpSharedFieldID();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
@@ -77,6 +78,14 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
 {
   auto imported_funcs = readFuncsFromFile("imported_funcs", M);
   auto exported_funcs = readFuncsFromFile("exported_funcs", M);
+
+  if (EnableAnalysisStats)
+  {
+    errs() << "=============== Driver Interface Complexity ================\n";
+    errs() << "Driver - Kernel: " << imported_funcs.size() << "\n";
+    errs() << "Kernel - Driver: " << exported_funcs.size() << "\n";
+  }
+
   _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
   _boundary_funcs.insert(exported_funcs.begin(), exported_funcs.end());
   for (auto bf : _boundary_funcs)
@@ -99,6 +108,23 @@ std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file
     ret.insert(f);
   }
   return ret;
+}
+
+std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
+{
+  std::set<Function*> boundary_trans_funcs;
+  for (auto boundary_func : _boundary_funcs)
+  {
+    auto func_node = _call_graph->getNode(*boundary_func);
+    assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
+    auto trans_func_nodes = _call_graph->computeTransitiveClosure(*func_node);
+    for (auto n : trans_func_nodes)
+    {
+      if (Function *trans_func = dyn_cast<Function>(n->getValue()))
+        boundary_trans_funcs.insert(trans_func);
+    }
+  }
+  return boundary_trans_funcs;
 }
 
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()

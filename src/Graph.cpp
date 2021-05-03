@@ -86,7 +86,6 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, 
   return ret;
 }
 
-
 // PDG Specific
 void pdg::ProgramGraph::build(Module &M)
 {

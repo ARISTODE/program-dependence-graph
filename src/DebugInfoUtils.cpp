@@ -518,3 +518,42 @@ std::set<DbgInfoIntrinsic *> pdg::dbgutils::collectDbgInstInFunc(Function &F)
   }
   return ret;
 }
+
+unsigned pdg::dbgutils::computeDeepCopyFields(DIType &dt, bool only_count_pointer)
+{
+  std::queue<DIType*> type_queue;
+  std::set<DIType*> seen_types;
+  type_queue.push(&dt);
+  unsigned field_num = 0;
+  while (!type_queue.empty())
+  {
+    DIType* cur_dt = type_queue.front();
+    type_queue.pop();
+    DIType* lowest_dt = getLowestDIType(*cur_dt);
+    if (lowest_dt == nullptr || !isStructType(*lowest_dt))
+      continue;
+    if (seen_types.find(lowest_dt) != seen_types.end())
+      continue;
+    seen_types.insert(lowest_dt);
+    auto di_node_arr = dyn_cast<DICompositeType>(lowest_dt)->getElements();
+    for (unsigned i = 0; i < di_node_arr.size(); ++i)
+    {
+      DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
+      DIType *field_lowest_di_type = getLowestDIType(*field_di_type);
+
+      if (only_count_pointer)
+      {
+        if (isPointerType(*field_di_type))
+          field_num++;
+      }
+      else
+        field_num++;
+
+      if (field_lowest_di_type == nullptr)
+        continue;
+      if (isStructType(*field_lowest_di_type))
+        type_queue.push(field_lowest_di_type);
+    }
+  }
+  return field_num;
+}

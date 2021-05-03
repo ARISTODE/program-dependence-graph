@@ -22,7 +22,7 @@
 
 #include "llvm/IR/DerivedTypes.h"
 #include "AnalysisState.hpp"
-#include "DataAccessAnalysis.hh"
+#include "AtomicRegionAnalysis.hh"
 
 #include <list>
 #include <time.h>
@@ -95,6 +95,7 @@ namespace NesCheck
     std::set<Value *> WildPtrs;
     std::set<Value *> UnknownPtrs;
     std::set<pdg::Node *> ProcessedNodes;
+    pdg::AtomicRegionAnalysis *_ARA;
     pdg::DataAccessAnalysis *_DDA;
     pdg::ProgramGraph* _PDG;
     std::set<std::string> BoundaryFuncNames;
@@ -1193,7 +1194,8 @@ namespace NesCheck
     bool runOnModule(Module &M) override
     {
       bool changed = false;
-      _DDA = &getAnalysis<pdg::DataAccessAnalysis>();
+      _ARA = &getAnalysis<pdg::AtomicRegionAnalysis>();
+      _DDA = _ARA->getDAA();
       _PDG = _DDA->getPDG();
       BoundaryFuncNames = _DDA->getSDA()->getBoundaryFuncNames();
 
@@ -1295,7 +1297,9 @@ namespace NesCheck
         // analyze all functions and populate Instrumentation WorkList
         analyzeFunction(F);
       }
-      _DDA->getKSplitStats()->printStats();
+      
+      if (pdg::EnableAnalysisStats)
+        _DDA->getKSplitStats()->printStats();
       // dumpRecordedTypes();
       printStats();
       return changed;
@@ -1304,7 +1308,7 @@ namespace NesCheck
     void getAnalysisUsage(AnalysisUsage &AU) const override
     {
       AU.addRequired<TargetLibraryInfoWrapperPass>();
-      AU.addRequired<pdg::DataAccessAnalysis>();
+      AU.addRequired<pdg::AtomicRegionAnalysis>();
     }
   };
   char NesCheckPass::ID = 0;

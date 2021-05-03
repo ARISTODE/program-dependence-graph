@@ -4,7 +4,12 @@
 using namespace llvm;
 
 char pdg::ProgramDependencyGraph::ID = 0;
-llvm::cl::opt<bool> FieldSensitive("fs", llvm::cl::desc("Field Sensitive"), llvm::cl::value_desc("field_sensitive"), llvm::cl::init(true));
+
+cl::opt<bool> FieldSensitive("fs", cl::desc("Field Sensitive"), cl::value_desc("field_sensitive"), cl::init(true));
+
+bool pdg::EnableAnalysisStats;
+
+cl::opt<bool, true> EAS("analysis-stats", cl::desc("enable printing analysis stats"), cl::value_desc("analysis_stats"), cl::location(pdg::EnableAnalysisStats), cl::init(false));
 
 void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {
@@ -58,28 +63,29 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   }
 
   errs() << "func size: " << func_size << "\n";
-  errs() << "Finsh adding dependencies" << "\n";
+  errs() << "Finsh adding dependencies"
+         << "\n";
   auto stop = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-  errs() << "building PDG takes: " <<  duration.count() << "\n";
+  errs() << "building PDG takes: " << duration.count() << "\n";
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
   return false;
 }
 
-void pdg::ProgramDependencyGraph::connectInTrees(Tree* src_tree, Tree* dst_tree, EdgeType edge_type)
+void pdg::ProgramDependencyGraph::connectInTrees(Tree *src_tree, Tree *dst_tree, EdgeType edge_type)
 {
   if (src_tree->size() != dst_tree->size())
     return;
   auto src_tree_root_node = src_tree->getRootNode();
   auto dst_tree_root_node = dst_tree->getRootNode();
-  std::queue<std::pair<TreeNode*, TreeNode*>> node_pairs_queue;
+  std::queue<std::pair<TreeNode *, TreeNode *>> node_pairs_queue;
   node_pairs_queue.push(std::make_pair(src_tree_root_node, dst_tree_root_node));
   while (!node_pairs_queue.empty())
   {
     auto current_node_pair = node_pairs_queue.front();
     node_pairs_queue.pop();
-    TreeNode* src = current_node_pair.first;
-    TreeNode* dst = current_node_pair.second;
+    TreeNode *src = current_node_pair.first;
+    TreeNode *dst = current_node_pair.second;
     assert(src->numOfChild() == dst->numOfChild());
     src->addNeighbor(*dst, edge_type);
     auto src_node_children = src->getChildNodes();
@@ -91,20 +97,20 @@ void pdg::ProgramDependencyGraph::connectInTrees(Tree* src_tree, Tree* dst_tree,
   }
 }
 
-void pdg::ProgramDependencyGraph::connectOutTrees(Tree* src_tree, Tree* dst_tree, EdgeType edge_type)
+void pdg::ProgramDependencyGraph::connectOutTrees(Tree *src_tree, Tree *dst_tree, EdgeType edge_type)
 {
   if (src_tree->size() != dst_tree->size())
     return;
   auto src_tree_root_node = src_tree->getRootNode();
   auto dst_tree_root_node = dst_tree->getRootNode();
-  std::queue<std::pair<TreeNode*, TreeNode*>> node_pairs_queue;
+  std::queue<std::pair<TreeNode *, TreeNode *>> node_pairs_queue;
   node_pairs_queue.push(std::make_pair(src_tree_root_node, dst_tree_root_node));
   while (!node_pairs_queue.empty())
   {
     auto current_node_pair = node_pairs_queue.front();
     node_pairs_queue.pop();
-    TreeNode* src = current_node_pair.first;
-    TreeNode* dst = current_node_pair.second;
+    TreeNode *src = current_node_pair.first;
+    TreeNode *dst = current_node_pair.second;
     assert(src->numOfChild() == dst->numOfChild());
     if (src->hasWriteAccess())
       src->addNeighbor(*dst, edge_type);
@@ -122,7 +128,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   // step 1: connect call site node with the entry node of function
   auto call_site_node = _PDG->getNode(*cw.getCallInst());
   auto func_entry_node = fw.getEntryNode();
-  if (call_site_node == nullptr || func_entry_node == nullptr )
+  if (call_site_node == nullptr || func_entry_node == nullptr)
     return;
   call_site_node->addNeighbor(*func_entry_node, EdgeType::CALL);
   // don't expand field sensitive connection if not specified
@@ -137,13 +143,13 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   for (int i = 0; i < num_arg; i++)
   {
     Value *actual_arg = actual_arg_list[i];
-    Argument *formal_arg =  formal_arg_list[i];
+    Argument *formal_arg = formal_arg_list[i];
     // step 2: connect actual in -> formal in
     auto actual_in_tree = cw.getArgActualInTree(*actual_arg);
     auto formal_in_tree = fw.getArgFormalInTree(*formal_arg);
     _PDG->addTreeNodesToGraph(*actual_in_tree);
     connectInTrees(actual_in_tree, formal_in_tree, EdgeType::PARAMETER_IN);
-    
+
     // step 3: connect actual out -> formal out
     auto actual_out_tree = cw.getArgActualOutTree(*actual_arg);
     auto formal_out_tree = fw.getArgFormalOutTree(*formal_arg);
@@ -182,14 +188,14 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
   // TODO: Figure out why control pass will run automatically.
   getAnalysis<ControlDependencyGraph>(F); // add data dependencies for nodes in F
   // connect formal tree with address variables
-  FunctionWrapper* func_w = getFuncWrapper(F);
-  Node* entry_node = func_w->getEntryNode();
+  FunctionWrapper *func_w = getFuncWrapper(F);
+  Node *entry_node = func_w->getEntryNode();
   for (auto arg : func_w->getArgList())
   {
-    Tree* formal_in_tree = func_w->getArgFormalInTree(*arg);
+    Tree *formal_in_tree = func_w->getArgFormalInTree(*arg);
     if (!formal_in_tree)
       return;
-    Tree* formal_out_tree = func_w->getArgFormalOutTree(*arg);
+    Tree *formal_out_tree = func_w->getArgFormalOutTree(*arg);
 
     entry_node->addNeighbor(*formal_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
     entry_node->addNeighbor(*formal_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);
@@ -253,19 +259,19 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
 // ====== connect tree with variables ======
 void pdg::ProgramDependencyGraph::connectGlobalTreeWithAddrVars(Tree &global_var_tree)
 {
-  TreeNode* root_node = global_var_tree.getRootNode();
-  std::queue<TreeNode*> node_queue;
+  TreeNode *root_node = global_var_tree.getRootNode();
+  std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
-  
+
   while (!node_queue.empty())
   {
-    TreeNode* current_node = node_queue.front();
+    TreeNode *current_node = node_queue.front();
     node_queue.pop();
-    TreeNode* parent_node = current_node->getParentNode();
-    std::unordered_set<Value*> parent_node_addr_vars;
+    TreeNode *parent_node = current_node->getParentNode();
+    std::unordered_set<Value *> parent_node_addr_vars;
     if (parent_node != nullptr)
       parent_node_addr_vars = parent_node->getAddrVars();
-    
+
     for (auto addr_var : current_node->getAddrVars())
     {
       if (!_PDG->hasNode(*addr_var))
@@ -275,7 +281,7 @@ void pdg::ProgramDependencyGraph::connectGlobalTreeWithAddrVars(Tree &global_var
       auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
       for (auto alias_node : alias_nodes)
       {
-        Value* alias_node_val = alias_node->getValue();
+        Value *alias_node_val = alias_node->getValue();
         if (alias_node_val == nullptr)
           continue;
         if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
@@ -299,19 +305,19 @@ void pdg::ProgramDependencyGraph::connectGlobalTreeWithAddrVars(Tree &global_var
 
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_in_tree)
 {
-  TreeNode* root_node = formal_in_tree.getRootNode();
-  std::queue<TreeNode*> node_queue;
+  TreeNode *root_node = formal_in_tree.getRootNode();
+  std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
-  
+
   while (!node_queue.empty())
   {
-    TreeNode* current_node = node_queue.front();
+    TreeNode *current_node = node_queue.front();
     node_queue.pop();
-    TreeNode* parent_node = current_node->getParentNode();
-    std::unordered_set<Value*> parent_node_addr_vars;
+    TreeNode *parent_node = current_node->getParentNode();
+    std::unordered_set<Value *> parent_node_addr_vars;
     if (parent_node != nullptr)
       parent_node_addr_vars = parent_node->getAddrVars();
-    
+
     for (auto addr_var : current_node->getAddrVars())
     {
       if (!_PDG->hasNode(*addr_var))
@@ -321,7 +327,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
       auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
       for (auto alias_node : alias_nodes)
       {
-        Value* alias_node_val = alias_node->getValue();
+        Value *alias_node_val = alias_node->getValue();
         if (alias_node_val == nullptr)
           continue;
         if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
@@ -334,34 +340,10 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
         current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
         current_node->addAddrVar(*alias_node_val);
       }
-      // check if the addr_var is used in call instruction
-      // if so, connect the tree node with the actual tree of the call
-      // auto call_out_neighbors = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_DEF_USE);
-      // for (auto call_node : call_out_neighbors)
-      // {
-      //   if (call_node->getValue() != nullptr)
-      //   {
-      //     if (CallInst *ci = dyn_cast<CallInst>(call_node->getValue()))
-      //     {
-      //       auto called_func = pdgutils::getCalledFunc(*ci);
-      //       if (called_func != nullptr && !called_func->isDeclaration())
-      //       {
-      //         auto call_wrapper = getCallWrapper(*ci);
-      //         Tree* arg_actual_in_tree = call_wrapper->getArgActualInTree(*addr_var);
-      //         if (arg_actual_in_tree != nullptr)
-      //         {
-      //           auto arg_actual_in_tree_root_node = arg_actual_in_tree->getRootNode();
-      //           if (arg_actual_in_tree_root_node != nullptr)
-      //             connectTreeNode(*current_node, *arg_actual_in_tree_root_node, EdgeType::PARAMETER_IN);
-      //         }
-      //       }
-      //     }
-      //   }
-      // }
     }
-    
+
     // stop connecting rest nodes with addr vars if not field sensitive
-    if (!FieldSensitive) 
+    if (!FieldSensitive)
       break;
     for (auto child_node : current_node->getChildNodes())
     {
@@ -392,7 +374,7 @@ void pdg::ProgramDependencyGraph::connectFormalOutTreeWithAddrVars(Tree &formal_
       }
     }
 
-    if(!FieldSensitive)
+    if (!FieldSensitive)
       break;
     for (auto child_node : current_node->getChildNodes())
     {
@@ -404,7 +386,7 @@ void pdg::ProgramDependencyGraph::connectFormalOutTreeWithAddrVars(Tree &formal_
 void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actual_in_tree, CallInst &ci)
 {
   TreeNode *root_node = actual_in_tree.getRootNode();
-  std::set<Instruction*> insts_before_ci = pdgutils::getInstructionBeforeInst(ci);
+  std::set<Instruction *> insts_before_ci = pdgutils::getInstructionBeforeInst(ci);
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
   while (!node_queue.empty())
@@ -511,16 +493,16 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithActualTree(Function &F)
 
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &formal_in_tree)
 {
-  TreeNode* root_node = formal_in_tree.getRootNode();
-  std::queue<TreeNode*> node_queue;
+  TreeNode *root_node = formal_in_tree.getRootNode();
+  std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
-   
+
   while (!node_queue.empty())
   {
-    TreeNode* current_node = node_queue.front();
+    TreeNode *current_node = node_queue.front();
     node_queue.pop();
-    TreeNode* parent_node = current_node->getParentNode();
-    std::unordered_set<Value*> parent_node_addr_vars;
+    TreeNode *parent_node = current_node->getParentNode();
+    std::unordered_set<Value *> parent_node_addr_vars;
     if (parent_node != nullptr)
       parent_node_addr_vars = parent_node->getAddrVars();
     for (auto addr_var : current_node->getAddrVars())
@@ -541,7 +523,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
             if (called_func != nullptr && !called_func->isDeclaration())
             {
               auto call_wrapper = getCallWrapper(*ci);
-              Tree* arg_actual_in_tree = call_wrapper->getArgActualInTree(*addr_var);
+              Tree *arg_actual_in_tree = call_wrapper->getArgActualInTree(*addr_var);
               if (arg_actual_in_tree != nullptr)
               {
                 auto arg_actual_in_tree_root_node = arg_actual_in_tree->getRootNode();
@@ -556,7 +538,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
       }
     }
     // stop connecting rest nodes with addr vars if not field sensitive
-    if (!FieldSensitive) 
+    if (!FieldSensitive)
       break;
     for (auto child_node : current_node->getChildNodes())
     {

@@ -10,6 +10,7 @@ namespace pdg
   {
   public:
     KSplitStats() = default;
+    void increaseTotalPtrNum(unsigned num = 0) { _total_ptr_num = (num == 0 ? _total_ptr_num + 1 : _total_ptr_num + num); }
     void increaseSharedPtrNum() { _shared_ptr_num++; }
     void increaseSafePtrNum() { _safe_ptr_num++; }
     void increaseVoidPtrNum() { _void_ptr_num++; }
@@ -21,6 +22,30 @@ namespace pdg
     void increaseNonVoidWildPtrNum() { _non_void_wild_ptr_num++; }
     void increaseVoidWildPtrNum() { _void_wild_ptr_num++; }
     void increaseUnknownPtrNum() { _unknown_ptr_num++; }
+    void increaseFieldsDeepCopy(unsigned num = 0) { _fields_deep_copy = (num == 0 ? _fields_deep_copy + 1 : _fields_deep_copy + num); }
+    void increaseFieldsFieldAccess() { _fields_field_analysis++; }
+    void increaseFieldsSharedData() { _fields_shared_analysis++; }
+    void increaseFieldsBoundaryOpt() { _fields_removed_boundary_opt++; }
+    void increaseTotalUnionNum() { _total_union_num++; }
+    void increaseSharedUnionNum() { _shared_union_num++; }
+    void increaseTotalCS() { _total_CS++; }
+    void increaseSharedCS() { _shared_CS++; }
+    void increaseTotalAtomicOps() { _total_atomic_op++; }
+    void increaseSharedAtomicOps() { _shared_atomic_op++; }
+    void increaseTotalRCU() { _total_rcu++; }
+    void increaseSharedRCU() { _shared_rcu++; }
+    void increaseTotalSeqlock() { _total_seqlock++; }
+    void increaseSharedSeqlock() { _shared_seqlock++; }
+    void increaseTotalNestLock() { _total_nest_lock++; }
+    void increaseSharedNestLock() { _shared_nest_lock++; }
+    void increasePrivateBarrier() { _private_barrier++; }
+    void increaseSharedBarrier() { _shared_barrier++; }
+    void increaseTotalBitfield() { _total_bitfield++; }
+    void increaseSharedBitfield() { _shared_bitfield++; }
+    void increaseTotalContainerof() { _total_containerof++; }
+    void increaseSharedContainerof() { _shared_containerof++; }
+    void increaseTotalIORemap() { _total_ioremap++; }
+    void increaseSharedIORemap() { _shared_ioremap++; }
     void collectStats(llvm::DIType &dt, std::set<std::string> &annotations);
     void printStats();
 
@@ -37,6 +62,33 @@ namespace pdg
     unsigned _void_wild_ptr_num = 0;
     unsigned _unknown_ptr_num = 0;
     unsigned _func_ptr_num = 0;
+    // fields analysis stats
+    int _fields_deep_copy = 0;
+    int _fields_field_analysis = 0;
+    int _fields_shared_analysis = 0;
+    int _fields_removed_boundary_opt = 0;
+    // shared / private stats
+    unsigned _total_ptr_num = 0;
+    unsigned _total_union_num = 0;
+    unsigned _shared_union_num = 0;
+    unsigned _total_CS = 0;
+    unsigned _shared_CS = 0;
+    unsigned _total_atomic_op = 0;
+    unsigned _shared_atomic_op = 0;
+    unsigned _total_rcu = 0;
+    unsigned _shared_rcu = 0;
+    unsigned _total_seqlock = 0;
+    unsigned _shared_seqlock = 0;
+    unsigned _total_nest_lock = 0;
+    unsigned _shared_nest_lock = 0;
+    unsigned _private_barrier = 0;
+    unsigned _shared_barrier = 0;
+    unsigned _total_bitfield = 0;
+    unsigned _shared_bitfield = 0;
+    unsigned _total_containerof = 0;
+    unsigned _shared_containerof = 0;
+    unsigned _total_ioremap = 0;
+    unsigned _shared_ioremap = 0;
   };
 
   class DataAccessAnalysis : public llvm::ModulePass
@@ -64,7 +116,7 @@ namespace pdg
     void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
-    std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node);
+    std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
     bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
     bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);
     std::string computeAllocCallerAnnotation(TreeNode &tree_node);
@@ -92,6 +144,7 @@ namespace pdg
     KSplitStats *_ksplit_stats;
     std::string _current_processing_func = "";
     std::set<std::string> _driver_defined_globalvar_names;
+    std::set<Node*> _funcs_reachable_from_boundary;
   };
 }
 

@@ -15,6 +15,8 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   _DAA = &getAnalysis<DataAccessAnalysis>();
   _SDA = _DAA->getSDA();
   _sync_stub_file.open("cs_sync.idl");
+  _ksplit_stats = _DAA->getKSplitStats();
+  _funcs_need_sync_stub_gen = _SDA->computeBoundaryTransitiveClosure();
   // _call_graph = &getAnalysis<CallGraphWrapperPass>().getCallGraph();
   _warning_cs_count = 0;
   _warning_atomic_op_count = 0;
@@ -26,11 +28,14 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   computeWarningCS();
   computeWarningAtomicOps();
 
+  if (EnableAnalysisStats)
+    _ksplit_stats->printStats();
+
   _sync_stub_file << "syn_stub_kernel {\n";
   for (auto tree_pair : _sync_data_inst_tree_map)
   {
-    Tree* tree = tree_pair.second;
-    Instruction* cs_begin_inst = tree_pair.first;
+    Tree *tree = tree_pair.second;
+    Instruction *cs_begin_inst = tree_pair.first;
     auto root_node = tree->getRootNode();
     auto di_type = root_node->getDIType();
     auto di_type_name = dbgutils::getSourceLevelTypeName(*di_type, true);
@@ -54,12 +59,11 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
     _sync_stub_file << "\trpc shared_lock_end( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << write_proj_str.str();
     _sync_stub_file << "\t};\n";
-
   }
   _sync_stub_file << "}\n";
   _sync_stub_file.close();
-  errs() << "CS Warning: " << _warning_cs_count << "/" << _critical_sections.size() << "\n";
-  errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << "/" << _atomic_operations.size() << "\n";
+  errs() << "CS Warning: " << _warning_cs_count << " / " << _critical_sections.size() << "\n";
+  errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << " / " << _atomic_operations.size() << "\n";
   return false;
 }
 
@@ -69,6 +73,8 @@ void pdg::AtomicRegionAnalysis::setupLockMap()
   _lock_map.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
   _lock_map.insert(std::make_pair("rcu_read_lock", "rcu_read_unlock"));
+  _lock_map.insert(std::make_pair("read_seqcount_begin", "read_seqcount_retry"));
+  _lock_map.insert(std::make_pair("write_seqcount_begin", "write_seqcount_end"));
 }
 
 void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)
@@ -125,7 +131,7 @@ pdg::AtomicRegionAnalysis::CSMap pdg::AtomicRegionAnalysis::computeCSInFunc(Func
     // 1. find all lock instruction that call to acquire a lock
     if (!isLockInst(*inst_iter))
       continue;
-    CallInst* lock_call_inst = cast<CallInst>(&*inst_iter);
+    CallInst *lock_call_inst = cast<CallInst>(&*inst_iter);
     // 2. find reachable unlock insts
     std::vector<Instruction *> unlock_insts;
     for (auto tmp_inst_iter = inst_iter; tmp_inst_iter != inst_end(F); tmp_inst_iter++)
@@ -146,25 +152,41 @@ pdg::AtomicRegionAnalysis::CSMap pdg::AtomicRegionAnalysis::computeCSInFunc(Func
 
 void pdg::AtomicRegionAnalysis::computeCriticalSections(Module &M)
 {
-  for (auto &F : M)
+  for (auto F : _funcs_need_sync_stub_gen)
   {
-    if (F.isDeclaration())
+    if (F->isDeclaration())
       continue;
-    auto cs_in_func = computeCSInFunc(F); // find cs in each defined functions
+    auto cs_in_func = computeCSInFunc(*F); // find cs in each defined functions
     _critical_sections.insert(cs_in_func.begin(), cs_in_func.end());
+    if (EnableAnalysisStats)
+    {
+      for (auto cs : cs_in_func)
+      {
+        _ksplit_stats->increaseTotalCS();
+        auto cs_lock_inst = cast<CallInst>(cs.first);
+        if (isRcuLockInst(*cs_lock_inst))
+          _ksplit_stats->increaseTotalRCU();
+        if (isSeqLockInst(*cs_lock_inst))
+          _ksplit_stats->increaseTotalSeqlock();
+      }
+    }
   }
 }
 
 void pdg::AtomicRegionAnalysis::computeAtomicOperations(Module &M)
 {
-  for (auto &F : M)
+  for (auto F : _funcs_need_sync_stub_gen)
   {
-    if (F.isDeclaration())
+    if (F->isDeclaration())
       continue;
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
       if (isAtomicOperation(*inst_iter))
+      {
         _atomic_operations.insert(&*inst_iter);
+        if (EnableAnalysisStats)
+          _ksplit_stats->increaseTotalAtomicOps();
+      }
     }
   }
 }
@@ -204,10 +226,21 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
   for (auto cs_pair : _critical_sections)
   {
     bool cs_warning = false;
+    bool has_nested_lock = false;
     auto insts_in_cs = computeInstsInCS(cs_pair);
     // errs() << "Critical Section found in func: " << cs_pair.first->getFunction()->getName() << "\n";
     for (auto inst : insts_in_cs)
     {
+      // detect nested lock here
+      if (EnableAnalysisStats)
+      {
+        if (isLockInst(*inst))
+        {
+          _ksplit_stats->increaseTotalNestLock();
+          has_nested_lock = true;
+        }
+      }
+
       std::set<std::string> modified_names;
       Value *accessed_val = nullptr;
       if (LoadInst *li = dyn_cast<LoadInst>(inst))
@@ -226,6 +259,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       auto alias_boundary_ptrs = computeBoundaryAliasPtrs(*accessed_val);
       if (!alias_boundary_ptrs.empty())
       {
+        cs_warning = true;
         for (auto in_neighbor : accessed_node->getInNeighborsWithDepType(EdgeType::PARAMETER_IN))
         {
           TreeNode *formal_param_in_node = (TreeNode *)in_neighbor;
@@ -234,53 +268,21 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
             _sync_data_inst_tree_map.insert(std::make_pair(cs_pair.first, formal_param_in_node->getTree()));
         }
       }
-      //   printWarningCS(cs_pair, *modified_val, *f, modified_names, "ALIAS");
-      //   errs() << " ===================== ALIAS PTR ================\n";
-      //   for (auto alias_ptr : alias_boundary_ptrs)
-      //   {
-      //     if (Argument *arg = dyn_cast<Argument>(alias_ptr))
-      //     {
-      //       Function *boundary_func = arg->getParent();
-      //       errs() << boundary_func->getName() << ": " << arg->getArgNo() << " | " << *arg << "\n";
-      //       auto n1 = CG.getNode(*boundary_func);
-      //       auto n2 = CG.getNode(*f);
-      //       if (!n1 || !n2)
-      //         continue;
-      //       // CG.printPaths(*n1, *n2);
-      //     }
-      //   }
-      //   errs() << " ================================================\n";
-      //   _cs_warning_count++;
-      //   cs_warning = true;
-      // }
-      // scenerio 2: check if a modifed value matches shared states naming info
-      // else
-      // {
-      // bool is_addr_var = false;
-      // bool is_shared = false;
-      // for (auto in_edge : val_node->getInEdgeSet())
-      // {
-      //   if (in_edge->getEdgeType() == EdgeType::VAL_DEP)
-      //   {
-      //     is_addr_var = true;
-      //     TreeNode *tree_node = static_cast<TreeNode *>(in_edge->getSrcNode());
-      //     if (_SDA->isSharedFieldID(pdgutils::computeTreeNodeID(*tree_node)))
-      //       is_shared = true;
-      //   }
-      //   if (is_addr_var && is_shared)
-      //     break;
-      // }
-      // if (!is_addr_var || !is_shared)
-      //   continue;
-
-      // printWarningCS(cs_pair, *modified_val, *f, modified_names, "TYPE");
-      // _cs_warning_count++;
-      cs_warning = true;
-      // }
     }
-    // compute the number of warning cs
-    if (cs_warning)
-      _warning_cs_count++;
+    // compute number of warning cs
+    if (EnableAnalysisStats)
+    {
+      if (cs_warning)
+      {
+        _ksplit_stats->increaseSharedCS();
+        if (isRcuLockInst(*cs_pair.first))
+          _ksplit_stats->increaseSharedRCU();
+        if (isSeqLockInst(*cs_pair.first))
+          _ksplit_stats->increaseSharedSeqlock();
+        if (has_nested_lock)
+          _ksplit_stats->increaseSharedNestLock();
+      }
+    }
   }
 }
 
@@ -316,7 +318,7 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
     alias_nodes.insert(in_alias.begin(), in_alias.end());
     for (auto alias_node : alias_nodes)
     {
-      errs() << "atomic warn: " << atomic_op->getFunction()->getName() << " - " << *alias_node->getValue() << "\n";
+      // errs() << "atomic warn: " << atomic_op->getFunction()->getName() << " - " << *alias_node->getValue() << "\n";
       for (auto in_edge : alias_node->getInEdgeSet())
       {
         if (in_edge->getEdgeType() != EdgeType::VAL_DEP)
@@ -332,7 +334,6 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           continue;
       }
 
-
       if (is_shared)
       {
         auto func_name = atomic_op->getFunction()->getName().str();
@@ -342,6 +343,9 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           _processed_func_names.insert(func_name);
           _warning_atomic_op_count++;
           printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
+
+          if (EnableAnalysisStats)
+            _ksplit_stats->increaseSharedAtomicOps();
         }
         break;
       }
@@ -382,6 +386,36 @@ bool pdg::AtomicRegionAnalysis::isLockInst(Instruction &i)
     std::string lock_call_name = called_func->getName().str();
     lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
     if (_lock_map.find(lock_call_name) != _lock_map.end())
+      return true;
+  }
+  return false;
+}
+
+bool pdg::AtomicRegionAnalysis::isRcuLockInst(Instruction &i)
+{
+  if (CallInst *ci = dyn_cast<CallInst>(&i))
+  {
+    auto called_func = pdgutils::getCalledFunc(*ci);
+    if (called_func == nullptr)
+      return false;
+    std::string lock_call_name = called_func->getName().str();
+    lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
+    if (lock_call_name == "rcu_read_lock")
+      return true;
+  }
+  return false;
+}
+
+bool pdg::AtomicRegionAnalysis::isSeqLockInst(Instruction &i)
+{
+  if (CallInst *ci = dyn_cast<CallInst>(&i))
+  {
+    auto called_func = pdgutils::getCalledFunc(*ci);
+    if (called_func == nullptr)
+      return false;
+    std::string lock_call_name = called_func->getName().str();
+    lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
+    if (lock_call_name == "read_seqcount_begin" || lock_call_name == "write_seqcount_begin")
       return true;
   }
   return false;
@@ -501,7 +535,7 @@ void pdg::AtomicRegionAnalysis::generateSyncStubForTree(Tree *tree, raw_string_o
 {
   if (!tree)
     return;
-  TreeNode* root_node = tree->getRootNode();
+  TreeNode *root_node = tree->getRootNode();
   DIType *root_node_di_type = root_node->getDIType();
   DIType *root_node_lowest_di_type = dbgutils::getLowestDIType(*root_node_di_type);
   if (!root_node_lowest_di_type || !dbgutils::isProjectableType(*root_node_lowest_di_type))
@@ -546,20 +580,20 @@ void pdg::AtomicRegionAnalysis::generateSyncStubForTree(Tree *tree, raw_string_o
       proj_var_name = proj_type_name;
     // concat ret preifx
     read_proj_str << "\t\tprojection_begin < struct "
-                    << proj_type_name
-                    << " > "
-                    << proj_var_name
-                    << " {\n"
-                    << nested_read_proj_str.str()
-                    << "\t\t}\n";
+                  << proj_type_name
+                  << " > "
+                  << proj_var_name
+                  << " {\n"
+                  << nested_read_proj_str.str()
+                  << "\t\t}\n";
 
     write_proj_str << "\t\t\tprojection_end < struct "
-                    << proj_type_name
-                    << " > "
-                    << proj_var_name
-                    << " {\n"
-                    << nested_write_proj_str.str()
-                    << "\t\t}\n";
+                   << proj_type_name
+                   << " > "
+                   << proj_var_name
+                   << " {\n"
+                   << nested_write_proj_str.str()
+                   << "\t\t}\n";
   }
 }
 
@@ -592,11 +626,11 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     // compute access attributes
-    auto annotations =  _DAA->inferTreeNodeAnnotations(tree_node);
+    auto annotations = _DAA->inferTreeNodeAnnotations(tree_node);
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
-    
+
     if (is_sentinel_field)
     {
       if (acc_tags.find(AccessTag::DATA_READ) != acc_tags.end())
@@ -612,12 +646,12 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
 
       if (acc_tags.find(AccessTag::DATA_READ) != acc_tags.end())
         read_proj_str << indent_level
-                              << "projection "
-                              << field_type_name
-                              << (field_type_name.back() == '*' ? "*" : " ")
-                              << " "
-                              << field_var_name
-                              << ";\n";
+                      << "projection "
+                      << field_type_name
+                      << (field_type_name.back() == '*' ? "*" : " ")
+                      << " "
+                      << field_var_name
+                      << ";\n";
       if (acc_tags.find(AccessTag::DATA_WRITE) != acc_tags.end())
         write_proj_str << indent_level
                        << "projection "
