@@ -742,7 +742,11 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
       auto ret_annotations = inferTreeNodeAnnotations(*ret_tree_formal_in_root_node, true);
 
       if (EnableAnalysisStats)
+      {
         _ksplit_stats->collectStats(*func_ret_di_type, ret_annotations);
+        if (dbgutils::isUnionPointerType(*func_ret_di_type) || dbgutils::isUnionType(*func_ret_di_type))
+          _ksplit_stats->increaseTotalUnionNum();
+      }
 
       for (auto anno : ret_annotations)
       {
@@ -815,7 +819,11 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
     rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + arg_name;
 
     if (EnableAnalysisStats)
+    {
       _ksplit_stats->collectStats(*arg_di_type, annotations);
+      if (dbgutils::isUnionPointerType(*arg_di_type) || dbgutils::isUnionType(*arg_di_type))
+        _ksplit_stats->increaseTotalUnionNum();
+    }
     if (pdgutils::isVoidPointerHasMultipleCasts(*root_node))
       _ksplit_stats->increaseUnhandledVoidPtrNum();
 

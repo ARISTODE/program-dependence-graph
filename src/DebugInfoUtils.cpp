@@ -35,7 +35,8 @@ static std::map<std::string, std::string> typeSwitchMap = {
 // ===== check types =====
 bool pdg::dbgutils::isPointerType(DIType &dt)
 {
-  auto d = stripAttributes(dt);
+  auto d = stripMemberTag(dt);
+  d = stripAttributes(*d);
   if (d == nullptr)
     return false;
   return (d->getTag() == dwarf::DW_TAG_pointer_type);
@@ -48,9 +49,11 @@ bool pdg::dbgutils::isStructType(DIType &dt)
 
 bool pdg::dbgutils::isUnionPointerType(DIType& dt)
 {
-  if (isPointerType(dt))
+  auto d = stripMemberTag(dt);
+  d = stripAttributes(*d);
+  if (isPointerType(*d))
   {
-    DIType *lowest_di_type = getLowestDIType(dt);
+    DIType *lowest_di_type = getLowestDIType(*d);
     if (lowest_di_type == nullptr)
       return false;
     if (isUnionType(*lowest_di_type))
@@ -61,7 +64,9 @@ bool pdg::dbgutils::isUnionPointerType(DIType& dt)
 
 bool pdg::dbgutils::isUnionType(DIType& dt)
 {
-  return (dt.getTag() == dwarf::DW_TAG_union_type);
+  auto d = stripMemberTag(dt);
+  d = stripAttributes(*d);
+  return (d->getTag() == dwarf::DW_TAG_union_type);
 }
 
 bool pdg::dbgutils::isStructPointerType(DIType &dt)
