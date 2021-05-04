@@ -81,9 +81,9 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
 
   if (EnableAnalysisStats)
   {
-    errs() << "=============== Driver Interface Complexity ================\n";
-    errs() << "Driver - Kernel: " << imported_funcs.size() << "\n";
-    errs() << "Kernel - Driver: " << exported_funcs.size() << "\n";
+    auto &ksplit = KSplitStats::getInstance();
+    ksplit.increaseKernelToDriverCallNum(exported_funcs.size());
+    ksplit.increaseDriverToKernelCallNum(imported_funcs.size());
   }
 
   _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
@@ -192,6 +192,23 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
 
         if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end() || is_driver_global_struct_type)
           _shared_struct_di_types.insert(lowest_di_type);
+      }
+    }
+  }
+
+  for (auto f : _boundary_funcs)
+  {
+    if (f->isDeclaration())
+      continue;
+    auto fw = _PDG->getFuncWrapper(*f);
+    for (auto arg : fw->getArgList())
+    {
+      auto arg_di_type = fw->getArgDIType(*arg);
+      auto arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
+      if (arg_lowest_di_type != nullptr)
+      {
+        if (dbgutils::isStructType(*arg_lowest_di_type))
+          _shared_struct_di_types.insert(arg_lowest_di_type);
       }
     }
   }

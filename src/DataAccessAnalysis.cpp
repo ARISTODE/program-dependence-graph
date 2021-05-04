@@ -27,7 +27,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _SDA = &getAnalysis<SharedDataAnalysis>();
   _PDG = _SDA->getPDG();
   _call_graph = &PDGCallGraph::getInstance();
-  _ksplit_stats = new KSplitStats();
+  _ksplit_stats = &KSplitStats::getInstance();
   computeExportedFuncsPtrNameMap();
   readDriverDefinedGlobalVarNames("driver_globalvar_names");
   _idl_file.open("kernel.idl");
@@ -51,16 +51,17 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     if (F->isDeclaration())
       continue;
     generateIDLForFunc(*F);
-    // if (EnableAnalysisStats)
-    // {
-    //   auto func_node = _call_graph->getNode(*F);
-    //   if (func_node != nullptr)
-    //   {
-    //     auto trans_closure = _call_graph->computeTransitiveClosure(*func_node);
-    //     _funcs_reachable_from_boundary.insert(trans_closure.begin(), trans_closure.end());
-    //   }
-    // }
+    if (EnableAnalysisStats)
+    {
+      auto func_node = _call_graph->getNode(*F);
+      if (func_node != nullptr)
+      {
+        auto trans_closure = _call_graph->computeTransitiveClosure(*func_node);
+        _funcs_reachable_from_boundary.insert(trans_closure.begin(), trans_closure.end());
+      }
+    }
   }
+  _ksplit_stats->increaseTotalFuncSize(_funcs_reachable_from_boundary.size());
 
   if (EnableAnalysisStats)
     errs() << "Funcs reachable from boundary: " << total_num_funcs << "\n";
@@ -82,10 +83,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 
   _idl_file << "\n}";
 
-  // if (EnableAnalysisStats)
-  // {
-  //   _ksplit_stats->printStats();
-  // }
   errs() << "Finish analyzing data access info.";
   _idl_file.close();
   return false;
@@ -807,6 +804,8 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
       arg_type_name = "rpc_ptr";
       arg_name = arg_name + " " + arg_name;
       // TODO: for function pointer that are not defined by global structs, we need to handle differently.
+      // if (_exported_funcs_ptr_name_map.find(arg_name) == _exported_funcs_ptr_name_map.end())
+      //   generateRpcStubForIndirectCall(*arg_di_type, arg_name);
     }
 
     auto annotations = inferTreeNodeAnnotations(*root_node);
@@ -832,6 +831,13 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
   }
   rpc_str += " ) ";
   _idl_file << rpc_str;
+}
+
+void pdg::DataAccessAnalysis::generateRpcStubForIndirectCall(DIType &dt, std::string arg_name)
+{
+  std::string ss;
+  llvm::raw_string_ostream call_stub(ss);
+  // TODO: genereate a call stub for indirect call
 }
 
 void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
@@ -1016,41 +1022,6 @@ void pdg::KSplitStats::collectStats(DIType &dt, std::set<std::string> &annotatio
     increaseStringNum();
   else if (dbgutils::isPointerType(dt))
     increaseSharedPtrNum();
-}
-
-void pdg::KSplitStats::printStats()
-{
-  errs() << "=============== Fields Access Analysis ================\n";
-  errs() << "num fields deep copying: " << _fields_deep_copy << "\n";
-  errs() << "num fields field access analysis: " << _fields_field_analysis << "\n";
-  errs() << "num fields _shared_analysis: " << _fields_shared_analysis << "\n";
-  errs() << "num fields removed by boundary opt: " << _fields_removed_boundary_opt << "\n";
-
-  errs() << "=============== Pointer Classification ================\n";
-  errs() << "shared ptr fields: " << _shared_ptr_num << "\n";
-  errs() << "safe ptr num: " << _safe_ptr_num << "\n";
-  errs() << "void ptr num: " << _void_ptr_num << "\n";
-  errs() << "unhandled void ptr num: " << _unhandled_void_ptr_num << "\n";
-  errs() << "void wild ptr num: " << _void_wild_ptr_num << "\n";
-  errs() << "string num: " << _string_num << "\n";
-  errs() << "array num: " << _array_num << "\n";
-  errs() << "unhandled array num: " << _unhandled_array_num << "\n";
-  errs() << "func ptr num: " << _func_ptr_num << "\n";
-  errs() << "non void wild ptr num: " << _non_void_wild_ptr_num << "\n";
-  errs() << "unknown num: " << _unknown_ptr_num << "\n";
-
-  errs() << "=============== Private/Shared Data Classification ================\n";
-  errs() << "pointers: " << _total_ptr_num << " / " << (_total_ptr_num - _shared_ptr_num) << " / " << _shared_ptr_num << "\n";
-  errs() << "unions: " << _total_union_num << " / " << (_total_union_num - _shared_union_num) << " / " << _shared_union_num << "\n";
-  errs() << "CS: " << _total_CS << " / " << (_total_CS - _shared_CS) << " / " << _shared_CS << "\n";
-  errs() << "Atomic Ops: " << _total_atomic_op << " / " << (_total_atomic_op - _shared_atomic_op) << " / " << _shared_atomic_op << "\n";
-  errs() << "RCU: " << _total_rcu << " / " << (_total_rcu - _shared_rcu) << " / " << _shared_rcu << "\n";
-  errs() << "Seqlock: " << _total_seqlock << " / " << (_total_seqlock - _shared_seqlock) << " / " << _shared_seqlock << "\n";
-  errs() << "Nest Lock: " << _total_nest_lock << " / " << (_total_nest_lock - _shared_nest_lock) << " / " << _shared_nest_lock << "\n";
-  errs() << "Barrier: " << _total_ptr_num << " / " << _private_barrier << " / " << _shared_barrier << "\n";
-  errs() << "Bitfield: " << _total_bitfield << " / " << (_total_bitfield - _shared_bitfield) << " / " << _shared_bitfield << "\n";
-  errs() << "containerof: " << _total_containerof << " / " << (_total_containerof - _shared_containerof) << " / " << _shared_containerof << "\n";
-  errs() << "IO remap: " << _total_ioremap << " / " << (_total_ioremap - _shared_ioremap) << " / " << _shared_containerof << "\n";
 }
 
 pdg::DomainTag pdg::DataAccessAnalysis::computeFuncDomainTag(Function &F)

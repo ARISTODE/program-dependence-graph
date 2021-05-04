@@ -99,6 +99,7 @@ namespace NesCheck
     pdg::DataAccessAnalysis *_DDA;
     pdg::ProgramGraph* _PDG;
     std::set<std::string> BoundaryFuncNames;
+    pdg::KSplitStats *_ksplit_stats;
 
     AnalysisState TheState;
     Type *MySizeType;
@@ -440,13 +441,13 @@ namespace NesCheck
         ProcessedNodes.insert(tree_node);
         if (ptrType == "SAFE")
         {
-          _DDA->getKSplitStats()->increaseSafePtrNum();
+          _ksplit_stats->increaseSafePtrNum();
           // SafePtrs.insert(ptr);
         }
         else if (ptrType == "SEQ")
         {
           if (!pdg::dbgutils::isArrayType(*tree_node->getDIType()))
-            _DDA->getKSplitStats()->increaseUnhandledArrayNum();
+            _ksplit_stats->increaseUnhandledArrayNum();
         }
         else if (ptrType == "DYN")
         {
@@ -454,11 +455,11 @@ namespace NesCheck
           {
           if (Instruction *i = dyn_cast<Instruction>(ptr))
             errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << "\n";
-          _DDA->getKSplitStats()->increaseNonVoidWildPtrNum();
+          _ksplit_stats->increaseNonVoidWildPtrNum();
           }
           else
           {
-            _DDA->getKSplitStats()->increaseVoidWildPtrNum();
+            _ksplit_stats->increaseVoidWildPtrNum();
           }
           // WildPtrs.insert(ptr);
         }
@@ -466,7 +467,7 @@ namespace NesCheck
         {
           if (Instruction *i = dyn_cast<Instruction>(ptr))
             errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << "\n";
-          _DDA->getKSplitStats()->increaseUnknownPtrNum();
+          _ksplit_stats->increaseUnknownPtrNum();
           errs() << "unknown: " << *ptr << "\n";
           // UnknownPtrs.insert(ptr);
         }
@@ -1197,6 +1198,7 @@ namespace NesCheck
       _ARA = &getAnalysis<pdg::AtomicRegionAnalysis>();
       _DDA = _ARA->getDAA();
       _PDG = _DDA->getPDG();
+      _ksplit_stats = &pdg::KSplitStats::getInstance();
       auto start = std::chrono::high_resolution_clock::now();
       BoundaryFuncNames = _DDA->getSDA()->getBoundaryFuncNames();
 
@@ -1300,7 +1302,7 @@ namespace NesCheck
       }
       
       if (pdg::EnableAnalysisStats)
-        _DDA->getKSplitStats()->printStats();
+        _ksplit_stats->printStatsRaw();
       auto stop = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
       // dumpRecordedTypes();

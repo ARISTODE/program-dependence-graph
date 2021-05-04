@@ -2,6 +2,7 @@
 #define SHARED_DATA_ANALYSIS_H_
 #include "LLVMEssentials.hh"
 #include "ProgramDependencyGraph.hh"
+#include "KSplitStatsCollector.hh"
 #include <set>
 #include <fstream> 
 

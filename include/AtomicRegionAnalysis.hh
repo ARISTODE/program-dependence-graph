@@ -27,11 +27,13 @@ namespace pdg
     AtomicOpSet &getAtomicOpSet() {return _atomic_operations;}
     CSMap computeCSInFunc(llvm::Function &F);
     void setupLockMap();
+    void setupFenceNames();
     void computeBoundaryObjects(llvm::Module &M);
     void computeCriticalSections(llvm::Module &M);
     void computeAtomicOperations(llvm::Module &M);
     void computeWarningCS();
     void computeWarningAtomicOps();
+    void collectBarriersInFunc(llvm::Function &F);
     void computeModifedNames(Node &node, std::set<std::string> &modified_names);
     void printWarningCS(CSPair cs_pair, llvm::Value &v, llvm::Function &f, std::set<std::string> &modified_names, std::string source_type);
     void printWarningAtomicOp(llvm::Instruction &i, std::set<std::string> &modified_names, std::string source_type);
@@ -39,6 +41,7 @@ namespace pdg
     bool isRcuLockInst(llvm::Instruction &i); // only read is counted for now
     bool isSeqLockInst(llvm::Instruction &i);
     bool isUnlockInst(llvm::Instruction &i, std::string lock_inst_name);
+    bool isAtomicFenceString(std::string str);
     bool isAtomicAsmString(std::string str);
     bool isAtomicOperation(llvm::Instruction &i);
     bool isAliasOfBoundaryPtrs(llvm::Value &v);
@@ -65,6 +68,7 @@ namespace pdg
     int _warning_cs_count;
     int _warning_atomic_op_count;
     int _cs_warning_count;
+    std::set<std::string> _fence_names;
     std::set<std::string> _processed_func_names;
     std::set<llvm::Function *> _funcs_need_sync_stub_gen;
     std::map<llvm::Instruction *, Tree *> _sync_data_inst_tree_map;

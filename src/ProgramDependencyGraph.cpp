@@ -20,7 +20,6 @@ void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 
 bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
 {
-  auto start = std::chrono::high_resolution_clock::now();
   _module = &M;
   _PDG = &ProgramGraph::getInstance();
   PTAWrapper &ptaw = PTAWrapper::getInstance();
@@ -63,11 +62,7 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   }
 
   errs() << "func size: " << func_size << "\n";
-  errs() << "Finsh adding dependencies"
-         << "\n";
   auto stop = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-  errs() << "building PDG takes: " << duration.count() << "\n";
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
   return false;
 }

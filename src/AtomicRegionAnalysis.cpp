@@ -28,8 +28,8 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   computeWarningCS();
   computeWarningAtomicOps();
 
-  if (EnableAnalysisStats)
-    _ksplit_stats->printStats();
+  // if (EnableAnalysisStats)
+  //   _ksplit_stats->printStats();
 
   _sync_stub_file << "syn_stub_kernel {\n";
   for (auto tree_pair : _sync_data_inst_tree_map)
@@ -65,6 +65,12 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   errs() << "CS Warning: " << _warning_cs_count << " / " << _critical_sections.size() << "\n";
   errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << " / " << _atomic_operations.size() << "\n";
   return false;
+}
+
+void pdg::AtomicRegionAnalysis::setupFenceNames()
+{
+  _fence_names.insert("mfence");
+  _fence_names.insert("sfence");
 }
 
 void pdg::AtomicRegionAnalysis::setupLockMap()
@@ -441,6 +447,11 @@ bool pdg::AtomicRegionAnalysis::isAtomicAsmString(std::string str)
   return (str.find("lock") != std::string::npos);
 }
 
+bool pdg::AtomicRegionAnalysis::isAtomicFenceString(std::string str)
+{
+  return (_fence_names.find(str) != _fence_names.end());
+}
+
 bool pdg::AtomicRegionAnalysis::isAtomicOperation(Instruction &i)
 {
   if (CallInst *ci = dyn_cast<CallInst>(&i))
@@ -450,6 +461,8 @@ bool pdg::AtomicRegionAnalysis::isAtomicOperation(Instruction &i)
     if (InlineAsm *ia = dyn_cast<InlineAsm>(ci->getCalledOperand()))
     {
       auto asm_str = ia->getAsmString();
+      if (isAtomicFenceString(asm_str))
+        _ksplit_stats->increaseTotalBarrier();
       if (isAtomicAsmString(asm_str))
         return true;
     }
