@@ -62,7 +62,7 @@ void pdg::KSplitStats::printStatsRaw()
   _stats_file << (_total_bitfield - _shared_bitfield) << "/" << _shared_bitfield << "\n";
   _stats_file << (_total_containerof - _shared_containerof) << "/" << _shared_containerof << "\n";
   _stats_file << _safe_ptr_num << "/0" << "\n";
-  _stats_file << _array_num << _unhandled_array_num << "\n";
+  _stats_file << _array_num << "/" << _unhandled_array_num << "\n";
   _stats_file << _string_num << "/0" << "\n";
   _stats_file << _void_ptr_num << "/" << _unhandled_void_ptr_num << "\n";
   _stats_file << (_non_void_wild_ptr_num + _unknown_ptr_num) << "/0" << "\n";
