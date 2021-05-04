@@ -173,8 +173,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   // add data return edge
   for (auto ret_inst : ret_insts)
   {
-    Value* ret_val = ret_inst->getReturnValue();
-    Node* src = _PDG->getNode(*ret_val);
+    Node* src = _PDG->getNode(*ret_inst);
     if (src == nullptr)
       continue;
     src->addNeighbor(*dst, EdgeType::DATA_RET);

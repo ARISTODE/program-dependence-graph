@@ -61,8 +61,10 @@ void pdg::DataDependencyGraph::addDefUseEdges(Instruction &inst)
     if (src == nullptr || dst == nullptr)
       continue;
     EdgeType edge_type = EdgeType::DATA_DEF_USE;
-    if (dst->getNodeType() == GraphNodeType::ANNO_VAR || dst->getNodeType() == GraphNodeType::ANNO_GLOBAL)
+    if (dst->getNodeType() == GraphNodeType::ANNO_VAR)
       edge_type = EdgeType::ANNO_VAR;
+    if (dst->getNodeType() == GraphNodeType::ANNO_GLOBAL)
+      edge_type = EdgeType::ANNO_GLOBAL;
     src->addNeighbor(*dst, edge_type);
   }
 }

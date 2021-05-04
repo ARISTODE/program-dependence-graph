@@ -15,9 +15,7 @@ pdg::Node *pdg::GenericGraph::getNode(Value &v)
   return _val_node_map[&v];
 }
 
-
 // ===== Graph Traversal =====
-
 // DFS search
 bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
 {
@@ -325,7 +323,7 @@ void pdg::ProgramGraph::buildGlobalAnnotationNodes(Module &M)
           _val_node_map.insert(std::pair<Value *, Node *>(annotated_gv, n));
           addNode(*n);
         }
-        n->addNeighbor(*global_anno_node, EdgeType::ANNO_VAR);
+        n->addNeighbor(*global_anno_node, EdgeType::ANNO_GLOBAL);
       }
     }
   }
