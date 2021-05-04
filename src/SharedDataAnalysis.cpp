@@ -195,12 +195,6 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       }
     }
   }
-  // errs() << "found " << _shared_struct_di_types.size() << " shared struct types\n";
-  // errs() << " ==== shared types ====\n";
-  // for (auto t : _shared_struct_di_types)
-  // {
-  //   errs() << "\t" << dbgutils::getSourceLevelTypeName(*t) << "\n";
-  // }
 }
 
 void pdg::SharedDataAnalysis::computeGlobalStructTypeNames()

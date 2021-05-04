@@ -1197,6 +1197,7 @@ namespace NesCheck
       _ARA = &getAnalysis<pdg::AtomicRegionAnalysis>();
       _DDA = _ARA->getDAA();
       _PDG = _DDA->getPDG();
+      auto start = std::chrono::high_resolution_clock::now();
       BoundaryFuncNames = _DDA->getSDA()->getBoundaryFuncNames();
 
       srand(time(NULL));
@@ -1300,8 +1301,11 @@ namespace NesCheck
       
       if (pdg::EnableAnalysisStats)
         _DDA->getKSplitStats()->printStats();
+      auto stop = std::chrono::high_resolution_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
       // dumpRecordedTypes();
       printStats();
+      errs() << "nescheck analysis takes: " << duration.count() << "\n";
       return changed;
     }
 
