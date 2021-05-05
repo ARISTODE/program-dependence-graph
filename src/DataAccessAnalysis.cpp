@@ -71,7 +71,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     generateIDLForFunc(*F, true);
   }
 
-
   if (EnableAnalysisStats)
     errs() << "Funcs reachable from boundary: " << total_num_funcs << "\n";
 
@@ -94,6 +93,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 
   errs() << "Finish analyzing data access info.";
   _idl_file.close();
+
   return false;
 }
 

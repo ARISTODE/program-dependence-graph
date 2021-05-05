@@ -386,7 +386,7 @@ bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string 
 {
   bool is_shared_id = (_shared_field_id.find(field_id) != _shared_field_id.end());
   bool is_shared_struct_type = isSharedStructType(field_type_name);
-  return (is_shared_id || is_shared_struct_type);
+  return ((is_shared_id || is_shared_struct_type) && !field_type_name.empty());
 }
 
 void pdg::SharedDataAnalysis::computeSharedFieldID()

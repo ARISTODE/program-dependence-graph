@@ -12,7 +12,7 @@ void pdg::KSplitStats::printStats()
   _stats_file << "=============== Fields Access Analysis ================\n";
   _stats_file << "num fields deep copying: " << _fields_deep_copy << "\n";
   _stats_file << "num fields field access analysis: " << _fields_field_analysis << "\n";
-  _stats_file << "num fields _shared_analysis: " << _fields_shared_analysis << "\n";
+  _stats_file << "num fields shared_analysis: " << _fields_shared_analysis << "\n";
   _stats_file << "num fields removed by boundary opt: " << _fields_removed_boundary_opt << "\n";
 
   _stats_file << "=============== Pointer Classification ================\n";
