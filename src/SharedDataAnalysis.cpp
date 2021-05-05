@@ -32,7 +32,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   computeSharedGlobalVars();
-  dumpSharedFieldID();
+  // dumpSharedFieldID();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
@@ -116,6 +116,11 @@ std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
   std::set<Function*> boundary_trans_funcs;
   for (auto boundary_func : _boundary_funcs)
   {
+    if (_call_graph->isExcludeFunc(*boundary_func))
+    {
+      errs() << "found exclude func " << boundary_func->getName() << "\n";
+      continue;
+    }
     auto func_node = _call_graph->getNode(*boundary_func);
     assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
     auto trans_func_nodes = _call_graph->computeTransitiveClosure(*func_node);
@@ -475,7 +480,6 @@ void pdg::SharedDataAnalysis::readGlobalOpStructNames()
     _global_op_struct_names.insert(line);
   }
 }
-
 
 void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
 {

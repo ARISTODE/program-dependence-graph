@@ -4,6 +4,8 @@ using namespace llvm;
 
 void pdg::PDGCallGraph::build(Module &M)
 {
+  setupExcludeFuncs();
+
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
@@ -34,13 +36,13 @@ void pdg::PDGCallGraph::build(Module &M)
         else
         {
           // indirect calls
-          auto ind_call_candidates = getIndirectCallCandidates(*ci, M);
-          for (auto ind_call_can : ind_call_candidates)
-          {
-            Node* callee_node = getNode(*ind_call_can);
-            if (callee_node != nullptr)
-              caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
-          }
+          // auto ind_call_candidates = getIndirectCallCandidates(*ci, M);
+          // for (auto ind_call_can : ind_call_candidates)
+          // {
+          //   Node* callee_node = getNode(*ind_call_can);
+          //   if (callee_node != nullptr)
+          //     caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
+          // }
         }
       }
     }
@@ -219,8 +221,36 @@ std::vector<pdg::Node *> pdg::PDGCallGraph::computeTransitiveClosure(pdg::Node &
     ret.push_back(n);
     for (auto out_neighbor : n->getOutNeighbors())
     {
+      // prune warning funcs in kernel
+      auto val = out_neighbor->getValue();
+      if (Function *f = dyn_cast<Function>(val))
+      {
+        if (isExcludeFunc(*f))
+          continue;
+      }
       node_queue.push(out_neighbor);
     }
   }
   return ret;
+}
+
+void pdg::PDGCallGraph::setupExcludeFuncs()
+{
+  _exclude_func_names.insert("warn_slowpath_fmt");
+  _exclude_func_names.insert("netdev_warn");
+  _exclude_func_names.insert("netdev_err");
+  _exclude_func_names.insert("netdev_info");
+  _exclude_func_names.insert("dev_warn");
+  _exclude_func_names.insert("dev_err");
+  _exclude_func_names.insert("dev_info");
+  _exclude_func_names.insert("kasprintf");
+  _exclude_func_names.insert("kvasprintf");
+  _exclude_func_names.insert("copy_user_overflow");
+}
+
+bool pdg::PDGCallGraph::isExcludeFunc(Function &F)
+{
+  auto func_name = F.getName().str();
+  func_name = pdgutils::stripFuncNameVersionNumber(func_name);
+  return (_exclude_func_names.find(func_name) != _exclude_func_names.end());
 }

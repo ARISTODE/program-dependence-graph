@@ -450,15 +450,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
     bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
     bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
-    if (SharedDataFlag && !_SDA->isSharedFieldID(field_id, field_lowest_di_type_name) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
+    if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
       continue;
     
-
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsSharedData();
-
-    if (_current_processing_func == "can_proto_register")
-      errs() << field_id << " - " << field_type_name << "\n";
 
     if (child_node->getCanOptOut() == true && !is_func_ptr_type)
     {
@@ -968,6 +964,37 @@ bool pdg::DataAccessAnalysis::isDriverDefinedGlobal(GlobalVariable &gv)
   return false;
 }
 
+bool pdg::DataAccessAnalysis::containerHasSharedFieldsAccessed(BitCastInst &bci)
+{
+  auto bci_node = _PDG->getNode(bci);
+  assert(bci_node != nullptr && "cannot find node for container_of bitcast inst\n");
+  auto alias_nodes = bci_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+  alias_nodes.insert(bci_node);
+  for (auto alias_node : alias_nodes)
+  {
+    auto alias_val = alias_node->getValue();
+    for (auto out_neighbor : alias_node->getOutNeighbors())
+    {
+      auto out_neighbor_val = out_neighbor->getValue();
+      if (out_neighbor_val == nullptr)
+        continue;
+      if (isa<GetElementPtrInst>(out_neighbor_val))
+      {
+        auto container_dt = bci_node->getDIType();
+        auto dt = out_neighbor->getDIType();
+        if (container_dt == nullptr || dt == nullptr)
+          continue;
+        auto container_type_name = dbgutils::getSourceLevelTypeName(*container_dt);
+        auto field_type_name = dbgutils::getSourceLevelTypeName(*dt);
+        std::string id = container_type_name + field_type_name;
+        if (_SDA->isSharedStructType(id))
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
 void pdg::DataAccessAnalysis::constructGlobalOpStructStr()
 {
   for (auto pair : _global_ops_fields_map)
@@ -1007,6 +1034,9 @@ void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
           std::string di_type_name = dbgutils::getSourceLevelTypeName(*node_di_type, true);
           if (_SDA->isSharedStructType(di_type_name))
           {
+            if (!containerHasSharedFieldsAccessed(*bci))
+              continue;
+            errs() << "hello\n";
             _container_of_insts.insert(bci);
             if (EnableAnalysisStats)
             {

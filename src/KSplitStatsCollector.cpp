@@ -30,7 +30,7 @@ void pdg::KSplitStats::printStats()
   _stats_file << "unknown num: " << _unknown_ptr_num << "\n";
 
   _stats_file << "=============== Private/Shared Data Classification ================\n";
-  _stats_file << "pointers: " << _total_ptr_num << " / " << (_total_ptr_num - _shared_ptr_num) << " / " << _shared_ptr_num << "\n";
+  _stats_file << "pointers: " << _total_ptr_num << " / " << (_total_ptr_num - total_shared_ptr) << " / " << total_shared_ptr << "\n";
   _stats_file << "unions: " << _total_union_num << " / " << (_total_union_num - _shared_union_num) << " / " << _shared_union_num << "\n";
   _stats_file << "CS: " << _total_CS << " / " << (_total_CS - _shared_CS) << " / " << _shared_CS << "\n";
   _stats_file << "Atomic Ops: " << _total_atomic_op << " / " << (_total_atomic_op - _shared_atomic_op) << " / " << _shared_atomic_op << "\n";
@@ -47,11 +47,11 @@ void pdg::KSplitStats::printStats()
 void pdg::KSplitStats::printStatsRaw()
 {
   _stats_file.open("ksplit_stats");
-
+  unsigned total_shared_ptr = _safe_ptr_num + _void_ptr_num + _unhandled_void_ptr_num + _string_num + _array_num + _unhandled_array_num + _non_void_wild_ptr_num + _unknown_ptr_num;
   _stats_file << _kernel_to_driver_func_call << "/0" << "\n";
   _stats_file << _driver_to_kernel_func_call << "/0" << "\n";
   _stats_file << _total_func_size << "/0" << "\n";
-  _stats_file << (_total_ptr_num - _shared_ptr_num) << "/" << _shared_ptr_num << "\n";
+  _stats_file << (_total_ptr_num - total_shared_ptr) << "/" << total_shared_ptr << "\n";
   _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num << "\n";
   _stats_file << (_total_CS - _shared_CS) << "/" << _shared_CS << "\n";
   _stats_file << (_total_atomic_op - _shared_atomic_op) << "/" << _shared_atomic_op << "\n";

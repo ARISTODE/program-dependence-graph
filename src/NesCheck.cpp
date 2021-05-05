@@ -1302,7 +1302,7 @@ namespace NesCheck
       }
       
       if (pdg::EnableAnalysisStats)
-        _ksplit_stats->printStatsRaw();
+        _ksplit_stats->printStats();
       auto stop = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
       // dumpRecordedTypes();

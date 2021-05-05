@@ -30,7 +30,11 @@ namespace pdg
     PathVecs computePaths(Node &src, Node &sink); // compute all pathes
     void computePathsHelper(PathVecs &path_vecs, Node &src, Node &sink, std::vector<llvm::Function *> cur_path, std::unordered_set<llvm::Function *> visited_funcs, bool &found_path);
     std::vector<Node*> computeTransitiveClosure(Node &src);
+    void setupExcludeFuncs();
+    bool isExcludeFunc(llvm::Function &F);
+
   private:
+    std::set<std::string> _exclude_func_names;
   };
 } // namespace pdg
 
