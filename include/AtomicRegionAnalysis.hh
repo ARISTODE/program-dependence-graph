@@ -64,7 +64,7 @@ namespace pdg
     LockMap _lock_map;
     AtomicOpSet _atomic_operations;
     BoundaryPtrSet _boundary_ptrs;
-    llvm::CallGraph *_call_graph;
+    PDGCallGraph *_call_graph;
     int _warning_cs_count;
     int _warning_atomic_op_count;
     int _cs_warning_count;

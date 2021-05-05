@@ -28,7 +28,9 @@ namespace pdg
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
     std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
     std::set<std::string> &getSentinelFields() { return _sentinel_fields; }
+    std::set<std::string> &getGlobalOpStructNames() { return _global_op_struct_names; }
     bool isSentinelField(std::string &s) { return _sentinel_fields.find(s) != _sentinel_fields.end(); }
+    bool isGlobalOpStruct(std::string &s) { return _global_op_struct_names.find(s) != _global_op_struct_names.end(); }
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     std::set<llvm::Function *> computeBoundaryTransitiveClosure();
     void computeSharedStructDITypes();
@@ -41,7 +43,7 @@ namespace pdg
     bool isTreeNodeShared(TreeNode &tree_node);
     bool isFieldUsedInStringOps(TreeNode &tree_node);
     bool isStringFieldID(std::string field_id) { return _string_op_names.find(field_id) != _string_op_names.end(); }
-    bool isSharedFieldID(std::string field_id);
+    bool isSharedFieldID(std::string field_id, std::string field_type_name="");
     bool isSharedStructType(std::string s) { return _shared_struct_type_names.find(s) != _shared_struct_type_names.end(); }
     // void computeSharedDataVars();
     void computeSharedFieldID();
@@ -49,6 +51,7 @@ namespace pdg
     std::set<std::string> getGlobalStructDITypeNames() { return _global_struct_di_type_names; }
     void dumpSharedFieldID();
     void readSentinelFields();
+    void readGlobalOpStructNames();
     ProgramGraph *getPDG() { return _PDG; }
     // some side tests
     void printPingPongCalls(llvm::Module &M);
@@ -72,6 +75,7 @@ namespace pdg
     std::set<std::string> _shared_struct_type_names;
     std::set<std::string> _driver_global_struct_types;
     std::set<std::string> _sentinel_fields;
+    std::set<std::string> _global_op_struct_names;
   };
 } // namespace pdg
 #endif

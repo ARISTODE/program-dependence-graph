@@ -17,7 +17,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   _sync_stub_file.open("cs_sync.idl");
   _ksplit_stats = _DAA->getKSplitStats();
   _funcs_need_sync_stub_gen = _SDA->computeBoundaryTransitiveClosure();
-  // _call_graph = &getAnalysis<CallGraphWrapperPass>().getCallGraph();
+  _call_graph = &PDGCallGraph::getInstance();
   _warning_cs_count = 0;
   _warning_atomic_op_count = 0;
   _cs_warning_count = 0;
@@ -348,7 +348,17 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
         {
           _processed_func_names.insert(func_name);
           _warning_atomic_op_count++;
-          printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
+
+          if (DEBUG)
+          {
+            printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
+            auto dst_func_node = _call_graph->getNode(*atomic_op->getFunction());
+            for (auto boundary_f : _SDA->getBoundaryFuncs())
+            {
+              auto boundary_func_node = _call_graph->getNode(*boundary_f);
+              _call_graph->printPaths(*boundary_func_node, *dst_func_node);
+            }
+          }
 
           if (EnableAnalysisStats)
             _ksplit_stats->increaseSharedAtomicOps();

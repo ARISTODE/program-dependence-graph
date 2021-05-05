@@ -8,8 +8,10 @@ char pdg::ProgramDependencyGraph::ID = 0;
 cl::opt<bool> FieldSensitive("fs", cl::desc("Field Sensitive"), cl::value_desc("field_sensitive"), cl::init(true));
 
 bool pdg::EnableAnalysisStats;
+bool pdg::DEBUG;
 
 cl::opt<bool, true> EAS("analysis-stats", cl::desc("enable printing analysis stats"), cl::value_desc("analysis_stats"), cl::location(pdg::EnableAnalysisStats), cl::init(false));
+cl::opt<bool, true> DBG("debug-verbose", cl::desc("enable printing verbose debug info"), cl::value_desc("verbose-debug"), cl::location(pdg::DEBUG), cl::init(false));
 
 void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {

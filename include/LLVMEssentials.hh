@@ -20,6 +20,7 @@
 namespace pdg
 {
   extern bool EnableAnalysisStats;
+  extern bool DEBUG;
 }
 
 #endif

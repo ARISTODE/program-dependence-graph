@@ -137,6 +137,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
           {
             _exported_func_ptrs.push_back(field_source_name);
             _exported_funcs.push_back(field_type_name);
+            _global_op_struct_names.insert(gv_di_type_name);
           }
         }
         // TODO: handle nested structs
@@ -154,6 +155,8 @@ void pdg::BoundaryAnalysis::dumpToFiles()
   dumpToFile("exported_func_ptrs", _exported_func_ptrs);
   dumpToFile("sentinel_fields", _sentinel_fields);
   dumpToFile("driver_globalvar_names", _driver_globalvar_names);
+  std::vector<std::string> global_op_struct_names(_global_op_struct_names.begin(), _global_op_struct_names.end());
+  dumpToFile("global_op_struct_names", global_op_struct_names);
 }
 
 void pdg::BoundaryAnalysis::dumpToFile(std::string file_name, std::vector<std::string> &names)

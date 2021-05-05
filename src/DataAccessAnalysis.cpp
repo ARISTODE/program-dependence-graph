@@ -63,6 +63,15 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   }
   _ksplit_stats->increaseTotalFuncSize(_funcs_reachable_from_boundary.size());
 
+  // genereate additional func call stubs for kernel funcs registered on the driver side
+  for (auto F : _SDA->getBoundaryFuncs())
+  {
+    if (F->isDeclaration())
+      continue;
+    generateIDLForFunc(*F, true);
+  }
+
+
   if (EnableAnalysisStats)
     errs() << "Funcs reachable from boundary: " << total_num_funcs << "\n";
 
@@ -303,8 +312,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
           continue;
       }
 
-      if (EnableAnalysisStats)
-        only_has_cross_domain_access = false;
+      only_has_cross_domain_access = false;
       auto acc_tags = computeDataAccessTagsForVal(*n->getValue());
       for (auto acc_tag : acc_tags)
       {
@@ -373,7 +381,6 @@ void pdg::DataAccessAnalysis::computeDataAccessForGlobalTree(Tree *tree)
 void pdg::DataAccessAnalysis::computeDataAccessForFuncArgs(Function &F)
 {
   // errs() << "compute intra for func: " << F.getName() << "\n";
-  _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   if (func_wrapper_map.find(&F) == func_wrapper_map.end())
     return;
@@ -410,7 +417,13 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
   for (auto child_node : tree_node.getChildNodes())
   {
     DIType *field_di_type = child_node->getDIType();
+    DIType *field_lowest_di_type = dbgutils::getLowestDIType(*field_di_type);
+    std::string field_lowest_di_type_name = "";
+    if (field_lowest_di_type != nullptr)
+      field_lowest_di_type_name = dbgutils::getSourceLevelTypeName(*field_lowest_di_type, true);
+
     auto field_var_name = dbgutils::getSourceLevelVariableName(*field_di_type);
+    auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
 
     if (EnableAnalysisStats)
     {
@@ -437,11 +450,15 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
     bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
     bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
-    if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
+    if (SharedDataFlag && !_SDA->isSharedFieldID(field_id, field_lowest_di_type_name) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
       continue;
     
+
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsSharedData();
+
+    if (_current_processing_func == "can_proto_register")
+      errs() << field_id << " - " << field_type_name << "\n";
 
     if (child_node->getCanOptOut() == true && !is_func_ptr_type)
     {
@@ -449,7 +466,6 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       continue;
     }
 
-    auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
     auto bw = 0;
 
     if (field_di_type->isBitField())
@@ -466,10 +482,14 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
-
-    _ksplit_stats->collectStats(*field_di_type, annotations);
-    if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
-      _ksplit_stats->increaseUnhandledVoidPtrNum();
+    
+    // collect fields stat
+    if (EnableAnalysisStats)
+    {
+      _ksplit_stats->collectStats(*field_di_type, annotations);
+      if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
+        _ksplit_stats->increaseUnhandledVoidPtrNum();
+    }
 
     if (is_sentinel_field)
     {
@@ -480,9 +500,10 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     else if (dbgutils::isStructPointerType(*field_di_type))
     {
       std::string field_name_prefix = "";
-      if (field_var_name.find("_ops") != std::string::npos)
+      // TODO: fix this to use global struct that contain function pointers
+      if (_SDA->isGlobalOpStruct(field_lowest_di_type_name))
       {
-        field_name_prefix = "_global_";
+        field_name_prefix = "global_";
         parent_struct_type_name = "";
       }
       std::string ptr_postfix = "";
@@ -497,7 +518,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
                             << parent_struct_type_name
                             << "_"
                             << field_name_prefix
-                            << field_var_name
+                            << field_type_name
                             << ptr_postfix
                             << " "
                             << field_var_name
@@ -653,7 +674,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t", proj_type_name);
     // handle funcptr ops struct specifically
     output_file << nested_struct_projection_str.str();
-    if (proj_type_name.find("_ops") != std::string::npos)
+    if (_SDA->isGlobalOpStruct(proj_type_name))
     {
       if (_global_ops_fields_map.find(proj_type_name) == _global_ops_fields_map.end())
         _global_ops_fields_map.insert(std::make_pair(proj_type_name, std::set<std::string>()));
@@ -718,7 +739,7 @@ std::string handleIoRemap(Function &F, std::string &ret_type_str)
   return "";
 }
 
-void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
+void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool is_kernel_func)
 {
   FunctionWrapper *fw = _PDG->getFuncWrapperMap()[&F];
   std::string rpc_str = "";
@@ -762,13 +783,18 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F)
   // determine called func name. Need to switch to indirect call name if the function is exported
   std::string rpc_prefix = "rpc";
   std::string called_func_name = F.getName().str();
-  for (auto p : _exported_funcs_ptr_name_map)
+  if (!is_kernel_func)
   {
-    if (p.second == F.getName().str())
+    for (auto p : _exported_funcs_ptr_name_map)
     {
-      rpc_prefix = "rpc_ptr";
-      called_func_name = p.first;
-      break;
+      if (p.second == F.getName().str())
+      {
+        rpc_prefix = "rpc_ptr";
+        called_func_name = p.first;
+        if (_SDA->isKernelFunc(F))
+          _kernel_funcs_regsitered_with_indirect_ptr.insert(&F);
+        break;
+      }
     }
   }
 
@@ -840,13 +866,14 @@ void pdg::DataAccessAnalysis::generateRpcStubForIndirectCall(DIType &dt, std::st
   // TODO: genereate a call stub for indirect call
 }
 
-void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F)
+void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool is_kernel_func)
 {
+  _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   auto func_iter = func_wrapper_map.find(&F);
   assert(func_iter != func_wrapper_map.end() && "no function wrapper found (IDL-GEN)!");
   auto fw = func_iter->second;
-  generateRpcForFunc(F);
+  generateRpcForFunc(F, is_kernel_func);
   _idl_file << "{\n";
   // generate projection for return value
   auto ret_arg_tree = fw->getRetFormalInTree();
@@ -982,7 +1009,11 @@ void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
           {
             _container_of_insts.insert(bci);
             if (EnableAnalysisStats)
+            {
               _ksplit_stats->increaseSharedContainerof();
+              if (DEBUG)
+                errs() << "shared container_of: " << F.getName() << " - " << di_type_name << " - " << *bci << "\n";
+            }
           }
         }
       }

@@ -18,6 +18,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // read driver/kernel domian funcs
   setupStrOps();
   readSentinelFields();
+  readGlobalOpStructNames();
   setupDriverFuncs(M);
   setupKernelFuncs(M);
   // get boundary functions
@@ -31,7 +32,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   computeSharedGlobalVars();
-  // dumpSharedFieldID();
+  dumpSharedFieldID();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
@@ -376,9 +377,11 @@ bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
   return false;
 }
 
-bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id)
+bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string field_type_name)
 {
-  return (_shared_field_id.find(field_id) != _shared_field_id.end());
+  bool is_shared_id = (_shared_field_id.find(field_id) != _shared_field_id.end());
+  bool is_shared_struct_type = isSharedStructType(field_type_name);
+  return (is_shared_id || is_shared_struct_type);
 }
 
 void pdg::SharedDataAnalysis::computeSharedFieldID()
@@ -464,6 +467,16 @@ void pdg::SharedDataAnalysis::readSentinelFields()
   }
 }
 
+void pdg::SharedDataAnalysis::readGlobalOpStructNames()
+{
+  std::ifstream ReadFile("global_op_struct_names");
+  for (std::string line; std::getline(ReadFile, line);)
+  {
+    _global_op_struct_names.insert(line);
+  }
+}
+
+
 void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
 {
   auto &call_g = PDGCallGraph::getInstance();
@@ -538,7 +551,8 @@ void pdg::SharedDataAnalysis::dumpSharedTypes(std::string file_name)
   std::ofstream output_file(file_name);
   for (auto shared_struct_type : _shared_struct_type_names)
   {
-    output_file << shared_struct_type << "\n";
+    if (!shared_struct_type.empty())
+      output_file << shared_struct_type << "\n";
   }
   output_file.close();
 }

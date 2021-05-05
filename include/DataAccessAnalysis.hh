@@ -24,8 +24,8 @@ namespace pdg
     void computeDataAccessForGlobalTree(Tree *tree);
     void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false);
     void computeDataAccessForFuncArgs(llvm::Function &F);
-    void generateIDLForFunc(llvm::Function &F);
-    void generateRpcForFunc(llvm::Function &F);
+    void generateIDLForFunc(llvm::Function &F, bool is_kernel_func=false);
+    void generateRpcForFunc(llvm::Function &F, bool is_kernel_func=false);
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
     void generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret = false);
     void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name);
@@ -61,7 +61,7 @@ namespace pdg
     std::string _current_processing_func = "";
     std::set<std::string> _driver_defined_globalvar_names;
     std::set<Node*> _funcs_reachable_from_boundary;
-    std::string _indirect_func_call_stubs = "";
+    std::set<llvm::Function *> _kernel_funcs_regsitered_with_indirect_ptr;
   };
 }
 
