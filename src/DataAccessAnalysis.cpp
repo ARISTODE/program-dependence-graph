@@ -434,6 +434,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
 
     // check for access tags, if none, no need to put this field in projection
+    bool is_global_func_op_struct = (_SDA->isGlobalOpStruct(field_lowest_di_type_name));
     bool is_func_ptr_type = dbgutils::isFuncPointerType(*field_di_type);
     if (child_node->getAccessTags().size() == 0 && !is_func_ptr_type)
       continue;
@@ -458,7 +459,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsSharedData();
 
-    if (child_node->getCanOptOut() == true && !is_func_ptr_type)
+    if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
     {
       _ksplit_stats->increaseFieldsBoundaryOpt();
       continue;
