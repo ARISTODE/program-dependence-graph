@@ -385,8 +385,8 @@ bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
 bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string field_type_name)
 {
   bool is_shared_id = (_shared_field_id.find(field_id) != _shared_field_id.end());
-  bool is_shared_struct_type = isSharedStructType(field_type_name);
-  return ((is_shared_id || is_shared_struct_type) && !field_type_name.empty());
+  // bool is_shared_struct_type = isSharedStructType(field_type_name);
+  return is_shared_id;
 }
 
 void pdg::SharedDataAnalysis::computeSharedFieldID()

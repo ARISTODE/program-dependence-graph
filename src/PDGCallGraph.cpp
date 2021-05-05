@@ -5,6 +5,7 @@ using namespace llvm;
 void pdg::PDGCallGraph::build(Module &M)
 {
   setupExcludeFuncs();
+  setupExportedFuncs();
 
   for (auto &F : M)
   {
@@ -35,14 +36,13 @@ void pdg::PDGCallGraph::build(Module &M)
         }
         else
         {
-          // indirect calls
-          // auto ind_call_candidates = getIndirectCallCandidates(*ci, M);
-          // for (auto ind_call_can : ind_call_candidates)
-          // {
-          //   Node* callee_node = getNode(*ind_call_can);
-          //   if (callee_node != nullptr)
-          //     caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
-          // }
+          auto ind_call_candidates = getIndirectCallCandidates(*ci, M);
+          for (auto ind_call_can : ind_call_candidates)
+          {
+            Node* callee_node = getNode(*ind_call_can);
+            if (callee_node != nullptr)
+              caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
+          }
         }
       }
     }
@@ -105,7 +105,10 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
     if (F.isDeclaration() || F.empty())
       continue;
     if (isFuncSignatureMatch(ci, F))
-      ind_call_cand.insert(&F);
+    {
+      if (isExportedFunc(F))
+        ind_call_cand.insert(&F);
+    }
   }
   return ind_call_cand;
 }
@@ -248,9 +251,25 @@ void pdg::PDGCallGraph::setupExcludeFuncs()
   _exclude_func_names.insert("copy_user_overflow");
 }
 
+void pdg::PDGCallGraph::setupExportedFuncs()
+{
+  std::ifstream ReadFile("exported_funcs");
+  for (std::string line; std::getline(ReadFile, line);)
+  {
+    _exported_func_names.insert(line);
+  }
+}
+
 bool pdg::PDGCallGraph::isExcludeFunc(Function &F)
 {
   auto func_name = F.getName().str();
   func_name = pdgutils::stripFuncNameVersionNumber(func_name);
   return (_exclude_func_names.find(func_name) != _exclude_func_names.end());
+}
+
+bool pdg::PDGCallGraph::isExportedFunc(Function &F)
+{
+  auto func_name = F.getName().str();
+  func_name = pdgutils::stripFuncNameVersionNumber(func_name);
+  return (_exported_func_names.find(func_name) != _exported_func_names.end());
 }

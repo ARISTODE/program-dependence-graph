@@ -28,8 +28,8 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   computeWarningCS();
   computeWarningAtomicOps();
 
-  if (EnableAnalysisStats)
-    _ksplit_stats->printStats();
+  // if (EnableAnalysisStats)
+  //   _ksplit_stats->printStats();
 
   _sync_stub_file << "syn_stub_kernel {\n";
   for (auto tree_pair : _sync_data_inst_tree_map)
