@@ -64,12 +64,14 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _ksplit_stats->increaseTotalFuncSize(_funcs_reachable_from_boundary.size());
 
   // genereate additional func call stubs for kernel funcs registered on the driver side
-  for (auto F : _SDA->getBoundaryFuncs())
+  EnableAnalysisStats = false;
+  for (auto F : _kernel_funcs_regsitered_with_indirect_ptr)
   {
     if (F->isDeclaration())
       continue;
     generateIDLForFunc(*F, true);
   }
+  EnableAnalysisStats = true;
 
   if (EnableAnalysisStats)
     errs() << "Funcs reachable from boundary: " << total_num_funcs << "\n";
@@ -880,7 +882,7 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool is_kernel_fun
   for (auto iter = arg_tree_map.begin(); iter != arg_tree_map.end(); iter++)
   {
     auto arg_tree = iter->second;
-    generateIDLFromArgTree(arg_tree, _idl_file);
+    generateIDLFromArgTree(arg_tree, _idl_file, false);
   }
   _idl_file << "}\n";
 }
