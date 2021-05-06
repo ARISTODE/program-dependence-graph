@@ -829,8 +829,12 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool is_kernel_fun
       continue;
     TreeNode *root_node = formal_in_tree->getRootNode();
     DIType *arg_di_type = root_node->getDIType();
+    DIType *arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
     auto arg_name = dbgutils::getSourceLevelVariableName(*root_node->getDILocalVar());
     auto arg_type_name = dbgutils::getSourceLevelTypeName(*arg_di_type, true);
+    std::string arg_lowest_type_name = "";
+    if (arg_lowest_di_type != nullptr)
+      arg_lowest_type_name = dbgutils::getSourceLevelTypeName(*arg_lowest_di_type, true);
 
     if (dbgutils::isStructPointerType(*arg_di_type) || dbgutils::isUnionPointerType(*arg_di_type))
     {
@@ -840,17 +844,21 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool is_kernel_fun
         ptr_postfix += "*";
         arg_type_name.pop_back();
       }
-      if (arg_type_name.find("_ops") != std::string::npos)
-        arg_name = "_global_" + arg_type_name;
-      arg_type_name = "projection " + arg_name + ptr_postfix;
+
+      if (_SDA->isGlobalOpStruct(arg_lowest_type_name))
+      {
+        arg_type_name = std::string("projection ") + std::string("_global_") + arg_lowest_type_name + ptr_postfix;
+      }
+      else
+      {
+        arg_type_name = "projection " + arg_name + ptr_postfix;
+      }
     }
     else if (dbgutils::isFuncPointerType(*arg_di_type))
     {
       arg_type_name = "rpc_ptr";
       arg_name = arg_name + " " + arg_name;
       // TODO: for function pointer that are not defined by global structs, we need to handle differently.
-      // if (_exported_funcs_ptr_name_map.find(arg_name) == _exported_funcs_ptr_name_map.end())
-      //   generateRpcStubForIndirectCall(*arg_di_type, arg_name);
     }
 
     auto annotations = inferTreeNodeAnnotations(*root_node);
@@ -876,13 +884,6 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool is_kernel_fun
   }
   rpc_str += " ) ";
   _idl_file << rpc_str;
-}
-
-void pdg::DataAccessAnalysis::generateRpcStubForIndirectCall(DIType &dt, std::string arg_name)
-{
-  std::string ss;
-  llvm::raw_string_ostream call_stub(ss);
-  // TODO: genereate a call stub for indirect call
 }
 
 void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool is_kernel_func)

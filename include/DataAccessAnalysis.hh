@@ -29,7 +29,6 @@ namespace pdg
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
     void generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret = false);
     void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name);
-    void generateRpcStubForIndirectCall(llvm::DIType &dt, std::string arg_name);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
