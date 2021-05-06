@@ -224,7 +224,7 @@ std::set<pdg::AccessTag> pdg::DataAccessAnalysis::computeDataAccessTagsForVal(Va
   return acc_tags;
 }
 
-void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node)
+void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node, bool is_ret)
 {
   auto func = tree_node.getFunc();
   DomainTag boundary_func_domain_tag = DomainTag::NO_DOMAIN;
@@ -280,7 +280,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   {
     if (Instruction *i = dyn_cast<Instruction>(addr_var))
     {
-
+      // checking for globals
       if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
         continue;
     }
@@ -310,7 +310,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
         if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
           continue;
         // optimization for cross domain data accesses
-        if (boundary_func_domain_tag != DomainTag::NO_DOMAIN && func_tag != boundary_func_domain_tag)
+        if (boundary_func_domain_tag != DomainTag::NO_DOMAIN && func_tag != boundary_func_domain_tag && !is_ret)
           continue;
       }
 
@@ -327,7 +327,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
     tree_node.setCanOptOut(true);
 }
 
-void pdg::DataAccessAnalysis::computeDataAccessForTree(Tree *tree)
+void pdg::DataAccessAnalysis::computeDataAccessForTree(Tree *tree, bool is_ret)
 {
   TreeNode *root_node = tree->getRootNode();
   assert(root_node != nullptr && "cannot compute access info for empty tree!");
@@ -337,7 +337,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTree(Tree *tree)
   {
     TreeNode *current_node = node_queue.front();
     node_queue.pop();
-    computeDataAccessForTreeNode(*current_node);
+    computeDataAccessForTreeNode(*current_node, false, is_ret);
     for (auto child_node : current_node->getChildNodes())
     {
       node_queue.push(child_node);
@@ -389,7 +389,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForFuncArgs(Function &F)
   FunctionWrapper *fw = func_wrapper_map[&F];
   // compute for return value access info
   auto arg_ret_tree = fw->getRetFormalInTree();
-  computeDataAccessForTree(arg_ret_tree);
+  computeDataAccessForTree(arg_ret_tree, true);
   // compute arg access info
   auto arg_tree_map = fw->getArgFormalInTreeMap();
   for (auto iter = arg_tree_map.begin(); iter != arg_tree_map.end(); iter++)
@@ -459,11 +459,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsSharedData();
 
-    if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
-    {
-      _ksplit_stats->increaseFieldsBoundaryOpt();
-      continue;
-    }
+    // if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
+    // {
+    //   _ksplit_stats->increaseFieldsBoundaryOpt();
+    //   continue;
+    // }
 
     auto bw = 0;
 
@@ -499,7 +499,6 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     else if (dbgutils::isStructPointerType(*field_di_type))
     {
       std::string field_name_prefix = "";
-      // TODO: fix this to use global struct that contain function pointers
       if (_SDA->isGlobalOpStruct(field_lowest_di_type_name))
       {
         field_name_prefix = "global_";
@@ -931,17 +930,6 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
 
   if (!tree_node.getAllocStr().empty())
     annotations.insert(tree_node.getAllocStr());
-  // if (dbgutils::isStructPointerType(*tree_node.getDIType()))
-  // {
-  //   std::string alloc_caller_anno = computeAllocCallerAnnotation(tree_node);
-  //   if (!alloc_caller_anno.empty())
-  //     annotations.insert(alloc_caller_anno);
-
-  //   std::string alloc_callee_anno = computeAllocCalleeAnnotation(tree_node);
-  //   if (!alloc_callee_anno.empty())
-  //     annotations.insert(alloc_callee_anno);
-  // }
-
   return annotations;
 }
 

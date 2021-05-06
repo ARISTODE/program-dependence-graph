@@ -79,10 +79,11 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
   {
     if (auto lshr = dyn_cast<BinaryOperator>(lshr_op_inst))
     {
-      auto shift_bits = lshr->getOperand(1);        // constant int in llvm
-      if (ConstantInt *ci = dyn_cast<ConstantInt>(shift_bits))
+      if (lshr->getOpcode() == BinaryOperator::LShr)
       {
-        gep_bit_offset += ci->getZExtValue(); // add the value as an unsigned integer
+        auto shift_bits = lshr->getOperand(1); // constant int in llvm
+        if (ConstantInt *ci = dyn_cast<ConstantInt>(shift_bits))
+          gep_bit_offset += ci->getZExtValue(); // add the value as an unsigned integer
       }
     }
   }

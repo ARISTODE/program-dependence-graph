@@ -51,6 +51,12 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
       Node* dst = g.getNode(*inst_iter);
       if (src == nullptr || dst == nullptr)
         continue;
+      // use type info to eliminate dubious gep
+      if (!isa<BitCastInst>(*inst_iter))
+      {
+        if (inst.getType() != inst_iter->getType())
+          continue;
+      }
       src->addNeighbor(*dst, EdgeType::DATA_ALIAS);
       dst->addNeighbor(*src, EdgeType::DATA_ALIAS);
     }
@@ -112,6 +118,11 @@ AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Valu
     auto load_addr = li->getPointerOperand();
     for (auto user : load_addr->users())
     {
+      if (isa<LoadInst>(user))
+      {
+        if (user == &v2)
+          return MustAlias;
+      }
       if (StoreInst *si = dyn_cast<StoreInst>(user))
       {
         if (si->getPointerOperand() == load_addr)
@@ -122,10 +133,11 @@ AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Valu
       }
     }
   }
+
   // handle gep
   if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&v1))
   {
-    if (gep->getPointerOperand() == &v2)
+    if (gep->getPointerOperand() == &v2 && gep->hasAllZeroIndices())
       return MustAlias;
   }
   return NoAlias;

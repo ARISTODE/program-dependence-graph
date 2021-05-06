@@ -20,9 +20,9 @@ namespace pdg
     void propagateAllocSizeAnno(llvm::Value &allocator);
     void computeAllocSizeAnnos(llvm::Module &M);
     void computeExportedFuncsPtrNameMap();
-    void computeDataAccessForTree(Tree *tree);
+    void computeDataAccessForTree(Tree *tree, bool is_ret=false);
     void computeDataAccessForGlobalTree(Tree *tree);
-    void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false);
+    void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false, bool is_ret=false);
     void computeDataAccessForFuncArgs(llvm::Function &F);
     void generateIDLForFunc(llvm::Function &F, bool is_kernel_func=false);
     void generateRpcForFunc(llvm::Function &F, bool is_kernel_func=false);

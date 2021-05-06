@@ -6,6 +6,7 @@ static std::set<std::string> KernelAllocators = {
     "kzalloc",
     "kmalloc",
     "kvzalloc",
+    "vzalloc",
     "__kmalloc"
 };
 

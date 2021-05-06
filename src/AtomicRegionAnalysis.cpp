@@ -21,6 +21,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   _warning_cs_count = 0;
   _warning_atomic_op_count = 0;
   _cs_warning_count = 0;
+  setupFenceNames();
   setupLockMap();
   computeBoundaryObjects(M);
   computeCriticalSections(M);
