@@ -46,9 +46,12 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 
   computeAllocSizeAnnos(M);
   _idl_file << "module kernel {\n";
-  for (auto F : _SDA->getBoundaryFuncs())
+  std::vector<std::string> boundary_func_names(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
+  std::sort(boundary_func_names.begin(), boundary_func_names.end());
+  for (auto func_name : boundary_func_names)
   {
-    if (F->isDeclaration())
+    auto F = M.getFunction(func_name);
+    if (F == nullptr || F->isDeclaration())
       continue;
     generateIDLForFunc(*F);
     if (EnableAnalysisStats)
