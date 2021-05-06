@@ -170,7 +170,8 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   auto call_inst = cw.getCallInst();
   for (auto ret_inst : ret_insts)
   {
-    Node *src = _PDG->getNode(*ret_inst);
+    auto ret_val = ret_inst->getReturnValue();
+    Node *src = _PDG->getNode(*ret_val);
     Node *dst = _PDG->getNode(*call_inst);
     if (src == nullptr || dst == nullptr)
       continue;

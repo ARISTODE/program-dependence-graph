@@ -297,7 +297,11 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
 
   // inter proc access
   bool only_has_cross_domain_access = true;
-  auto parameter_in_nodes = _PDG->findNodesReachedByEdge(tree_node, EdgeType::PARAMETER_IN);
+  std::set<EdgeType> edge_types = {
+    EdgeType::PARAMETER_IN,
+    EdgeType::DATA_RET,
+  };
+  auto parameter_in_nodes = _PDG->findNodesReachedByEdges(tree_node, edge_types);
   for (auto n : parameter_in_nodes)
   {
     if (n->getValue() != nullptr)
@@ -305,6 +309,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
       if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
       {
         auto inst_func = i->getFunction();
+        if (inst_func == func)
+          tree_node.addAddrVar(*i);
+
         DomainTag func_tag = computeFuncDomainTag(*inst_func);
         // assumption when computing access for global variable
         if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
@@ -320,6 +327,17 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
       {
         tree_node.addAccessTag(acc_tag);
       }
+    }
+  }
+
+  // reconnecting address nodes found by inter procedural call
+  for (auto child_node : tree_node.getChildNodes())
+  {
+    child_node->computeDerivedAddrVarsFromParent();
+    for (auto addr_var : child_node->getAddrVars())
+    {
+      auto addr_var_node = _PDG->getNode(*addr_var);
+      child_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
     }
   }
 
@@ -459,11 +477,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsSharedData();
 
-    // if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
-    // {
-    //   _ksplit_stats->increaseFieldsBoundaryOpt();
-    //   continue;
-    // }
+    if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
+    {
+      _ksplit_stats->increaseFieldsBoundaryOpt();
+      continue;
+    }
 
     auto bw = 0;
 

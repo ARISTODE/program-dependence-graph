@@ -43,6 +43,7 @@ namespace pdg
     bool canReach(pdg::Node &src, pdg::Node &dst);
     bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> include_edge_types);
     std::set<Node *> findNodesReachedByEdge(Node &src, EdgeType edge_type);
+    std::set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edge_types);
     ValueNodeMap &getValueNodeMap() { return _val_node_map; }
 
   protected:

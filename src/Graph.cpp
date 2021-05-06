@@ -87,6 +87,30 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, 
   return ret;
 }
 
+std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src, std::set<EdgeType> &edge_types)
+{
+  std::set<Node *> ret;
+  std::queue<Node *> node_queue;
+  node_queue.push(&src);
+  std::set<Node*> visited;
+  while (!node_queue.empty())
+  {
+    Node *current_node = node_queue.front();
+    node_queue.pop();
+    if (visited.find(current_node) != visited.end())
+      continue;
+    visited.insert(current_node);
+    ret.insert(current_node);
+    for (auto out_edge : current_node->getOutEdgeSet())
+    {
+      if (edge_types.find(out_edge->getEdgeType()) == edge_types.end())
+        continue;
+      node_queue.push(out_edge->getDstNode());
+    }
+  }
+  return ret;
+}
+
 // PDG Specific
 void pdg::ProgramGraph::build(Module &M)
 {
