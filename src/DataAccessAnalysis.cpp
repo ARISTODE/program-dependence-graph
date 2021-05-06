@@ -54,17 +54,17 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     if (F == nullptr || F->isDeclaration())
       continue;
     generateIDLForFunc(*F);
-    if (EnableAnalysisStats)
-    {
-      auto func_node = _call_graph->getNode(*F);
-      if (func_node != nullptr)
-      {
-        auto trans_closure = _call_graph->computeTransitiveClosure(*func_node);
-        _funcs_reachable_from_boundary.insert(trans_closure.begin(), trans_closure.end());
-      }
-    }
+    // if (EnableAnalysisStats)
+    // {
+    //   auto func_node = _call_graph->getNode(*F);
+    //   if (func_node != nullptr)
+    //   {
+    //     auto trans_closure = _call_graph->computeTransitiveClosure(*func_node);
+    //     _funcs_reachable_from_boundary.insert(trans_closure.begin(), trans_closure.end());
+    //   }
+    // }
   }
-  _ksplit_stats->increaseTotalFuncSize(_funcs_reachable_from_boundary.size());
+  _ksplit_stats->increaseTotalFuncSize(total_num_funcs);
 
   // genereate additional func call stubs for kernel funcs registered on the driver side
   EnableAnalysisStats = false;
