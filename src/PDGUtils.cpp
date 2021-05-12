@@ -337,6 +337,54 @@ std::string pdg::pdgutils::getNodeTypeStr(GraphNodeType node_type)
   return "";
 }
 
+std::string pdg::pdgutils::getEdgeTypeStr(EdgeType edge_type)
+{
+  switch (edge_type)
+  {
+  case EdgeType::IND_CALL:
+    return "IND_CALL";
+  case EdgeType::CONTROLDEP_CALLINV:
+    return "CONTROLDEP_CALLINV";
+  case EdgeType::CONTROLDEP_ENTRY:
+    return "CONTROLDEP_ENTRY";
+  case EdgeType::CONTROLDEP_BR:
+    return "CONTROLDEP_BR";
+  case EdgeType::CONTROLDEP_IND_BR:
+    return "CONTROLDEP_IND_BR";
+  case EdgeType::DATA_DEF_USE:
+    return "DATA_DEF_USE";
+  case EdgeType::DATA_RAW:
+    return "DATA_RAW";
+  case EdgeType::DATA_READ:
+    return "DATA_READ";
+  case EdgeType::DATA_ALIAS:
+    return "DATA_ALIAS";
+  case EdgeType::DATA_RET:
+    return "DATA_RET";
+  case EdgeType::PARAMETER_IN:
+    return "PARAMETER_IN";
+  case EdgeType::PARAMETER_OUT:
+    return "PARAMETER_OUT";
+  case EdgeType::PARAMETER_FIELD:
+    return "PARAMETER_FIELD";
+  case EdgeType::GLOBAL_DEP:
+    return "GLOBAL_DEP";
+  case EdgeType::VAL_DEP:
+    return "VAL_DEP";
+  case EdgeType::ANNO_VAR:
+    return "ANNO_VAR";
+  case EdgeType::ANNO_GLOBAL:
+    return "ANNO_GLOBAL";
+  case EdgeType::ANNO_OTHER:
+    return "ANNO_OTHER";
+  case EdgeType::TYPE_OTHEREDGE:
+    return "TYPE_OTHEREDGE";
+  default:
+    break;
+  }
+  return "";
+}
+
 std::string& pdg::pdgutils::rtrim(std::string& s, const char* t)
 {
     s.erase(s.find_last_not_of(t) + 1);

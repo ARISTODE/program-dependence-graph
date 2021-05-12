@@ -47,7 +47,7 @@ void pdg::GenericGraph::dumpGraph()
     auto node = *node_iter;
     for (auto out_edge : node->getOutEdgeSet())
     {
-      errs() << "edge: " << out_edge << " / " << "src[" << out_edge->getSrcNode() << "] / " << " dst[" << out_edge->getDstNode() << "]" << "\n";
+      errs() << "edge: " << out_edge << " / " << "src[" << out_edge->getSrcNode() << "] / " << " dst[" << out_edge->getDstNode() << "]" << " / " << pdgutils::getEdgeTypeStr(out_edge->getEdgeType()) << "\n";
     }
   }
 }

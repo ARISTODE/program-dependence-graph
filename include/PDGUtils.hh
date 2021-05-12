@@ -34,6 +34,7 @@ namespace pdg
     std::string computeTreeNodeID(TreeNode &tree_node);
     std::string stripVersionTag(std::string str);
     std::string getNodeTypeStr(GraphNodeType node_type);
+    std::string getEdgeTypeStr(EdgeType edge_type);
     std::string& rtrim(std::string& s, const char* t = "\t\n\r\f\v");
   } // namespace pdgutils
 } // namespace pdg
