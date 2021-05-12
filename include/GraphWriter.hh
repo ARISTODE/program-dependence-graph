@@ -23,11 +23,103 @@ namespace llvm
       return "Program Dependency  Graph";
     }
 
-    std::string getNodeLabel(pdg::Node *node, pdg::ProgramDependencyGraph *G)
+    std::string getCDGNodeLabel(pdg::Node *node)
     {
       pdg::GraphNodeType node_type = node->getNodeType();
-      Function* func = node->getFunc();
-      Value* node_val = node->getValue();
+      Function *func = node->getFunc();
+      Value *node_val = node->getValue();
+      std::string str;
+      raw_string_ostream OS(str);
+
+
+      return "";
+    }
+
+    std::string getDDGNodeLabel(pdg::Node *node)
+    {
+      pdg::GraphNodeType node_type = node->getNodeType();
+      Function *func = node->getFunc();
+      Value *node_val = node->getValue();
+      std::string str;
+      raw_string_ostream OS(str);
+
+      switch (node_type)
+      {
+      case pdg::GraphNodeType::FUNC_ENTRY:
+        return "<<ENTRY>> " + func->getName().str();
+      case pdg::GraphNodeType::INST_OTHER:
+      {
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str(); // print the instruction literal
+        }
+      }
+      case pdg::GraphNodeType::INST_FUNCALL:
+      {
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str(); // print the instruction literal
+        }
+      }
+      case pdg::GraphNodeType::INST_RET:
+      {
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str(); // print the instruction literal
+        }
+      }
+      case pdg::GraphNodeType::INST_BR:
+      {
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str(); // print the instruction literal
+        }
+      }
+      case pdg::GraphNodeType::ANNO_VAR:
+      {
+        OS << "Local Anno: " << *node_val;
+        return OS.str();
+      }
+      case pdg::GraphNodeType::ANNO_GLOBAL:
+      {
+        OS << "Global Anno: " << *node_val;
+        return OS.str();
+      }
+      case pdg::GraphNodeType::VAR_STATICALLOCGLOBALSCOPE:
+      {
+        OS << "global var: " << *node_val;
+        return OS.str();
+      }
+      case pdg::GraphNodeType::VAR_STATICALLOCMODULESCOPE:
+      {
+        OS << "static global var: " << *node_val;
+        return OS.str();
+      }
+      case pdg::GraphNodeType::VAR_STATICALLOCFUNCTIONSCOPE:
+      {
+        OS << "static func var: " << *node_val;
+        return OS.str();
+      }
+      default:
+        break;
+      }
+
+      return "style=invis";
+    }
+
+    std::string getNodeLabel(pdg::Node *node, pdg::ProgramDependencyGraph *G)
+    {
+      if (pdg::DOTONLYDDG)
+        return getDDGNodeLabel(node);
+      if (pdg::DOTONLYCDG)
+        return getCDGNodeLabel(node);
+      pdg::GraphNodeType node_type = node->getNodeType();
+      Function *func = node->getFunc();
+      Value *node_val = node->getValue();
       std::string str;
       raw_string_ostream OS(str);
 
@@ -118,8 +210,33 @@ namespace llvm
       return "";
     }
 
+    std::string getDDGEdgeAttributes(pdg::Node::iterator edge_iter)
+    {
+      pdg::EdgeType edge_type = edge_iter.getEdgeType();
+      switch (edge_type)
+      {
+      case pdg::EdgeType::DATA_DEF_USE:
+        return "style=dotted,label = \"{D_DEF_USE}\" ";
+      case pdg::EdgeType::DATA_ALIAS:
+        return "style=dotted,label = \"{D_ALIAS}\" ";
+      case pdg::EdgeType::DATA_RAW:
+        return "style=dotted,label = \"{D_RAW}\" ";
+      case pdg::EdgeType::DATA_RET:
+        return "style=dashed, color=\"red\", label =\"{D_RET}\"";
+      case pdg::EdgeType::ANNO_GLOBAL:
+        return "style=dashed, color=\"green\", label =\"{ANNO_GLOB}\"";
+      case pdg::EdgeType::ANNO_VAR:
+        return "style=dashed, color=\"green\", label =\"{ANNO_VAR}\"";
+      default:
+        break;
+      }
+      return "style=invis";
+    }
+
     std::string getEdgeAttributes(pdg::Node *Node, pdg::Node::iterator edge_iter, pdg::ProgramDependencyGraph *PDG)
     {
+      if (pdg::DOTONLYDDG)
+        return getDDGEdgeAttributes(edge_iter);
       pdg::EdgeType edge_type = edge_iter.getEdgeType();
       switch (edge_type)
       {

@@ -6,6 +6,7 @@
 #include "PDGEnums.hh"
 #include "PDGUtils.hh"
 #include <set>
+#include <unordered_set>
 
 namespace pdg
 {

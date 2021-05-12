@@ -1,3 +1,5 @@
+#ifndef PDGUTILS_H_
+#define PDGUTILS_H_
 #include "LLVMEssentials.hh"
 #include "Tree.hh"
 #include <vector>
@@ -31,5 +33,9 @@ namespace pdg
     std::string stripFuncNameVersionNumber(std::string func_name);
     std::string computeTreeNodeID(TreeNode &tree_node);
     std::string stripVersionTag(std::string str);
+    std::string getNodeTypeStr(GraphNodeType node_type);
+    std::string& rtrim(std::string& s, const char* t = "\t\n\r\f\v");
   } // namespace pdgutils
 } // namespace pdg
+
+#endif

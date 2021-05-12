@@ -5,6 +5,10 @@ using namespace llvm;
 
 char pdg::ProgramDependencyGraph::ID = 0;
 
+bool pdg::DEBUG;
+
+cl::opt<bool, true> DEBUG("pdg-debug", cl::desc("print debug messages"), cl::value_desc("print debug messages"), cl::location(pdg::DEBUG), cl::init(false));
+
 void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {
   AU.addRequired<DataDependencyGraph>();
@@ -44,6 +48,10 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
   errs() << "building PDG takes: " <<  duration.count() << "\n";
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
+
+  if (DEBUG)
+    _PDG->dumpGraph();
+
   return false;
 }
 
@@ -184,7 +192,6 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
 void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
 {
   // add control dependency edges
-  // TODO: Figure out why control pass will run automatically.
   getAnalysis<ControlDependencyGraph>(F); // add control dependencies for nodes in F
   // connect formal tree with address variables
   FunctionWrapper* func_w = getFuncWrapper(F);
@@ -193,10 +200,7 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
   {
     Tree* formal_in_tree = func_w->getArgFormalInTree(*arg);
     if (!formal_in_tree)
-    {
-      // errs() << "[WARNING]: empty formal tree for func " << F.getName() << "\n";
       return;
-    }
 
     Tree* formal_out_tree = func_w->getArgFormalOutTree(*arg);
     entry_node->addNeighbor(*formal_in_tree->getRootNode(), EdgeType::PARAMETER_IN);

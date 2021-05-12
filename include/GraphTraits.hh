@@ -30,20 +30,6 @@ namespace llvm
     static ChildIteratorType child_begin(NodeRef N) { return ChildIteratorType(N); }
     static ChildIteratorType child_end(NodeRef N) { return ChildIteratorType(N, true); }
   };
-
-  // template <>
-  // struct GraphTraits<const pdg::ProgramGraph *>
-  // {
-  //   using NodeType = const pdg::Node;
-  //   using NodeRef = const pdg::Node *;
-  //   using ChildIteratorType = pdg::Node::const_iterator;
-  //   using nodes_iterator = pdg::ProgramGraph::NodeSet::const_iterator;
-
-  //   static nodes_iterator nodes_begin(const pdg::ProgramGraph *G) { return G->begin(); }
-  //   static nodes_iterator nodes_end(const pdg::ProgramGraph *G) { return G->end(); }
-  //   static ChildIteratorType child_begin(NodeRef N) { return ChildIteratorType(N); }
-  //   static ChildIteratorType child_end(NodeRef N) { return ChildIteratorType(N, true); }
-  // };
 }
 
 #endif

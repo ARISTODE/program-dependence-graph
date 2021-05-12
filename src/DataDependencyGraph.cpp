@@ -10,6 +10,7 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
   if (!g.isBuild())
   {
     g.build(M);
+    // TODO: add comment
     g.bindDITypeToNodes(M);
   }
   

@@ -38,6 +38,7 @@ namespace pdg
       _is_visited = false;
       _node_di_type = nullptr;
     }
+    
     void addInEdge(Edge &e) { _in_edge_set.insert(&e); }
     void addOutEdge(Edge &e) { _out_edge_set.insert(&e); }
     EdgeSet &getInEdgeSet() { return _in_edge_set; }

@@ -292,3 +292,53 @@ Value *pdg::pdgutils::getLShrOnGep(GetElementPtrInst &gep)
   }
   return nullptr;
 }
+
+std::string pdg::pdgutils::getNodeTypeStr(GraphNodeType node_type)
+{
+  switch (node_type)
+  {
+  case GraphNodeType::INST_FUNCALL:
+    return "INST_FUNCALL";
+  case GraphNodeType::INST_RET:
+    return "INST_RET";
+  case GraphNodeType::INST_BR:
+    return "INST_BR";
+  case GraphNodeType::INST_OTHER:
+    return "INST_OTHER";
+  case GraphNodeType::FUNC_ENTRY:
+    return "FUNC_ENTRY";
+  case GraphNodeType::PARAM_FORMALIN:
+    return "PARAM_FORMALIN";
+  case GraphNodeType::PARAM_FORMALOUT:
+    return "PARAM_FORMALOUT";
+  case GraphNodeType::PARAM_ACTUALIN:
+    return "PARAM_ACTUALIN";
+  case GraphNodeType::PARAM_ACTUALOUT:
+    return "PARAM_ACTUALOUT";
+  case GraphNodeType::VAR_STATICALLOCGLOBALSCOPE:
+    return "VAR_STATICALLOCGLOBALSCOPE";
+  case GraphNodeType::VAR_STATICALLOCMODULESCOPE:
+    return "VAR_STATICALLOCMODULESCOPE";
+  case GraphNodeType::VAR_STATICALLOCFUNCTIONSCOPE:
+    return "VAR_STATICALLOCFUNCTIONSCOPE";
+  case GraphNodeType::VAR_OTHER:
+    return "VAR_OTHER";
+  case GraphNodeType::FUNC:
+    return "FUNC";
+  case GraphNodeType::ANNO_VAR:
+    return "ANNO_VAR";
+  case GraphNodeType::ANNO_GLOBAL:
+    return "ANNO_GLOBAL";
+  case GraphNodeType::ANNO_OTHER:
+    return "ANNO_OTHER";
+  default:
+    break;
+  }
+  return "";
+}
+
+std::string& pdg::pdgutils::rtrim(std::string& s, const char* t)
+{
+    s.erase(s.find_last_not_of(t) + 1);
+    return s;
+}

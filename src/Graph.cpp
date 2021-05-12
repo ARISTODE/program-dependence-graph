@@ -15,6 +15,43 @@ pdg::Node *pdg::GenericGraph::getNode(Value &v)
   return _val_node_map[&v];
 }
 
+// pretty print nodes and edges in PDG
+void pdg::GenericGraph::dumpGraph()
+{
+  // print nodes
+  errs() << "=============== Node Set ===============\n";
+  for (auto node_iter = begin(); node_iter != end(); ++node_iter)
+  {
+    auto node = *node_iter;
+    std::string str;
+    raw_string_ostream OS(str);
+    Value* val = node->getValue();
+    if (val != nullptr)
+    {
+      if (Function* f = dyn_cast<Function>(val))
+        OS << f->getName().str() << "\n";
+      else
+        OS << *val << "\n";
+    }
+
+    if (node->getValue() != nullptr)
+      errs() << "node: " << node << " - " << pdgutils::rtrim(OS.str()) << " - " << pdgutils::getNodeTypeStr(node->getNodeType()) << "\n" ;
+    else
+      errs() << "node: " << node << " - " <<  pdgutils::getNodeTypeStr(node->getNodeType()) << "\n" ;
+  }
+
+  //print edges
+  errs() << "=============== Edge Set ===============\n";
+  for (auto node_iter = begin(); node_iter != end(); ++node_iter)
+  {
+    auto node = *node_iter;
+    for (auto out_edge : node->getOutEdgeSet())
+    {
+      errs() << "edge: " << out_edge << " / " << "src[" << out_edge->getSrcNode() << "] / " << " dst[" << out_edge->getDstNode() << "]" << "\n";
+    }
+  }
+}
+
 // ===== Graph Traversal =====
 // DFS search
 bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)

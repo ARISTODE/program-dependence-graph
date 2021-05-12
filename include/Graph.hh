@@ -7,6 +7,7 @@
 #include "CallWrapper.hh"
 #include "FunctionWrapper.hh"
 #include "PDGEnums.hh"
+#include "PDGCommandLineOptions.hh"
 
 
 #include <unordered_map>
@@ -43,6 +44,7 @@ namespace pdg
     bool canReach(pdg::Node &src, pdg::Node &dst);
     bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> exclude_edge_types);
     ValueNodeMap &getValueNodeMap() { return _val_node_map; }
+    void dumpGraph();
 
   protected:
     ValueNodeMap _val_node_map;
