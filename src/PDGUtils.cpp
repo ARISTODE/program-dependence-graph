@@ -6,6 +6,10 @@ static std::set<std::string> dataWriteLibFuncs = {
   "__memcpy"
 };
 
+static std::set<std::string> asmWriteOpcode = {
+  "bts"
+};
+
 StructType *pdg::pdgutils::getStructTypeFromGEP(GetElementPtrInst &gep)
 {
   Value *baseAddr = gep.getPointerOperand();
@@ -149,6 +153,11 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
 
     if (CallInst *ci = dyn_cast<CallInst>(user))
     {
+      if (InlineAsm *ia = dyn_cast<InlineAsm>(ci->getCalledOperand()))
+      {
+        return hasAsmWriteAccess(*ia);
+      }
+
       auto called_func = getCalledFunc(*ci);
       if (called_func == nullptr)
         continue;
@@ -439,6 +448,20 @@ bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
   if (cast_count > 1)
     return true;
   return false;
+}
+
+bool pdg::pdgutils::hasAsmWriteAccess(InlineAsm &ia)
+{
+  auto asm_str = ia.getAsmString();
+  auto op_code = asm_str.substr(0, asm_str.find(" "));
+  if (isWriteAccessAsmOpcode(op_code))
+    return true;
+  return false;
+}
+
+bool pdg::pdgutils::isWriteAccessAsmOpcode(std::string op_code)
+{
+  return (asmWriteOpcode.find(op_code) != asmWriteOpcode.end());
 }
 
 bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)

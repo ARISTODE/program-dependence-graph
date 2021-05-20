@@ -72,6 +72,7 @@ namespace pdg
     void build(int max_tree_depth = 5);
     llvm::Value *getBaseVal() { return _base_val; }
     void setBaseVal(llvm::Value &v) { _base_val = &v; }
+    llvm::Function *getFunc() { return (_root_node == nullptr ? nullptr : _root_node->getFunc()); }
 
   private:
     llvm::Value *_base_val;

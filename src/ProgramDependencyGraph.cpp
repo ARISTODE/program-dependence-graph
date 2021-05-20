@@ -53,16 +53,21 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
       continue;
     connectIntraprocDependencies(F);
     connectInterprocDependencies(F);
+    // this is a simplification from caller's formal tree to call site actual trees
+    connectFormalInTreeWithActualTree(F);
     func_size++;
   }
 
+  errs() << "connecting interproc addrvar\n";
   for (auto &F : M)
   {
     if (F.isDeclaration())
       continue;
+    connectAddrVarsReachableFromInterprocFlow(F);
+    connectInterprocDependencies(F);
     connectFormalInTreeWithActualTree(F);
+    // connectIntraprocDependencies(F);
   }
-
   errs() << "func size: " << func_size << "\n";
   auto stop = std::chrono::high_resolution_clock::now();
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
@@ -135,7 +140,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   // step 2: connect actual in -> formal in, formal out -> actual out
   auto actual_arg_list = cw.getArgList();
   auto formal_arg_list = fw.getArgList();
-  assert(actual_arg_list.size() == formal_arg_list.size() && "cannot connect tree edges due to inequal arg num! (connectCallerandCallee)");
+  assert(actual_arg_list.size() == formal_arg_list.size() && "cannot connect tree edges due to unequal arg num! (connectCallerandCallee)");
   int num_arg = cw.getArgList().size();
   for (int i = 0; i < num_arg; i++)
   {
@@ -526,9 +531,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
               {
                 auto arg_actual_in_tree_root_node = arg_actual_in_tree->getRootNode();
                 if (arg_actual_in_tree_root_node != nullptr)
-                {
                   connectTreeNode(*current_node, *arg_actual_in_tree_root_node, EdgeType::PARAMETER_IN);
-                }
               }
             }
           }
@@ -538,6 +541,54 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
     // stop connecting rest nodes with addr vars if not field sensitive
     if (!FieldSensitive)
       break;
+    for (auto child_node : current_node->getChildNodes())
+    {
+      node_queue.push(child_node);
+    }
+  }
+}
+
+void pdg::ProgramDependencyGraph::connectAddrVarsReachableFromInterprocFlow(Function &F)
+{
+  FunctionWrapper *func_w = getFuncWrapper(F);
+  for (auto arg : func_w->getArgList())
+  {
+    Tree *formal_in_tree = func_w->getArgFormalInTree(*arg);
+    if (!formal_in_tree)
+      return;
+    conntectFormalInTreeWithInterprocReachableAddrVars(*formal_in_tree);
+  }
+}
+
+void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddrVars(Tree &formal_in_tree)
+{
+  TreeNode *root_node = formal_in_tree.getRootNode();
+  std::queue<TreeNode *> node_queue;
+  node_queue.push(root_node);
+  std::set<EdgeType> edge_types = {
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_RET,
+  };
+  Function* current_func = formal_in_tree.getFunc();
+  if (current_func == nullptr)
+    return;
+  while (!node_queue.empty())
+  {
+    auto current_node = node_queue.front();
+    node_queue.pop();
+    auto reachable_nodes = _PDG->findNodesReachedByEdges(*current_node, edge_types);
+    for (auto n : reachable_nodes)
+    {
+      if (n->getValue() == nullptr)
+        continue;
+      if (n->getFunc() == current_func)
+      {
+        if (current_func->getName() == "msr_open")
+          errs() << "find inter proc addr var: " << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << " - " << *n->getValue() << " - " << current_func->getName() << "\n";
+        current_node->addAddrVar(*n->getValue());
+      }
+    }
+
     for (auto child_node : current_node->getChildNodes())
     {
       node_queue.push(child_node);

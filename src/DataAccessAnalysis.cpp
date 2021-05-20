@@ -54,15 +54,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     if (F == nullptr || F->isDeclaration())
       continue;
     generateIDLForFunc(*F);
-    // if (EnableAnalysisStats)
-    // {
-    //   auto func_node = _call_graph->getNode(*F);
-    //   if (func_node != nullptr)
-    //   {
-    //     auto trans_closure = _call_graph->computeTransitiveClosure(*func_node);
-    //     _funcs_reachable_from_boundary.insert(trans_closure.begin(), trans_closure.end());
-    //   }
-    // }
   }
   _ksplit_stats->increaseTotalFuncSize(total_num_funcs);
 
@@ -93,6 +84,8 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     _global_var_access_info << "====== global " << pair.first->getName().str() << " ======== \n";
     generateIDLFromGlobalVarTree(*pair.first, tree);
   }
+
+  generateRpcStubForExportedSymbols(M);
 
   _idl_file << "\n}";
 
@@ -301,8 +294,8 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   // inter proc access
   bool only_has_cross_domain_access = true;
   std::set<EdgeType> edge_types = {
-    EdgeType::PARAMETER_IN,
-    EdgeType::DATA_RET,
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_RET,
   };
   auto parameter_in_nodes = _PDG->findNodesReachedByEdges(tree_node, edge_types);
   for (auto n : parameter_in_nodes)
@@ -427,7 +420,7 @@ Four cases:
 3. pointer to aggregate type
 4. aggregate type
 */
-void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_string_ostream &fields_projection_str, raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name)
+void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_string_ostream &fields_projection_str, raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name, bool is_ret)
 {
   DIType *node_di_type = tree_node.getDIType();
   assert(node_di_type != nullptr && "cannot generate IDL for node with null DIType\n");
@@ -459,7 +452,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     bool is_func_ptr_type = dbgutils::isFuncPointerType(*field_di_type);
     if (child_node->getAccessTags().size() == 0 && !is_func_ptr_type)
       continue;
-    
+
     if (EnableAnalysisStats)
     {
       if (dbgutils::isUnionPointerType(*field_di_type) || dbgutils::isUnionType(*field_di_type))
@@ -468,7 +461,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
 
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsFieldAccess();
-    
+
     // check for shared fields
     std::string field_id = pdgutils::computeTreeNodeID(*child_node);
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
@@ -476,7 +469,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
       continue;
-    
+
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsSharedData();
 
@@ -498,11 +491,17 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     // compute access attributes
     auto annotations = inferTreeNodeAnnotations(*child_node);
+    // handle attribute for return value. The in attr should be eliminated if return val is not alias of arguments
+    if (is_ret)
+    {
+      auto it = annotations.find("[in]");
+      annotations.erase(it, annotations.end());
+    }
 
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
-    
+
     // collect fields stat
     if (EnableAnalysisStats)
     {
@@ -552,7 +551,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       std::string nested_struct_str;
       raw_string_ostream field_nested_struct_proj(nested_struct_str);
 
-      generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t", field_type_name);
+      generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t", field_type_name, is_ret);
 
       if (!nested_fields_proj.str().empty())
       {
@@ -690,7 +689,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     // for pointer to aggregate type, retrive the child node(pointed object), and generate projection
     if (dbgutils::isPointerType(*dbgutils::stripMemberTag(*node_di_type)) && !current_node->getChildNodes().empty())
       current_node = current_node->getChildNodes()[0];
-    generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t", proj_type_name);
+    generateIDLFromTreeNode(*current_node, fields_projection_str, nested_struct_projection_str, node_queue, "\t\t", proj_type_name, is_ret);
     // handle funcptr ops struct specifically
     output_file << nested_struct_projection_str.str();
     if (_SDA->isGlobalOpStruct(proj_type_name))
@@ -758,7 +757,7 @@ std::string handleIoRemap(Function &F, std::string &ret_type_str)
   return "";
 }
 
-void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool is_kernel_func)
+void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_exported_func)
 {
   FunctionWrapper *fw = _PDG->getFuncWrapperMap()[&F];
   std::string rpc_str = "";
@@ -802,19 +801,12 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool is_kernel_fun
   // determine called func name. Need to switch to indirect call name if the function is exported
   std::string rpc_prefix = "rpc";
   std::string called_func_name = F.getName().str();
-  if (!is_kernel_func)
+  called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
+  // handle exported func. Switch name and rpc prefix
+  if (!_SDA->isKernelFunc(F))
   {
-    for (auto p : _exported_funcs_ptr_name_map)
-    {
-      if (p.second == F.getName().str())
-      {
-        rpc_prefix = "rpc_ptr";
-        called_func_name = p.first;
-        if (_SDA->isKernelFunc(F))
-          _kernel_funcs_regsitered_with_indirect_ptr.insert(&F);
-        break;
-      }
-    }
+    rpc_prefix = "rpc_ptr";
+    called_func_name = getExportedFuncPtrName(called_func_name); // TODO: fix the problem when multiple global ops have same type
   }
 
   auto ioremap_ann = handleIoRemap(F, ret_type_str);
@@ -886,14 +878,43 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool is_kernel_fun
   _idl_file << rpc_str;
 }
 
-void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool is_kernel_func)
+bool pdg::DataAccessAnalysis::isExportedFunc(Function &F)
+{
+  for (auto p : _exported_funcs_ptr_name_map)
+  {
+    if (p.second == F.getName().str())
+      return true;
+  }
+  return false;
+}
+
+void pdg::DataAccessAnalysis::generateRpcStubForExportedSymbols(Module &M)
+{
+  for (auto &gv : M.getGlobalList())
+  {
+    auto name = gv.getName().str();
+    // look for global name starts with __ksymtab or __kstrtab
+    if (name.find("__ksymtab") == 0 || name.find("__kstrtab") == 0)
+    {
+      _idl_file << "\trpc_export " << gv.getName().str() << ";\n";
+    }
+  }
+}
+
+void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool process_exported_func)
 {
   _current_processing_func = F.getName().str();
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   auto func_iter = func_wrapper_map.find(&F);
   assert(func_iter != func_wrapper_map.end() && "no function wrapper found (IDL-GEN)!");
   auto fw = func_iter->second;
-  generateRpcForFunc(F, is_kernel_func);
+  // process exported funcs later in special manner
+  if (isExportedFunc(F) && !process_exported_func)
+  {
+    _kernel_funcs_regsitered_with_indirect_ptr.insert(&F);
+    return;
+  }
+  generateRpcForFunc(F, process_exported_func);
   _idl_file << "{\n";
   // generate projection for return value
   auto ret_arg_tree = fw->getRetFormalInTree();
@@ -1104,6 +1125,16 @@ pdg::DomainTag pdg::DataAccessAnalysis::computeFuncDomainTag(Function &F)
     return DomainTag::DRIVER_DOMAIN;
   else
     return DomainTag::KERNEL_DOMAIN;
+}
+
+std::string pdg::DataAccessAnalysis::getExportedFuncPtrName(std::string func_name)
+{
+  for (auto p : _exported_funcs_ptr_name_map)
+  {
+    if (p.second == func_name)
+      return p.first;
+  }
+  return func_name;
 }
 
 static RegisterPass<pdg::DataAccessAnalysis>

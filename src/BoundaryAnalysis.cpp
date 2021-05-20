@@ -104,6 +104,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
       continue;
     auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type, true);
+    auto gv_name = global_var.getName().str();
     gv_di_type_name = pdgutils::stripVersionTag(gv_di_type_name);
     if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
       continue;

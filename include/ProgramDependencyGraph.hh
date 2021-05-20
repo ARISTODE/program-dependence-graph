@@ -30,7 +30,9 @@ namespace pdg
       void connectActualOutTreeWithAddrVars(Tree &actual_out_tree, llvm::CallInst &ci);
       void connectTreeNode(TreeNode &src_node, TreeNode &dst_node, EdgeType edge_type);
       void connectFormalInTreeWithActualTree(llvm::Function &F);
+      void connectAddrVarsReachableFromInterprocFlow(llvm::Function &F);
       void connectFormalInTreeWithCallActualNode(Tree &formal_in_tree);
+      void conntectFormalInTreeWithInterprocReachableAddrVars(Tree &formal_in_tree);
       void connectGlobalTreeWithAddrVars(Tree &global_var_tree);
 
     private:

@@ -24,6 +24,8 @@ namespace pdg
     bool isSentinelType(llvm::GlobalVariable &gv);
     bool isUserOfSentinelTypeVal(llvm::Value &v);
     bool isVoidPointerHasMultipleCasts(TreeNode &tree_node);
+    bool hasAsmWriteAccess(llvm::InlineAsm &ia);
+    bool isWriteAccessAsmOpcode(std::string op_code);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
