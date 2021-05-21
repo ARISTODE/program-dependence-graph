@@ -45,6 +45,8 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   }
 
   computeAllocSizeAnnos(M);
+  collectExportedFuncSymbols(M); // collect funcs need rpc_export call stub
+
   _idl_file << "module kernel {\n";
   std::vector<std::string> boundary_func_names(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
   std::sort(boundary_func_names.begin(), boundary_func_names.end());
@@ -85,7 +87,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     generateIDLFromGlobalVarTree(*pair.first, tree);
   }
 
-  generateRpcStubForExportedSymbols(M);
 
   _idl_file << "\n}";
 
@@ -809,6 +810,9 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     called_func_name = getExportedFuncPtrName(called_func_name); // TODO: fix the problem when multiple global ops have same type
   }
 
+  if (_exported_func_symbols.find(&F) != _exported_func_symbols.end())
+    rpc_prefix = "rpc_export";
+
   auto ioremap_ann = handleIoRemap(F, ret_type_str);
 
   rpc_str = rpc_prefix + " " + ret_type_str + ioremap_ann + " " + anno_str + " " + called_func_name + "( ";
@@ -888,15 +892,18 @@ bool pdg::DataAccessAnalysis::isExportedFunc(Function &F)
   return false;
 }
 
-void pdg::DataAccessAnalysis::generateRpcStubForExportedSymbols(Module &M)
+void pdg::DataAccessAnalysis::collectExportedFuncSymbols(Module &M)
 {
   for (auto &gv : M.getGlobalList())
   {
     auto name = gv.getName().str();
     // look for global name starts with __ksymtab or __kstrtab
-    if (name.find("__ksymtab") == 0 || name.find("__kstrtab") == 0)
+    if (name.find("__ksymtab_") == 0 || name.find("__kstrtab_") == 0)
     {
-      _idl_file << "\trpc_export " << gv.getName().str() << ";\n";
+      std::string func_name = name.erase(0, 10);
+      Function *f = M.getFunction(StringRef(func_name));
+      if (f != nullptr)
+        _exported_func_symbols.insert(f);
     }
   }
 }
