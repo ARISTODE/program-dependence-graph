@@ -17,6 +17,7 @@ bool pdg::BoundaryAnalysis::runOnModule(Module &M)
   computeDriverImportedFuncs(M);
   computeDriverFuncs(M);
   computeExportedFuncs(M);
+  computeExportedFuncSymbols(M);
   dumpToFiles();
   return false;
 }
@@ -147,6 +148,22 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
   }
 }
 
+void pdg::BoundaryAnalysis::computeExportedFuncSymbols(Module &M)
+{
+  for (auto &gv : M.getGlobalList())
+  {
+    auto name = gv.getName().str();
+    // look for global name starts with __ksymtab or __kstrtab
+    if (name.find("__ksymtab_") == 0 || name.find("__kstrtab_") == 0)
+    {
+      std::string func_name = name.erase(0, 10);
+      Function *f = M.getFunction(StringRef(func_name));
+      if (f != nullptr)
+        _exported_func_symbols.insert(func_name);
+    }
+  }
+}
+
 void pdg::BoundaryAnalysis::dumpToFiles()
 {
   errs() << "dumping to files\n";
@@ -156,6 +173,8 @@ void pdg::BoundaryAnalysis::dumpToFiles()
   dumpToFile("exported_func_ptrs", _exported_func_ptrs);
   dumpToFile("sentinel_fields", _sentinel_fields);
   dumpToFile("driver_globalvar_names", _driver_globalvar_names);
+  std::vector<std::string> exported_func_symbols(_exported_func_symbols.begin(), _exported_func_symbols.end());
+  dumpToFile("driver_exported_func_symbols", exported_func_symbols);
   std::vector<std::string> global_op_struct_names(_global_op_struct_names.begin(), _global_op_struct_names.end());
   dumpToFile("global_op_struct_names", global_op_struct_names);
 }

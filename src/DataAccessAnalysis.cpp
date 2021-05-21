@@ -30,6 +30,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _ksplit_stats = &KSplitStats::getInstance();
   computeExportedFuncsPtrNameMap();
   readDriverDefinedGlobalVarNames("driver_globalvar_names");
+  readDriverExportedFuncSymbols("driver_exported_func_symbols");
   _idl_file.open("kernel.idl");
   _global_var_access_info.open("global_var_access_info.idl");
   unsigned total_num_funcs = 0;
@@ -45,7 +46,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   }
 
   computeAllocSizeAnnos(M);
-  collectExportedFuncSymbols(M); // collect funcs need rpc_export call stub
 
   _idl_file << "module kernel {\n";
   std::vector<std::string> boundary_func_names(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
@@ -68,6 +68,16 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     generateIDLForFunc(*F, true);
   }
   EnableAnalysisStats = true;
+  
+  // generate rpc_export stub for functions exported form driver through export_symbol
+  for (auto s : _driver_exported_func_symbols)
+  {
+    Function* F = M.getFunction(StringRef(s));
+    if (F == nullptr || F->isDeclaration())
+      continue;
+    generateIDLForFunc(*F, true);
+  }
+
 
   if (EnableAnalysisStats)
     errs() << "Funcs reachable from boundary: " << total_num_funcs << "\n";
@@ -130,6 +140,15 @@ void pdg::DataAccessAnalysis::readDriverDefinedGlobalVarNames(std::string file_n
   for (std::string line; std::getline(ReadFile, line);)
   {
     _driver_defined_globalvar_names.insert(line);
+  }
+}
+
+void pdg::DataAccessAnalysis::readDriverExportedFuncSymbols(std::string file_name)
+{
+  std::ifstream ReadFile(file_name);
+  for (std::string line; std::getline(ReadFile, line);)
+  {
+    _driver_exported_func_symbols.insert(line);
   }
 }
 
@@ -810,8 +829,10 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     called_func_name = getExportedFuncPtrName(called_func_name); // TODO: fix the problem when multiple global ops have same type
   }
 
-  if (_exported_func_symbols.find(&F) != _exported_func_symbols.end())
-    rpc_prefix = "rpc_export";
+  if (_driver_exported_func_symbols.find(called_func_name) != _driver_exported_func_symbols.end())
+  {
+      rpc_prefix = "rpc_export";
+  }
 
   auto ioremap_ann = handleIoRemap(F, ret_type_str);
 
@@ -890,22 +911,6 @@ bool pdg::DataAccessAnalysis::isExportedFunc(Function &F)
       return true;
   }
   return false;
-}
-
-void pdg::DataAccessAnalysis::collectExportedFuncSymbols(Module &M)
-{
-  for (auto &gv : M.getGlobalList())
-  {
-    auto name = gv.getName().str();
-    // look for global name starts with __ksymtab or __kstrtab
-    if (name.find("__ksymtab_") == 0 || name.find("__kstrtab_") == 0)
-    {
-      std::string func_name = name.erase(0, 10);
-      Function *f = M.getFunction(StringRef(func_name));
-      if (f != nullptr)
-        _exported_func_symbols.insert(f);
-    }
-  }
 }
 
 void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool process_exported_func)

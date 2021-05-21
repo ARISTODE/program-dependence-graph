@@ -17,6 +17,7 @@ namespace pdg
     std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
     pdg::Node *findFirstCrossDomainParamNode(Node &n);
     void readDriverDefinedGlobalVarNames(std::string file_name);
+    void readDriverExportedFuncSymbols(std::string file_name);
     void propagateAllocSizeAnno(llvm::Value &allocator);
     void computeAllocSizeAnnos(llvm::Module &M);
     void computeExportedFuncsPtrNameMap();
@@ -24,7 +25,6 @@ namespace pdg
     void computeDataAccessForGlobalTree(Tree *tree);
     void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false, bool is_ret=false);
     void computeDataAccessForFuncArgs(llvm::Function &F);
-    void collectExportedFuncSymbols(llvm::Module &M);
     void generateIDLForFunc(llvm::Function &F, bool process_exported_func=false);
     void generateRpcForFunc(llvm::Function &F, bool process_exported_func=false);
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
@@ -63,7 +63,7 @@ namespace pdg
     KSplitStats *_ksplit_stats;
     std::string _current_processing_func = "";
     std::set<std::string> _driver_defined_globalvar_names;
-    std::set<llvm::Function*> _exported_func_symbols;
+    std::set<std::string> _driver_exported_func_symbols;
     std::set<Node*> _funcs_reachable_from_boundary;
     std::set<llvm::Function *> _kernel_funcs_regsitered_with_indirect_ptr;
   };

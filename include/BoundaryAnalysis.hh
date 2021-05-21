@@ -20,6 +20,7 @@ namespace pdg
     void computeDriverImportedFuncs(llvm::Module &M);
     void computeDriverFuncs(llvm::Module &M);
     void computeExportedFuncs(llvm::Module &M);
+    void computeExportedFuncSymbols(llvm::Module &M);
     void dumpToFiles();
     void dumpToFile(std::string file_name, std::vector<std::string> &names);
     bool isBlackListFunc(std::string func_name) { return _black_list_func_names.find(func_name) != _black_list_func_names.end(); }
@@ -32,6 +33,7 @@ namespace pdg
     std::vector<std::string> _driver_domain_funcs;
     std::vector<std::string> _exported_func_ptrs;
     std::vector<std::string> _driver_globalvar_names;
+    std::set<std::string> _exported_func_symbols;
     std::set<std::string> _global_op_struct_names;
   };
 } // namespace pdg
