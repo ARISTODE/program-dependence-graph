@@ -64,7 +64,7 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
     if (F.isDeclaration())
       continue;
     connectAddrVarsReachableFromInterprocFlow(F);
-    connectInterprocDependencies(F);
+    // connectInterprocDependencies(F);
     connectFormalInTreeWithActualTree(F);
     // connectIntraprocDependencies(F);
   }
@@ -497,6 +497,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithActualTree(Function &F)
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &formal_in_tree)
 {
   TreeNode *root_node = formal_in_tree.getRootNode();
+  Function* func = root_node->getFunc();
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
 
@@ -583,9 +584,19 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
         continue;
       if (n->getFunc() == current_func)
       {
-        if (current_func->getName() == "msr_open")
-          errs() << "find inter proc addr var: " << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << " - " << *n->getValue() << " - " << current_func->getName() << "\n";
-        current_node->addAddrVar(*n->getValue());
+        // if (current_func->getName() == "msr_open")
+        //   errs() << "find inter proc addr var: " << dbgutils::getSourceLevelTypeName(*current_node->getDIType()) << " - " << *n->getValue() << " - " << current_func->getName() << "\n";
+        if (!dbgutils::isPointerType(*current_node->getDIType()))
+        {
+          auto parent_node = current_node->getParentNode();
+          // TODO: need to change pdg construction later
+          if (parent_node != nullptr)
+          {
+            parent_node->addAddrVar(*n->getValue());
+          }
+        }
+        else
+          current_node->addAddrVar(*n->getValue());
       }
     }
 

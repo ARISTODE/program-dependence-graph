@@ -97,7 +97,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     generateIDLFromGlobalVarTree(*pair.first, tree);
   }
 
-
   _idl_file << "\n}";
 
   errs() << "Finish analyzing data access info.";

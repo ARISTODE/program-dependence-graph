@@ -37,6 +37,10 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   {
     Tree *tree = tree_pair.second;
     Instruction *cs_begin_inst = tree_pair.first;
+    CallInst *lock_call_inst = cast<CallInst>(cs_begin_inst);
+    std::string lock_call_name = pdgutils::getCalledFunc(*lock_call_inst)->getName();
+    lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
+    std::string unlock_call_name = _lock_map[lock_call_name];
     auto root_node = tree->getRootNode();
     auto di_type = root_node->getDIType();
     auto di_type_name = dbgutils::getSourceLevelTypeName(*di_type, true);
@@ -51,13 +55,12 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
     raw_string_ostream write_proj_str(write_fields_ss);
     generateSyncStubForTree(tree, read_proj_str, write_proj_str);
     // generate begin stub
-
     _sync_stub_file << "<============== rpc generate for func " << cs_begin_inst->getFunction()->getName().str() << "================>\n";
-    _sync_stub_file << "\trpc shared_lock_begin( projection " << di_type_name << "* " << di_type_name << ") {\n";
+    _sync_stub_file << "\trpc shared_lock_begin_" << lock_call_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << read_proj_str.str();
     _sync_stub_file << "\t};\n";
 
-    _sync_stub_file << "\trpc shared_lock_end( projection " << di_type_name << "* " << di_type_name << ") {\n";
+    _sync_stub_file << "\trpc shared_lock_end_" << unlock_call_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << write_proj_str.str();
     _sync_stub_file << "\t};\n";
   }

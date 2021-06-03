@@ -31,6 +31,9 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   buildTreesForSharedStructDIType(M);
   // generate shared field id
   computeSharedFieldID();
+  _shared_field_id.insert("struct inodei_rdev");
+  _shared_field_id.insert("struct inodedevt");
+  dumpSharedFieldID();
   computeSharedGlobalVars();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
@@ -215,6 +218,14 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
         if (dbgutils::isStructType(*arg_lowest_di_type))
           _shared_struct_di_types.insert(arg_lowest_di_type);
       }
+    }
+
+    auto ret_val_di_type = fw->getReturnValDIType();
+    auto ret_val_lowest_di_type = dbgutils::getLowestDIType(*ret_val_di_type);
+    if (ret_val_lowest_di_type != nullptr)
+    {
+      if (dbgutils::isStructType(*ret_val_lowest_di_type))
+        _shared_struct_di_types.insert(ret_val_lowest_di_type);
     }
   }
 }
