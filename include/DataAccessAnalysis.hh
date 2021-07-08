@@ -28,11 +28,12 @@ namespace pdg
     void generateIDLForFunc(llvm::Function &F, bool process_exported_func=false);
     void generateRpcForFunc(llvm::Function &F, bool process_exported_func=false);
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
-    void generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret = false);
+    void generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret = false, bool is_global = false);
     void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name, bool is_ret = false);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
+    void inferUserAnnotation(TreeNode &tree_node, std::string &anno_str);
     bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
     bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);
     bool containerHasSharedFieldsAccessed(llvm::BitCastInst &bci);

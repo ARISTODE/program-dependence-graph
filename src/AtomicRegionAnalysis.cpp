@@ -14,7 +14,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
 {
   _DAA = &getAnalysis<DataAccessAnalysis>();
   _SDA = _DAA->getSDA();
-  _sync_stub_file.open("cs_sync.idl");
+  _sync_stub_file.open("kernel.idl", std::ios_base::app);
   _ksplit_stats = _DAA->getKSplitStats();
   _funcs_need_sync_stub_gen = _SDA->computeBoundaryTransitiveClosure();
   _call_graph = &PDGCallGraph::getInstance();
@@ -32,7 +32,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   // if (EnableAnalysisStats)
   //   _ksplit_stats->printStats();
 
-  _sync_stub_file << "syn_stub_kernel {\n";
+  // _sync_stub_file << "syn_stub_kernel {\n";
   for (auto tree_pair : _sync_data_inst_tree_map)
   {
     Tree *tree = tree_pair.second;
@@ -55,7 +55,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
     raw_string_ostream write_proj_str(write_fields_ss);
     generateSyncStubForTree(tree, read_proj_str, write_proj_str);
     // generate begin stub
-    _sync_stub_file << "<============== rpc generate for func " << cs_begin_inst->getFunction()->getName().str() << "================>\n";
+    // _sync_stub_file << "<============== rpc generate for func " << cs_begin_inst->getFunction()->getName().str() << "================>\n";
     _sync_stub_file << "\trpc shared_lock_begin_" << lock_call_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << read_proj_str.str();
     _sync_stub_file << "\t};\n";
@@ -64,7 +64,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
     _sync_stub_file << write_proj_str.str();
     _sync_stub_file << "\t};\n";
   }
-  _sync_stub_file << "}\n";
+  // _sync_stub_file << "}\n";
   _sync_stub_file.close();
   errs() << "CS Warning: " << _warning_cs_count << " / " << _critical_sections.size() << "\n";
   errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << " / " << _atomic_operations.size() << "\n";

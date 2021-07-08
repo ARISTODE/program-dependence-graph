@@ -78,13 +78,15 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     generateIDLForFunc(*F, true);
   }
 
-
   if (EnableAnalysisStats)
     errs() << "Funcs reachable from boundary: " << total_num_funcs << "\n";
 
   constructGlobalOpStructStr();
   _idl_file << _ops_struct_proj_str << "\n";
 
+  _idl_file << "\n};\n";
+
+  // generate IDL for global variables
   for (auto pair : _PDG->getGlobalVarTreeMap())
   {
     Tree *tree = pair.second;
@@ -93,11 +95,8 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     if (isDriverDefinedGlobal(*pair.first))
       continue;
     computeDataAccessForGlobalTree(tree);
-    _global_var_access_info << "====== global " << pair.first->getName().str() << " ======== \n";
     generateIDLFromGlobalVarTree(*pair.first, tree);
   }
-
-  _idl_file << "\n}";
 
   errs() << "Finish analyzing data access info.";
   _idl_file.close();
@@ -508,6 +507,8 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
 
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
+    field_di_type = dbgutils::stripAttributes(*field_di_type);
+
     // compute access attributes
     auto annotations = inferTreeNodeAnnotations(*child_node);
     // handle attribute for return value. The in attr should be eliminated if return val is not alias of arguments
@@ -587,6 +588,16 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
 
         nested_struct_proj_str << field_nested_struct_proj.str();
       }
+
+      if (!field_var_name.empty())
+      {
+        fields_projection_str << indent_level
+                              << "projection "
+                              << field_type_name
+                              << " "
+                              << field_var_name
+                              << ";\n";
+      }
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
     {
@@ -615,6 +626,7 @@ void pdg::DataAccessAnalysis::generateIDLFromGlobalVarTree(GlobalVariable &gv, T
   DIType *root_node_di_type = root_node->getDIType();
   assert(root_node_di_type != nullptr && "cannot generate projection for global with null di type\n");
   DIType *root_node_lowest_di_type = dbgutils::getLowestDIType(*root_node_di_type);
+  // handle non-projectable types: int/float etc. 
   if (!root_node_lowest_di_type || !dbgutils::isProjectableType(*root_node_lowest_di_type))
   {
     auto type_name = dbgutils::getSourceLevelTypeName(*root_node_di_type);
@@ -643,21 +655,21 @@ void pdg::DataAccessAnalysis::generateIDLFromGlobalVarTree(GlobalVariable &gv, T
         }
       }
     }
-
+    // compute get/set attribute
     for (auto acc_tag : acc_tags)
     {
       if (acc_tag == AccessTag::DATA_READ)
-        anno += "[in]";
+        anno += "[get]";
       if (acc_tag == AccessTag::DATA_WRITE)
-        anno += "[out]";
+        anno += "[set]";
     }
-    _global_var_access_info << "global " << anno << " " << type_name << " " << var_name << "\n";
+    _idl_file << "\tglobal " << anno << " " << type_name << " " << var_name << "\n";
   }
   else
-    generateIDLFromArgTree(tree, _global_var_access_info);
+    generateIDLFromArgTree(tree, _idl_file, false, true);
 }
 
-void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret)
+void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret, bool is_global)
 {
   if (!arg_tree)
     return;
@@ -742,7 +754,13 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
       if (dbgutils::isUnionPointerType(*node_di_type))
         type_prefix = "union";
 
-      output_file << "\tprojection < "
+      std::string global_keyword_prefix = "";
+      if (is_global)
+        global_keyword_prefix = "global ";
+
+      output_file << "\t"
+                  << global_keyword_prefix
+                  << "projection < "
                   << type_prefix
                   << " "
                   << proj_type_name
@@ -883,6 +901,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
       anno_str += anno;
 
     patchStringAnnotation(arg_type_name, anno_str);
+    inferUserAnnotation(*root_node, anno_str);
 
     rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + arg_name;
 
@@ -930,15 +949,41 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool process_expor
   // generate projection for return value
   auto ret_arg_tree = fw->getRetFormalInTree();
   if (dbgutils::getFuncRetDIType(F) != nullptr)
-    generateIDLFromArgTree(ret_arg_tree, _idl_file, true);
+    generateIDLFromArgTree(ret_arg_tree, _idl_file, true, false);
   //generate projection for each argument
   auto arg_tree_map = fw->getArgFormalInTreeMap();
   for (auto iter = arg_tree_map.begin(); iter != arg_tree_map.end(); iter++)
   {
     auto arg_tree = iter->second;
-    generateIDLFromArgTree(arg_tree, _idl_file, false);
+    generateIDLFromArgTree(arg_tree, _idl_file, false, false);
   }
   _idl_file << "}\n";
+}
+
+void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &tree_node, std::string &anno_str)
+{
+  // get all alias of the argument
+  auto alias_nodes = _PDG->findNodesReachedByEdge(tree_node, EdgeType::DATA_ALIAS);
+  for (auto node : alias_nodes)
+  {
+    auto out_neighbor_nodes = node->getOutNeighbors();
+    for (auto neighbor_node : out_neighbor_nodes)
+    {
+      auto val = neighbor_node->getValue();
+      if (val == nullptr)
+        continue;
+      if (CallInst *ci = dyn_cast<CallInst>(val))
+      {
+        auto called_func = pdgutils::getCalledFunc(*ci);
+        if (called_func == nullptr)
+          continue;
+        std::string called_func_name = called_func->getName();
+        called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
+        if (called_func_name == "copy_from_user" || called_func_name == "copy_to_user")
+          anno_str.append("[user]");
+      }
+    }
+  }
 }
 
 std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret)

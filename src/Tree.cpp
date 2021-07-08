@@ -31,8 +31,9 @@ int pdg::TreeNode::expandNode()
   // expand debugging information here
   if (_node_di_type == nullptr)
     return 0;
-  DIType* dt = dbgutils::stripAttributes(*_node_di_type);
-  dt = dbgutils::stripMemberTag(*dt);
+  DIType* dt = dbgutils::stripMemberTag(*_node_di_type);
+  dt = dbgutils::stripAttributes(*dt);
+
   // iterate through all the child nodes, build a tree node for each of them.
   if (!dbgutils::isPointerType(*dt) && !dbgutils::isStructType(*dt))
     return 0;

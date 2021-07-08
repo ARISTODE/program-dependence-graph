@@ -34,6 +34,7 @@ namespace pdg
       void connectFormalInTreeWithCallActualNode(Tree &formal_in_tree);
       void conntectFormalInTreeWithInterprocReachableAddrVars(Tree &formal_in_tree);
       void connectGlobalTreeWithAddrVars(Tree &global_var_tree);
+      std::set<Node*> getAliasNodes(Node &n);
 
     private:
       llvm::Module *_module;

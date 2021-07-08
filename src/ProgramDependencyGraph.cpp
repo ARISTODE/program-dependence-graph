@@ -309,6 +309,7 @@ void pdg::ProgramDependencyGraph::connectGlobalTreeWithAddrVars(Tree &global_var
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_in_tree)
 {
   TreeNode *root_node = formal_in_tree.getRootNode();
+  Function* current_func = formal_in_tree.getFunc();
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
 
@@ -316,6 +317,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
   {
     TreeNode *current_node = node_queue.front();
     node_queue.pop();
+    current_node->computeDerivedAddrVarsFromParent();
     TreeNode *parent_node = current_node->getParentNode();
     std::unordered_set<Value *> parent_node_addr_vars;
     if (parent_node != nullptr)
@@ -327,12 +329,21 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
       current_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
-      auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+      auto alias_nodes = getAliasNodes(*addr_var_node);
+      if (current_func != nullptr && current_func->getName() == "nvme_init_identify")
+      {
+        errs() << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << " - " << *addr_var << " - " << current_node->numOfChild() << " - " << alias_nodes.size() <<"\n";
+      }
+      
       for (auto alias_node : alias_nodes)
       {
         Value *alias_node_val = alias_node->getValue();
         if (alias_node_val == nullptr)
           continue;
+        if (current_func != nullptr && current_func->getName() == "nvme_init_identify")
+        {
+          errs() << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << " - " << *alias_node_val << "\n";
+        }
         if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
           continue;
         if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(alias_node_val))
@@ -605,6 +616,29 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
       node_queue.push(child_node);
     }
   }
+}
+
+std::set<pdg::Node *> pdg::ProgramDependencyGraph::getAliasNodes(pdg::Node &n)
+{
+  std::queue<Node *> node_queue;
+  std::set<Node *> seen_nodes;
+  std::set<Node *> alias_nodes;
+  node_queue.push(&n);
+  while (!node_queue.empty())
+  {
+    auto current_node = node_queue.front();
+    node_queue.pop();
+    auto out_alias_neighbors = current_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+    for (auto alias_node : out_alias_neighbors)
+    {
+      if (seen_nodes.find(alias_node) != seen_nodes.end())
+        continue;
+      seen_nodes.insert(alias_node);
+      node_queue.push(alias_node);
+      alias_nodes.insert(alias_node);
+    }
+  }
+  return alias_nodes;
 }
 
 static RegisterPass<pdg::ProgramDependencyGraph>

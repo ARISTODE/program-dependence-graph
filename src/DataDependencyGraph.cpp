@@ -52,7 +52,7 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
       if (src == nullptr || dst == nullptr)
         continue;
       // use type info to eliminate dubious gep
-      if (!isa<BitCastInst>(*inst_iter))
+      if (!isa<BitCastInst>(*inst_iter) && !isa<BitCastInst>(&inst))
       {
         if (inst.getType() != inst_iter->getType())
           continue;
