@@ -15,11 +15,13 @@ namespace pdg
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
     std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
-    pdg::Node *findFirstCrossDomainParamNode(Node &n);
+    pdg::Node *findFirstCrossDomainParamNode(Node &n, bool is_backward = false);
     void readDriverDefinedGlobalVarNames(std::string file_name);
     void readDriverExportedFuncSymbols(std::string file_name);
     void propagateAllocSizeAnno(llvm::Value &allocator);
+    void inferDeallocAnno(llvm::Value &deallocator);
     void computeAllocSizeAnnos(llvm::Module &M);
+    void computeDeallocAnnos(llvm::Module &M);
     void computeExportedFuncsPtrNameMap();
     void computeDataAccessForTree(Tree *tree, bool is_ret=false);
     void computeDataAccessForGlobalTree(Tree *tree);

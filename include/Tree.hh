@@ -41,6 +41,8 @@ namespace pdg
       bool isAccessedInAtomicRegion() { return _is_accessed_in_atomic_region; }
       void setAllocStr(std::string str) { _alloc_str = str; }
       std::string getAllocStr() { return _alloc_str; }
+      void setDeallocStr(std::string str) { _dealloc_str = str; }
+      std::string getDeallocStr() { return _dealloc_str; }
       void dump() override;
 
     private:
@@ -54,6 +56,7 @@ namespace pdg
       bool _is_accessed_in_atomic_region = false;
       bool _can_opt_out = false;
       std::string _alloc_str;
+      std::string _dealloc_str;
   };
 
   class Tree

@@ -330,11 +330,6 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
       auto addr_var_node = _PDG->getNode(*addr_var);
       current_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
       auto alias_nodes = getAliasNodes(*addr_var_node);
-      if (current_func != nullptr && current_func->getName() == "nvme_init_identify")
-      {
-        errs() << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << " - " << *addr_var << " - " << current_node->numOfChild() << " - " << alias_nodes.size() <<"\n";
-      }
-      
       for (auto alias_node : alias_nodes)
       {
         Value *alias_node_val = alias_node->getValue();

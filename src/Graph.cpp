@@ -10,6 +10,10 @@ static std::set<std::string> KernelAllocators = {
     "__kmalloc"
 };
 
+static std::set<std::string> KernelDeAllocators = {
+    "kfree"
+};
+
 // Generic Graph
 bool pdg::GenericGraph::hasNode(Value &v)
 {
@@ -87,12 +91,12 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, 
   return ret;
 }
 
-std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src, std::set<EdgeType> &edge_types)
+std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src, std::set<EdgeType> &edge_types, bool is_backward)
 {
   std::set<Node *> ret;
   std::queue<Node *> node_queue;
   node_queue.push(&src);
-  std::set<Node*> visited;
+  std::set<Node *> visited;
   while (!node_queue.empty())
   {
     Node *current_node = node_queue.front();
@@ -101,11 +105,16 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src,
       continue;
     visited.insert(current_node);
     ret.insert(current_node);
-    for (auto out_edge : current_node->getOutEdgeSet())
+    Node::EdgeSet edge_set;
+    if (is_backward)
+      edge_set = current_node->getInEdgeSet();
+    else 
+      edge_set = current_node->getOutEdgeSet();
+    for (auto edge : edge_set)
     {
-      if (edge_types.find(out_edge->getEdgeType()) == edge_types.end())
+      if (edge_types.find(edge->getEdgeType()) == edge_types.end())
         continue;
-      node_queue.push(out_edge->getDstNode());
+      node_queue.push(edge->getDstNode());
     }
   }
   return ret;
@@ -157,6 +166,8 @@ void pdg::ProgramGraph::build(Module &M)
           called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
           if (KernelAllocators.find(called_func_name) != KernelAllocators.end())
             _allocators.insert(ci);
+          if (KernelDeAllocators.find(called_func_name) != KernelDeAllocators.end())
+            _deallocators.insert(ci);
         }
       }
     }

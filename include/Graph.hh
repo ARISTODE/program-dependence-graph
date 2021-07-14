@@ -43,7 +43,7 @@ namespace pdg
     bool canReach(pdg::Node &src, pdg::Node &dst);
     bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> include_edge_types);
     std::set<Node *> findNodesReachedByEdge(Node &src, EdgeType edge_type);
-    std::set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edge_types);
+    std::set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edge_types, bool is_backward = false);
     ValueNodeMap &getValueNodeMap() { return _val_node_map; }
 
   protected:
@@ -86,6 +86,7 @@ namespace pdg
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
     std::set<llvm::Value *> &getAllocators() { return _allocators; }
+    std::set<llvm::Value *> &getDeallocators() { return _deallocators; }
     
   private:
     FuncWrapperMap _func_wrapper_map;
@@ -93,6 +94,7 @@ namespace pdg
     GlobalVarTreeMap _global_var_tree_map;
     NodeDIMap _node_di_type_map;
     std::set<llvm::Value *> _allocators;
+    std::set<llvm::Value *> _deallocators;
   };
 } // namespace pdg
 

@@ -46,6 +46,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   }
 
   computeAllocSizeAnnos(M);
+  computeDeallocAnnos(M);
 
   _idl_file << "module kernel {\n";
   std::vector<std::string> boundary_func_names(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
@@ -104,7 +105,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   return false;
 }
 
-pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n)
+pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n, bool is_backward)
 {
   std::queue<Node *> node_queue;
   std::set<EdgeType> search_edge_types = {
@@ -119,12 +120,21 @@ pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n)
     if (seen_nodes.find(current_node) != seen_nodes.end())
       continue;
     seen_nodes.insert(current_node);
-    auto out_edges = current_node->getOutEdgeSet();
-    for (auto out_edge : out_edges)
+    Node::EdgeSet edge_set;
+    if (is_backward)
+      edge_set = current_node->getInEdgeSet();
+    else
+      edge_set = current_node->getOutEdgeSet();
+
+    for (auto edge : edge_set)
     {
-      if (search_edge_types.find(out_edge->getEdgeType()) == search_edge_types.end())
+      if (search_edge_types.find(edge->getEdgeType()) == search_edge_types.end())
         continue;
-      auto target_node = out_edge->getDstNode();
+      Node *target_node = nullptr;
+      if (is_backward)
+        target_node = edge->getSrcNode();
+      else
+        target_node = edge->getDstNode();
       if (target_node->getNodeType() == GraphNodeType::FORMAL_IN)
         return target_node;
     }
@@ -185,6 +195,7 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   auto val_node = _PDG->getNode(allocator);
   assert(val_node != nullptr && "cannot generate size anno str for null node\n");
   alloc_str += size_str;
+  // in this case, the allocated object escaped.
   if (val_node->isAddrVarNode())
   {
     alloc_str += std::string("(caller)");
@@ -194,6 +205,7 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   }
   else
   {
+    // in this case, the allocated object is passed across isolation boundary
     alloc_str += std::string("(callee)");
     auto first_cross_domain_param_node = findFirstCrossDomainParamNode(*val_node);
     if (first_cross_domain_param_node != nullptr)
@@ -204,12 +216,43 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   }
 }
 
+void pdg::DataAccessAnalysis::inferDeallocAnno(Value &deallocator)
+{
+  // check if any address variable is passed to a deallocation function.
+  if (CallInst *ci = dyn_cast<CallInst>(&deallocator))
+  {
+    auto freed_object = ci->getOperand(0);
+    assert(freed_object != nullptr && "cannot infer dealloc annotation for nullptr!\n");
+    auto freed_object_node = _PDG->getNode(*freed_object);
+    if (freed_object_node->isAddrVarNode())
+    {
+      auto param_node = freed_object_node->getAbstractTreeNode();
+      auto first_backward_cross_domain_param_node = findFirstCrossDomainParamNode(*param_node, true);
+      // perform backward search to identify the parameter tree node that should contain the dealloc attribute.
+      if (first_backward_cross_domain_param_node != nullptr)
+      {
+        TreeNode *tn = (TreeNode *)first_backward_cross_domain_param_node;
+        tn->setAllocStr("dealloc(caller)");
+      }
+    }
+  }
+}
+
 void pdg::DataAccessAnalysis::computeAllocSizeAnnos(Module &M)
 {
   auto allocators = _PDG->getAllocators();
   for (auto allocator : allocators)
   {
     propagateAllocSizeAnno(*allocator);
+  }
+}
+
+void pdg::DataAccessAnalysis::computeDeallocAnnos(Module &M)
+{
+  auto deallocators = _PDG->getDeallocators();
+  for (auto deallocator : deallocators)
+  {
+    inferDeallocAnno(*deallocator);
   }
 }
 
@@ -1027,8 +1070,12 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
     }
   }
 
+  // infer the alloc/dealloc string.
   if (!tree_node.getAllocStr().empty())
     annotations.insert(tree_node.getAllocStr());
+  if (!tree_node.getDeallocStr().empty())
+    annotations.insert(tree_node.getDeallocStr());
+  
   return annotations;
 }
 
