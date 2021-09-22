@@ -14,6 +14,11 @@ void pdg::KSplitStats::printStats()
   _stats_file << "num fields field access analysis: " << _fields_field_analysis << "\n";
   _stats_file << "num fields shared_analysis: " << _fields_shared_analysis << "\n";
   _stats_file << "num fields removed by boundary opt: " << _fields_removed_boundary_opt << "\n";
+  _stats_file << "num fields have ptr arith: " << _ptr_arith_num << "\n";
+  _stats_file << "num fields have ptr gep arith in sd: " << _ptr_gep_arith_sd << "\n";
+  _stats_file << "num fields have ptr ptrtoint arith in sd: " << _ptr_ptrtoint_arith_sd << "\n";
+  _stats_file << "num fields have ptr gep arith in daa: " << _ptr_gep_arith_daa << "\n";
+  _stats_file << "num fields have ptr ptrtoint arith in daa: " << _ptr_ptrtoint_arith_daa << "\n";
 
   _stats_file << "=============== Pointer Classification ================\n";
   unsigned total_shared_ptr = _safe_ptr_num + _void_ptr_num + _unhandled_void_ptr_num + _string_num + _array_num + _unhandled_array_num + _non_void_wild_ptr_num + _unknown_ptr_num;
@@ -21,10 +26,12 @@ void pdg::KSplitStats::printStats()
   _stats_file << "safe ptr num: " << _safe_ptr_num << "\n";
   _stats_file << "void ptr num: " << _void_ptr_num << "\n";
   _stats_file << "unhandled void ptr num: " << _unhandled_void_ptr_num << "\n";
+  _stats_file << "unhandled void ptr num SD: " << _unhandled_void_ptr_sd_num << "\n";
   _stats_file << "void wild ptr num: " << _void_wild_ptr_num << "\n";
   _stats_file << "string num: " << _string_num << "\n";
   _stats_file << "array num: " << _array_num << "\n";
   _stats_file << "unhandled array num: " << _unhandled_array_num << "\n";
+  _stats_file << "struct array num: " << _struct_array_num << "\n";
   _stats_file << "func ptr num: " << _func_ptr_num << "\n";
   _stats_file << "non void wild ptr num: " << _non_void_wild_ptr_num << "\n";
   _stats_file << "unknown num: " << _unknown_ptr_num << "\n";

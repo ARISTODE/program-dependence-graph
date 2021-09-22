@@ -7,7 +7,9 @@ static std::set<std::string> KernelAllocators = {
     "kmalloc",
     "kvzalloc",
     "vzalloc",
-    "__kmalloc"
+    "__kmalloc",
+    "alloc_netdev",
+    "alloc_netdev_mqs",
 };
 
 static std::set<std::string> KernelDeAllocators = {
@@ -157,6 +159,7 @@ void pdg::ProgramGraph::build(Module &M)
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
       addNode(*n);
+      // identify possible heap allocator/dealloctor. Used for inferring alloc/dealloc attributes in IDL generation.
       if (CallInst *ci = dyn_cast<CallInst>(&*inst_iter))
       {
         auto called_func = pdgutils::getCalledFunc(*ci);
@@ -169,6 +172,12 @@ void pdg::ProgramGraph::build(Module &M)
           if (KernelDeAllocators.find(called_func_name) != KernelDeAllocators.end())
             _deallocators.insert(ci);
         }
+      }
+      // identify array allocated on stack. If the array is passed across isolation domain, also need to annotate the array with alloc attribute
+      if (AllocaInst *ai = dyn_cast<AllocaInst>(&*inst_iter))
+      {
+        if (ai->getAllocatedType()->isArrayTy())
+          _allocators.insert(ai);
       }
     }
     func_w->buildFormalTreeForArgs();

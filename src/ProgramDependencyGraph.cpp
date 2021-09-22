@@ -6,12 +6,11 @@ using namespace llvm;
 char pdg::ProgramDependencyGraph::ID = 0;
 
 cl::opt<bool> FieldSensitive("fs", cl::desc("Field Sensitive"), cl::value_desc("field_sensitive"), cl::init(true));
+cl::opt<bool, true> EAS("analysis-stats", cl::desc("enable printing analysis stats"), cl::value_desc("analysis_stats"), cl::location(pdg::EnableAnalysisStats), cl::init(false));
+cl::opt<bool, true> DBG("debug-verbose", cl::desc("enable printing verbose debug info"), cl::value_desc("verbose-debug"), cl::location(pdg::DEBUG), cl::init(false));
 
 bool pdg::EnableAnalysisStats;
 bool pdg::DEBUG;
-
-cl::opt<bool, true> EAS("analysis-stats", cl::desc("enable printing analysis stats"), cl::value_desc("analysis_stats"), cl::location(pdg::EnableAnalysisStats), cl::init(false));
-cl::opt<bool, true> DBG("debug-verbose", cl::desc("enable printing verbose debug info"), cl::value_desc("verbose-debug"), cl::location(pdg::DEBUG), cl::init(false));
 
 void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
 {
@@ -58,18 +57,17 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
     func_size++;
   }
 
-  errs() << "connecting interproc addrvar\n";
-  for (auto &F : M)
-  {
-    if (F.isDeclaration())
-      continue;
-    connectAddrVarsReachableFromInterprocFlow(F);
-    // connectInterprocDependencies(F);
-    connectFormalInTreeWithActualTree(F);
-    // connectIntraprocDependencies(F);
-  }
+  // errs() << "connecting interproc addrvar\n";
+  // for (auto &F : M)
+  // {
+  //   if (F.isDeclaration())
+  //     continue;
+  //   connectAddrVarsReachableFromInterprocFlow(F);
+  //   // connectInterprocDependencies(F);
+  //   connectFormalInTreeWithActualTree(F);
+  //   // connectIntraprocDependencies(F);
+  // }
   errs() << "func size: " << func_size << "\n";
-  auto stop = std::chrono::high_resolution_clock::now();
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
   return false;
 }
@@ -592,7 +590,7 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
       {
         // if (current_func->getName() == "msr_open")
         //   errs() << "find inter proc addr var: " << dbgutils::getSourceLevelTypeName(*current_node->getDIType()) << " - " << *n->getValue() << " - " << current_func->getName() << "\n";
-        if (!dbgutils::isPointerType(*current_node->getDIType()))
+        if (current_node->getDIType() != nullptr && !dbgutils::isPointerType(*current_node->getDIType()))
         {
           auto parent_node = current_node->getParentNode();
           // TODO: need to change pdg construction later

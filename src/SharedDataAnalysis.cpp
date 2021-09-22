@@ -91,6 +91,11 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
 
   _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
   _boundary_funcs.insert(exported_funcs.begin(), exported_funcs.end());
+  // module init functions
+  Function* init_func = getModuleInitFunc(M);
+  if (init_func != nullptr)
+    _boundary_funcs.insert(init_func);
+
   for (auto bf : _boundary_funcs)
   {
     _boundary_func_names.insert(bf->getName().str());
@@ -264,6 +269,8 @@ void pdg::SharedDataAnalysis::buildTreesForSharedStructDIType(Module &M)
     TreeNode *root_node = new TreeNode(shared_struct_di_type, 0, nullptr, type_tree, GraphNodeType::GLOBAL_TYPE);
     std::string shared_struct_type_name = dbgutils::getSourceLevelTypeName(*shared_struct_di_type, true);
     _shared_struct_type_names.insert(shared_struct_type_name);
+    // this finds all the variable (global/local) in the code that have the struct type.
+    // we will analylze the accesses to these variables to determine shared fields.
     auto vars_with_di_type = computeVarsWithDITypeInModule(*shared_struct_di_type, M);
     for (auto var : vars_with_di_type)
     {
@@ -291,6 +298,7 @@ void pdg::SharedDataAnalysis::connectTypeTreeToAddrVars(Tree &type_tree)
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
       current_node->addNeighbor(*addr_var_node, EdgeType::VAL_DEP);
+      // TODO: add alias here
     }
     for (auto child_node : current_node->getChildNodes())
     {
@@ -402,6 +410,7 @@ bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string 
 
 void pdg::SharedDataAnalysis::computeSharedFieldID()
 {
+  auto &ksplit_stats = KSplitStats::getInstance();
   for (auto dt_tree_pair : _global_struct_di_type_map)
   {
     // auto di_type_name = dbgutils::getSourceLevelTypeName(*dt_tree_pair.first);
@@ -418,6 +427,9 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       DIType *node_di_type = current_tree_node->getDIType();
       if (node_di_type == nullptr)
         continue;
+      if (pdgutils::isVoidPointerHasMultipleCasts(*current_tree_node))
+        ksplit_stats.increaseUnhandledVoidPtrSDNum();
+
       if (isStructFieldNode(*current_tree_node))
       {
         if (dbgutils::isFuncPointerType(*node_di_type) && current_tree_node->getParentNode() != nullptr)
@@ -426,8 +438,12 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
         {
           auto field_id = pdgutils::computeTreeNodeID(*current_tree_node);
           _shared_field_id.insert(field_id);
+          // check whether a shared field is used in string operation.
           if (isFieldUsedInStringOps(*current_tree_node))
             _string_field_id.insert(field_id);
+          // check whether a field is used in pointer arithmetic
+          if (pdgutils::hasPtrArith(*current_tree_node, true))
+            errs() << "find ptr arith in sd: " << field_id << "\n";
         }
         // here, we also check if a field is used as a string in any string manipulation functions
       }
@@ -570,6 +586,19 @@ void pdg::SharedDataAnalysis::dumpSharedTypes(std::string file_name)
       output_file << shared_struct_type << "\n";
   }
   output_file.close();
+}
+
+Function *pdg::SharedDataAnalysis::getModuleInitFunc(Module &M)
+{
+  for (auto &F : M)
+  {
+    if (F.isDeclaration())
+      continue;
+    std::string func_name = F.getName().str();
+    if (func_name.find("_init_module") != std::string::npos)
+      return &F;
+  }
+  return nullptr;
 }
 
 static RegisterPass<pdg::SharedDataAnalysis>

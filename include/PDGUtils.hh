@@ -1,5 +1,8 @@
+#ifndef PDGUTILS_H_
+#define PDGUTILS_H_
 #include "LLVMEssentials.hh"
 #include "Tree.hh"
+#include "KSplitStatsCollector.hh"
 #include <vector>
 #include <set>
 #include <unordered_set>
@@ -26,6 +29,8 @@ namespace pdg
     bool isVoidPointerHasMultipleCasts(TreeNode &tree_node);
     bool hasAsmWriteAccess(llvm::InlineAsm &ia);
     bool isWriteAccessAsmOpcode(std::string op_code);
+    bool hasPtrArith(TreeNode &tree_node, bool is_shared_data=false);
+    llvm::Instruction* getNextInst(llvm::Instruction &i);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
@@ -44,3 +49,4 @@ namespace pdg
     bool isFileExist(std::string file_name);
   } // namespace pdgutils
 } // namespace pdg
+#endif

@@ -7,7 +7,8 @@ namespace pdg
   {
     CALL,
     IND_CALL,
-    CONTROL,
+    CONTROL, // control dependence edges
+    CONTROL_FLOW, // control flow edges
     DATA_DEF_USE,
     DATA_RAW,
     DATA_READ,

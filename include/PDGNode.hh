@@ -62,6 +62,7 @@ namespace pdg
     std::set<Node *> getOutNeighborsWithDepType(EdgeType edge_type);
     bool hasInNeighborWithEdgeType(Node &n, EdgeType edge_type);
     bool hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type);
+    std::set<Node *> getNeighborsWithDepType(std::set<EdgeType> edge_types);
     bool isAddrVarNode();
     Node* getAbstractTreeNode();
     virtual ~Node() = default;

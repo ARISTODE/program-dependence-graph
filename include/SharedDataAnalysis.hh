@@ -52,6 +52,7 @@ namespace pdg
     void dumpSharedFieldID();
     void readSentinelFields();
     void readGlobalOpStructNames();
+    llvm::Function *getModuleInitFunc(llvm::Module &M);
     ProgramGraph *getPDG() { return _PDG; }
     // some side tests
     void printPingPongCalls(llvm::Module &M);

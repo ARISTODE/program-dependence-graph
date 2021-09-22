@@ -416,6 +416,7 @@ namespace NesCheck
         auto func_name = i->getFunction()->getName().str();
         if (func_name.find("_nesCheck") != std::string::npos)
           func_name.erase(func_name.find("_nesCheck"));
+        // here, maybe we should aim for functions other than boundary funcs.
         if (BoundaryFuncNames.find(func_name) == BoundaryFuncNames.end())
           return;
       }
@@ -434,6 +435,7 @@ namespace NesCheck
       for (auto tree_node : tree_nodes)
       {
         auto field_id = pdg::pdgutils::computeTreeNodeID(*tree_node);
+        // check if the classified field is shared id
         if (!_DDA->getSDA()->isSharedFieldID(field_id) && !tree_node->isRootNode())
           continue;
         if (ProcessedNodes.find(tree_node) != ProcessedNodes.end())
@@ -446,15 +448,19 @@ namespace NesCheck
         }
         else if (ptrType == "SEQ")
         {
+          if (Instruction *i = dyn_cast<Instruction>(ptr))
+            errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node->getDIType()) << "\n";
           if (!pdg::dbgutils::isArrayType(*tree_node->getDIType()))
             _ksplit_stats->increaseUnhandledArrayNum();
+          if (pdg::dbgutils::isStructPointerType(*tree_node->getDIType()))
+            _ksplit_stats->increaseStructArrayNum();
         }
         else if (ptrType == "DYN")
         {
           if (!pdg::dbgutils::isVoidPointerType(*tree_node->getDIType()))
           {
           if (Instruction *i = dyn_cast<Instruction>(ptr))
-            errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << "\n";
+            errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node->getDIType()) << "\n";
           _ksplit_stats->increaseNonVoidWildPtrNum();
           }
           else
@@ -466,7 +472,7 @@ namespace NesCheck
         else if (ptrType == "UNKNOWN")
         {
           if (Instruction *i = dyn_cast<Instruction>(ptr))
-            errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << "\n";
+            errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node->getDIType()) << "\n";
           _ksplit_stats->increaseUnknownPtrNum();
           errs() << "unknown: " << *ptr << "\n";
           // UnknownPtrs.insert(ptr);
@@ -1302,7 +1308,7 @@ namespace NesCheck
       }
       
       if (pdg::EnableAnalysisStats)
-        _ksplit_stats->printStatsRaw();
+        _ksplit_stats->printStats();
       auto stop = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
       // dumpRecordedTypes();

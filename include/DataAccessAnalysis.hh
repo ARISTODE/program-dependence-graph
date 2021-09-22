@@ -15,7 +15,7 @@ namespace pdg
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
     std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
-    pdg::Node *findFirstCrossDomainParamNode(Node &n, bool is_backward = false);
+    std::set<pdg::Node *> findCrossDomainParamNode(Node &n, bool is_backward = false);
     void readDriverDefinedGlobalVarNames(std::string file_name);
     void readDriverExportedFuncSymbols(std::string file_name);
     void propagateAllocSizeAnno(llvm::Value &allocator);

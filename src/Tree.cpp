@@ -15,6 +15,8 @@ pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parent_node, Tree 
   _depth = depth;
   _parent_node = parent_node;
   _tree = tree;
+  if (parent_node != nullptr)
+    _func = parent_node->getFunc();
 }
 
 pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)

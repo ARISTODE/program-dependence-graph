@@ -18,6 +18,11 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
   if (!ptaw.hasPTASetup())
     ptaw.setupPTA(M);
 
+
+  std::chrono::milliseconds defuse = std::chrono::milliseconds::zero();
+  std::chrono::milliseconds raw = std::chrono::milliseconds::zero();
+  std::chrono::milliseconds alias = std::chrono::milliseconds::zero();
+
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
@@ -25,11 +30,21 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
     _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
+      auto t1 = std::chrono::high_resolution_clock::now();
       addDefUseEdges(*inst_iter);
+      auto t2 = std::chrono::high_resolution_clock::now();
+      defuse += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
       addRAWEdges(*inst_iter);
+      auto t3 = std::chrono::high_resolution_clock::now();
+      raw += std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2);
       addAliasEdges(*inst_iter);
+      auto t4 = std::chrono::high_resolution_clock::now();
+      alias += std::chrono::duration_cast<std::chrono::milliseconds>(t4 - t3);
     }
   }
+  errs() << "defuse: " << std::chrono::duration_cast<std::chrono::milliseconds>(defuse).count() << "\n";
+  errs() << "raw: " << std::chrono::duration_cast<std::chrono::milliseconds>(raw).count() << "\n";
+  errs() << "alias: " << std::chrono::duration_cast<std::chrono::milliseconds>(alias).count() << "\n";
   return false;
 }
 
@@ -42,6 +57,8 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
   for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); inst_iter++)
   {
     if (&inst == &*inst_iter)
+      continue;
+    if (!inst.getType()->isPointerTy())
       continue;
     auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
     auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);

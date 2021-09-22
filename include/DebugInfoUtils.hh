@@ -13,6 +13,7 @@ namespace pdg
     bool isUnionType(llvm::DIType &dt);
     bool isStructPointerType(llvm::DIType &dt);
     bool isStructType(llvm::DIType &dt);
+    bool isStructArrayType(llvm::DIType &dt);
     bool isFuncPointerType(llvm::DIType &dt);
     bool isProjectableType(llvm::DIType &dt);
     bool hasSameDIName(llvm::DIType& d1, llvm::DIType &d2);

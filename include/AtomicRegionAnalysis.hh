@@ -5,6 +5,7 @@
 #include "PDGUtils.hh"
 #include "DataAccessAnalysis.hh"
 #include "PDGCallGraph.hh"
+#include "KSplitCFG.hh"
 #include <map>
 #include <unordered_set>
 
@@ -45,10 +46,15 @@ namespace pdg
     bool isAtomicAsmString(std::string str);
     bool isAtomicOperation(llvm::Instruction &i);
     bool isAliasOfBoundaryPtrs(llvm::Value &v);
+    // used for checking shared states updated outside of critical regions.
+    void computeCodeRegions();
+    void printCodeRegionsUpdateSharedStates();
+    void findNextCheckpoints(std::set<llvm::Instruction *> &checkpoints, llvm::Instruction &cur_inst);
     std::set<llvm::Value*> computeBoundaryAliasPtrs(llvm::Value &v);
     // sync stub generation
     void generateSyncStubForTree(Tree* tree, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str);
     void generateSyncStubProjFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+    llvm::Value *getUsedLock(llvm::CallInst &lock_inst);
     void dumpCS();
     void dumpAtomicOps();
     std::set<llvm::Instruction*> computeInstsInCS(CSPair cs_pair);
@@ -65,6 +71,7 @@ namespace pdg
     AtomicOpSet _atomic_operations;
     BoundaryPtrSet _boundary_ptrs;
     PDGCallGraph *_call_graph;
+    KSplitCFG *_ksplit_cfg;
     int _warning_cs_count;
     int _warning_atomic_op_count;
     int _cs_warning_count;

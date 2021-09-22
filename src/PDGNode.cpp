@@ -73,6 +73,23 @@ bool pdg::Node::hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type)
   return false;
 }
 
+std::set<pdg::Node *> pdg::Node::getNeighborsWithDepType(std::set<pdg::EdgeType> edge_types)
+{
+  std::set<Node *> ret;
+  for (auto edge : _in_edge_set)
+  {
+    if (edge_types.find(edge->getEdgeType()) != edge_types.end())
+      ret.insert(edge->getSrcNode());
+  }
+
+  for (auto edge : _out_edge_set)
+  {
+    if (edge_types.find(edge->getEdgeType()) != edge_types.end())
+      ret.insert(edge->getDstNode());
+  }
+  return ret;
+}
+
 bool pdg::Node::isAddrVarNode()
 {
   for (auto in_edge : _in_edge_set)

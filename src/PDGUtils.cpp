@@ -426,6 +426,7 @@ bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
 
 bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
 {
+  std::set<Type *> casted_types;
   auto di_type = tree_node.getDIType();
   if (di_type == nullptr)
     return false;
@@ -439,8 +440,12 @@ bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
     {
       if (isa<BitCastInst>(user))
       {
-        cast_count += 1;
-        break;
+        auto casted_type = user->getType();
+        if (casted_types.find(casted_type) == casted_types.end())
+        {
+          casted_types.insert(casted_type);
+          cast_count += 1;
+        }
       }
     }
   }
@@ -475,6 +480,60 @@ bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)
       {
         if (isSentinelType(*gv))
           return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
+{
+  auto &ksplit_stats = KSplitStats::getInstance();
+  auto field_id = pdgutils::computeTreeNodeID(tree_node);
+
+  // check if a field is
+  for (auto addr_var : tree_node.getAddrVars())
+  {
+    // check if a field is used to derive pointer arithmetic for other field
+    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(addr_var))
+    {
+      if (gep->getType()->isStructTy())
+        continue;
+      for (auto user : gep->users())
+      {
+        if (isa<GetElementPtrInst>(user))
+        {
+          if (is_shared_data)
+          {
+            ksplit_stats.increasePtrGEPArithSDNum();
+            // errs() << "SD find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
+          }
+          else
+          {
+            ksplit_stats.increasePtrGEPArithDaaNum();
+            // errs() << "DAA find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
+          }
+          return true;
+        }
+      }
+    }
+
+    // check if a field is directly used in pointer arithmetic computation
+    for (auto user : addr_var->users())
+    {
+      if (auto var_user = dyn_cast<PtrToIntInst>(user))
+      {
+        if (is_shared_data)
+        {
+          errs() << "SD find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
+          ksplit_stats.increasePtrtoIntArithSDNum();
+        }
+        else
+        {
+          errs() << "DAA find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
+          ksplit_stats.increasePtrtoIntArithDaaNum();
+        }
+        return true;
       }
     }
   }

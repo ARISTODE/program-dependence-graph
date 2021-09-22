@@ -18,6 +18,11 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   _ksplit_stats = _DAA->getKSplitStats();
   _funcs_need_sync_stub_gen = _SDA->computeBoundaryTransitiveClosure();
   _call_graph = &PDGCallGraph::getInstance();
+  // build control flow graph
+  // _ksplit_cfg = &KSplitCFG::getInstance();
+  // if (!_ksplit_cfg->isBuild())
+  //   _ksplit_cfg->build();
+
   _warning_cs_count = 0;
   _warning_atomic_op_count = 0;
   _cs_warning_count = 0;
@@ -28,15 +33,18 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   computeAtomicOperations(M);
   computeWarningCS();
   computeWarningAtomicOps();
+  // check whether shared states are updated outside of critical region
+  // computeCodeRegions();
+  // printCodeRegionsUpdateSharedStates();
 
   // if (EnableAnalysisStats)
   //   _ksplit_stats->printStats();
-
   // _sync_stub_file << "syn_stub_kernel {\n";
   for (auto tree_pair : _sync_data_inst_tree_map)
   {
     Tree *tree = tree_pair.second;
     Instruction *cs_begin_inst = tree_pair.first;
+    std::string current_func_name = cs_begin_inst->getFunction()->getName().str();
     CallInst *lock_call_inst = cast<CallInst>(cs_begin_inst);
     std::string lock_call_name = pdgutils::getCalledFunc(*lock_call_inst)->getName();
     lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
@@ -56,11 +64,11 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
     generateSyncStubForTree(tree, read_proj_str, write_proj_str);
     // generate begin stub
     // _sync_stub_file << "<============== rpc generate for func " << cs_begin_inst->getFunction()->getName().str() << "================>\n";
-    _sync_stub_file << "\trpc shared_lock_begin_" << lock_call_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
+    _sync_stub_file << "\trpc shared_lock_begin_" << lock_call_name << "_" << current_func_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << read_proj_str.str();
     _sync_stub_file << "\t};\n";
 
-    _sync_stub_file << "\trpc shared_lock_end_" << unlock_call_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
+    _sync_stub_file << "\trpc shared_lock_end_" << unlock_call_name << "_" << current_func_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << write_proj_str.str();
     _sync_stub_file << "\t};\n";
   }
@@ -79,6 +87,7 @@ void pdg::AtomicRegionAnalysis::setupFenceNames()
 
 void pdg::AtomicRegionAnalysis::setupLockMap()
 {
+  _lock_map.insert(std::make_pair("rtnl_lock", "rtnl_unlock"));
   _lock_map.insert(std::make_pair("mutex_lock", "mutex_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
@@ -237,6 +246,43 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
   {
     bool cs_warning = false;
     bool has_nested_lock = false;
+
+    bool is_shared_lock = false;
+    auto lock_inst = cs_pair.first;
+    if (!isa<CallInst>(lock_inst))
+      continue;
+    Function* cur_func = lock_inst->getFunction();
+    if (!_SDA->isDriverFunc(*cur_func))
+      continue;
+    CallInst* lock_call_inst = cast<CallInst>(lock_inst);
+    auto used_lock = getUsedLock(*lock_call_inst);
+    // we aim to handle spin_lock and mutex_lock correctly for now
+    if (used_lock == nullptr)
+    {
+      errs() << "[Warning]: potential shared lock - " << cur_func->getName() <<  " - " << *lock_call_inst <<"\n";
+      continue;
+    }
+    auto used_lock_node = G->getNode(*used_lock);
+    std::set<EdgeType> edge_types;
+    edge_types.insert(EdgeType::DATA_ALIAS);
+    auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edge_types);
+    for (auto alias_node : lock_node_alias)
+    {
+      if (alias_node->isAddrVarNode())
+      {
+        TreeNode* abstract_tree_node = (TreeNode*)alias_node->getAbstractTreeNode();
+        auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
+        if (_SDA->isSharedFieldID(field_id))
+        {
+          is_shared_lock = true;
+          errs() << "find shared lock: " << lock_inst->getFunction()->getName() << " - " << field_id << "\n";
+          break;
+        }
+      }
+    }
+
+    if (!is_shared_lock)
+      continue;
     auto insts_in_cs = computeInstsInCS(cs_pair);
     // errs() << "Critical Section found in func: " << cs_pair.first->getFunction()->getName() << "\n";
     for (auto inst : insts_in_cs)
@@ -697,6 +743,62 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
         write_proj_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name << ";\n";
     }
   }
+}
+
+void pdg::AtomicRegionAnalysis::findNextCheckpoints(std::set<Instruction *> &checkpoints, Instruction &cur_inst)
+{
+  auto cur_inst_cfg_node = _ksplit_cfg->getNode(cur_inst);
+  bool is_lock_inst = false;
+  // if current inst is lock inst, search for unlock instruction
+  if (CallInst *ci = dyn_cast<CallInst>(&cur_inst))
+  {
+    auto called_func = pdgutils::getCalledFunc(*ci);
+    if (called_func != nullptr && called_func->isDeclaration())
+    {
+      std::string called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+      if (_lock_map.find(called_func_name) != _lock_map.end())
+      {
+        is_lock_inst = true;
+        auto unlock_inst_name = _lock_map[called_func_name];
+        return _ksplit_cfg->searchCallNodes(*cur_inst_cfg_node, unlock_inst_name);
+      }
+    }
+  }
+  // otherwise, search for lock instruction
+  else
+  {
+    // TODO: use spin_lock for test right now.
+    return _ksplit_cfg->searchCallNodes(*cur_inst_cfg_node, "spin_lock");
+  }
+}
+
+void pdg::AtomicRegionAnalysis::printCodeRegionsUpdateSharedStates()
+{
+  for (auto boundary_func : _SDA->getBoundaryFuncs())
+  {
+    if (boundary_func->isDeclaration())
+      continue;
+    Instruction* first_inst = &*inst_begin(boundary_func);
+
+  }
+}
+
+llvm::Value* pdg::AtomicRegionAnalysis::getUsedLock(CallInst &lock_inst)
+{
+  // we only consider lock instructions that take a lock instance as argument
+  if (lock_inst.getNumArgOperands() == 0)
+    return nullptr;
+  // use pattern on IR to track down the lock (O0 optimization level)
+  if (auto used_lock_cast_inst = dyn_cast<BitCastInst>(lock_inst.getOperand(0)))
+  {
+    auto used_lock = used_lock_cast_inst->getOperand(0);
+    if (auto gep = dyn_cast<GetElementPtrInst>(used_lock))
+    {
+      if (auto li = dyn_cast<LoadInst>(gep->getPointerOperand()))
+        return li;
+    }
+  }
+  return nullptr;
 }
 
 static RegisterPass<pdg::AtomicRegionAnalysis>

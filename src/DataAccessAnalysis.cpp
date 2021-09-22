@@ -79,6 +79,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     generateIDLForFunc(*F, true);
   }
 
+  // debug stats for total func counts
   if (EnableAnalysisStats)
     errs() << "Funcs reachable from boundary: " << total_num_funcs << "\n";
 
@@ -102,10 +103,13 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   errs() << "Finish analyzing data access info.";
   _idl_file.close();
 
+  if (EnableAnalysisStats)
+    _ksplit_stats->printStats();
+
   return false;
 }
 
-pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n, bool is_backward)
+std::set<pdg::Node *> pdg::DataAccessAnalysis::findCrossDomainParamNode(Node &n, bool is_backward)
 {
   std::queue<Node *> node_queue;
   std::set<EdgeType> search_edge_types = {
@@ -113,6 +117,7 @@ pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n, bool 
       EdgeType::DATA_ALIAS};
   node_queue.push(&n);
   std::set<Node *> seen_nodes;
+  std::set<Node*> cross_domain_nodes;
   while (!node_queue.empty())
   {
     auto current_node = node_queue.front();
@@ -136,10 +141,12 @@ pdg::Node *pdg::DataAccessAnalysis::findFirstCrossDomainParamNode(Node &n, bool 
       else
         target_node = edge->getDstNode();
       if (target_node->getNodeType() == GraphNodeType::FORMAL_IN)
-        return target_node;
+        cross_domain_nodes.insert(target_node);
+      else
+        node_queue.push(target_node);
     }
   }
-  return nullptr;
+  return cross_domain_nodes;
 }
 
 void pdg::DataAccessAnalysis::readDriverDefinedGlobalVarNames(std::string file_name)
@@ -196,22 +203,30 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   assert(val_node != nullptr && "cannot generate size anno str for null node\n");
   alloc_str += size_str;
   // in this case, the allocated object escaped.
-  if (val_node->isAddrVarNode())
+  auto alias_nodes = _PDG->findNodesReachedByEdge(*val_node, EdgeType::DATA_ALIAS);
+  alias_nodes.insert(val_node);
+  for (auto alias_node : alias_nodes)
   {
-    alloc_str += std::string("(caller)");
-    auto param_tree_node = val_node->getAbstractTreeNode();
-    TreeNode *tn = (TreeNode *)param_tree_node;
-    tn->setAllocStr(alloc_str);
-  }
-  else
-  {
-    // in this case, the allocated object is passed across isolation boundary
-    alloc_str += std::string("(callee)");
-    auto first_cross_domain_param_node = findFirstCrossDomainParamNode(*val_node);
-    if (first_cross_domain_param_node != nullptr)
+    alias_node->dump();
+    if (alias_node->isAddrVarNode())
     {
-      TreeNode *tn = (TreeNode *)first_cross_domain_param_node;
-      tn->setAllocStr(alloc_str);
+      auto param_tree_node = alias_node->getAbstractTreeNode();
+      TreeNode *tn = (TreeNode *)param_tree_node;
+      tn->setAllocStr(alloc_str + "(caller)");
+    }
+    else
+    {
+      // in this case, the allocated object is passed across isolation boundary.
+      // the tracking is path insensitive. If two functions are called in different branches, both function woul have the alloca attributes created for the received parameter
+      auto cross_domain_param_nodes = findCrossDomainParamNode(*alias_node);
+      for (auto n : cross_domain_param_nodes)
+      {
+        if (n != nullptr)
+        {
+          TreeNode *tn = (TreeNode *)n;
+          tn->setAllocStr(alloc_str + "(callee)");
+        }
+      }
     }
   }
 }
@@ -227,12 +242,15 @@ void pdg::DataAccessAnalysis::inferDeallocAnno(Value &deallocator)
     if (freed_object_node->isAddrVarNode())
     {
       auto param_node = freed_object_node->getAbstractTreeNode();
-      auto first_backward_cross_domain_param_node = findFirstCrossDomainParamNode(*param_node, true);
+      auto backward_cross_domain_param_nodes = findCrossDomainParamNode(*param_node, true);
       // perform backward search to identify the parameter tree node that should contain the dealloc attribute.
-      if (first_backward_cross_domain_param_node != nullptr)
+      for (auto n : backward_cross_domain_param_nodes)
       {
-        TreeNode *tn = (TreeNode *)first_backward_cross_domain_param_node;
-        tn->setAllocStr("dealloc(caller)");
+        if (n != nullptr)
+        {
+          TreeNode *tn = (TreeNode *)n;
+          tn->setAllocStr("dealloc(caller)");
+        }
       }
     }
   }
@@ -341,6 +359,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
       if (is_global_tree_node && !_SDA->isDriverFunc(*(i->getFunction())))
         continue;
     }
+
     auto acc_tags = computeDataAccessTagsForVal(*addr_var);
     for (auto acc_tag : acc_tags)
     {
@@ -531,6 +550,10 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
       continue;
 
+    // check for pointer arithmetic
+    if (pdgutils::hasPtrArith(*child_node))
+      _ksplit_stats->increasePtrArithNum();
+
     if (EnableAnalysisStats)
       _ksplit_stats->increaseFieldsSharedData();
 
@@ -570,7 +593,10 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     {
       _ksplit_stats->collectStats(*field_di_type, annotations);
       if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
+      {
+        errs() << "find void pointer casted to multiple types: " << _current_processing_func << " - " << field_id << "\n";
         _ksplit_stats->increaseUnhandledVoidPtrNum();
+      }
     }
 
     if (is_sentinel_field)
@@ -869,7 +895,10 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
         anno_str += anno;
       }
       if (pdgutils::isVoidPointerHasMultipleCasts(*ret_tree_formal_in_root_node))
+      {
+        errs() << "find void pointer casted to multiple types: " << F.getName() << " - " << "ret value" << "\n";
         _ksplit_stats->increaseUnhandledVoidPtrNum();
+      }
     }
   }
   else
@@ -955,7 +984,10 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
         _ksplit_stats->increaseTotalUnionNum();
     }
     if (pdgutils::isVoidPointerHasMultipleCasts(*root_node))
+    {
       _ksplit_stats->increaseUnhandledVoidPtrNum();
+      errs() << "find void pointer casted to multiple types: " << F.getName() << " - " << arg_name << "\n";
+    }
 
     if (i != arg_list.size() - 1)
       rpc_str += ", ";
@@ -988,6 +1020,7 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool process_expor
     return;
   }
   generateRpcForFunc(F, process_exported_func);
+  errs() << "generating idl for: " << F.getName() << "\n";
   _idl_file << "{\n";
   // generate projection for return value
   auto ret_arg_tree = fw->getRetFormalInTree();
@@ -1006,7 +1039,8 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool process_expor
 void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &tree_node, std::string &anno_str)
 {
   // get all alias of the argument
-  auto alias_nodes = _PDG->findNodesReachedByEdge(tree_node, EdgeType::DATA_ALIAS);
+  std::set<EdgeType> edge_types = {EdgeType::PARAMETER_IN, EdgeType::DATA_ALIAS};
+  auto alias_nodes = _PDG->findNodesReachedByEdges(tree_node, edge_types);
   for (auto node : alias_nodes)
   {
     auto out_neighbor_nodes = node->getOutNeighbors();
@@ -1022,7 +1056,7 @@ void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &tree_node, std::stri
           continue;
         std::string called_func_name = called_func->getName();
         called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
-        if (called_func_name == "copy_from_user" || called_func_name == "copy_to_user")
+        if (called_func_name == "_copy_from_user" || called_func_name == "_copy_to_user")
           anno_str.append("[user]");
       }
     }
@@ -1075,7 +1109,7 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
     annotations.insert(tree_node.getAllocStr());
   if (!tree_node.getDeallocStr().empty())
     annotations.insert(tree_node.getDeallocStr());
-  
+
   return annotations;
 }
 
