@@ -745,7 +745,7 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
   }
 }
 
-void pdg::AtomicRegionAnalysis::findNextCheckpoints(std::set<Instruction *> &checkpoints, Instruction &cur_inst)
+std::set<pdg::Node*> pdg::AtomicRegionAnalysis::findNextCheckpoints(std::set<Instruction *> &checkpoints, Instruction &cur_inst)
 {
   auto cur_inst_cfg_node = _ksplit_cfg->getNode(cur_inst);
   bool is_lock_inst = false;

@@ -49,7 +49,7 @@ namespace pdg
     // used for checking shared states updated outside of critical regions.
     void computeCodeRegions();
     void printCodeRegionsUpdateSharedStates();
-    void findNextCheckpoints(std::set<llvm::Instruction *> &checkpoints, llvm::Instruction &cur_inst);
+    std::set<pdg::Node*> findNextCheckpoints(std::set<llvm::Instruction *> &checkpoints, llvm::Instruction &cur_inst);
     std::set<llvm::Value*> computeBoundaryAliasPtrs(llvm::Value &v);
     // sync stub generation
     void generateSyncStubForTree(Tree* tree, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str);
