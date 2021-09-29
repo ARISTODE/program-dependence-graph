@@ -808,66 +808,66 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
   }
 }
 
-std::set<pdg::Node*> pdg::AtomicRegionAnalysis::findNextCheckpoints(std::set<Instruction *> &checkpoints, Instruction &cur_inst)
-{
-  auto cur_inst_cfg_node = _ksplit_cfg->getNode(cur_inst);
-  bool is_lock_inst = false;
-  // if current inst is lock inst, search for unlock instruction
-  if (CallInst *ci = dyn_cast<CallInst>(&cur_inst))
-  {
-    auto called_func = pdgutils::getCalledFunc(*ci);
-    if (called_func != nullptr && called_func->isDeclaration())
-    {
-      std::string called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
-      if (_lock_map.find(called_func_name) != _lock_map.end())
-      {
-        is_lock_inst = true;
-        auto unlock_inst_name = _lock_map[called_func_name];
-        return _ksplit_cfg->searchCallNodes(*cur_inst_cfg_node, unlock_inst_name);
-      }
-    }
-  }
-  // otherwise, search for lock instruction
-  else
-  {
-    // TODO: use spin_lock for test right now.
-    return _ksplit_cfg->searchCallNodes(*cur_inst_cfg_node, "spin_lock");
-  }
-}
+// std::set<pdg::Node*> pdg::AtomicRegionAnalysis::findNextCheckpoints(std::set<Instruction *> &checkpoints, Instruction &cur_inst)
+// {
+//   auto cur_inst_cfg_node = _ksplit_cfg->getNode(cur_inst);
+//   bool is_lock_inst = false;
+//   // if current inst is lock inst, search for unlock instruction
+//   if (CallInst *ci = dyn_cast<CallInst>(&cur_inst))
+//   {
+//     auto called_func = pdgutils::getCalledFunc(*ci);
+//     if (called_func != nullptr && called_func->isDeclaration())
+//     {
+//       std::string called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+//       if (_lock_map.find(called_func_name) != _lock_map.end())
+//       {
+//         is_lock_inst = true;
+//         auto unlock_inst_name = _lock_map[called_func_name];
+//         return _ksplit_cfg->searchCallNodes(*cur_inst_cfg_node, unlock_inst_name);
+//       }
+//     }
+//   }
+//   // otherwise, search for lock instruction
+//   else
+//   {
+//     // TODO: use spin_lock for test right now.
+//     return _ksplit_cfg->searchCallNodes(*cur_inst_cfg_node, "spin_lock");
+//   }
+// }
 
-// the idea is to find a shared state update outside of critical region.
-void pdg::AtomicRegionAnalysis::printCodeRegionsUpdateSharedStates(Module &M)
-{
-  ProgramGraph *PDG = _SDA->getPDG();
-  // scan through all the instructions and find the shared state update outside of critical region
-  for (auto &F : M)
-  {
-    if (F.isDeclaration())
-      continue;
-    for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
-    {
-      if (_insts_in_CS.find(&*inst_iter) != _insts_in_CS.end())
-        continue;
-      auto node = PDG->getNode(*inst_iter);
-      assert(node != nullptr && "printCodeRegionsUpdateSharedStates cannot get instruction node\n");
-      if (!pdgutils::hasWriteAccess(*inst_iter))
-        continue;
-      for (auto in_edge : node->getInEdgeSet())
-      {
-        // check if this instruction corresponds to a type tree node
-        if (in_edge->getEdgeType() == EdgeType::VAL_DEP)
-        {
-          auto in_neighbor = in_edge->getSrcNode();
-          TreeNode* tn = (TreeNode*)in_neighbor;
-          if (!tn->isStructMember())
-            continue;
-          if (_SDA->isTreeNodeShared(*tn))
-            errs() << "Find shared field update outside critical section: " << F.getName() << " - " << pdgutils::computeTreeNodeID(*tn) << "\n";
-        }
-      }
-    }
-  }
-}
+// // the idea is to find a shared state update outside of critical region.
+// void pdg::AtomicRegionAnalysis::printCodeRegionsUpdateSharedStates(Module &M)
+// {
+//   ProgramGraph *PDG = _SDA->getPDG();
+//   // scan through all the instructions and find the shared state update outside of critical region
+//   for (auto &F : M)
+//   {
+//     if (F.isDeclaration())
+//       continue;
+//     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
+//     {
+//       if (_insts_in_CS.find(&*inst_iter) != _insts_in_CS.end())
+//         continue;
+//       auto node = PDG->getNode(*inst_iter);
+//       assert(node != nullptr && "printCodeRegionsUpdateSharedStates cannot get instruction node\n");
+//       if (!pdgutils::hasWriteAccess(*inst_iter))
+//         continue;
+//       for (auto in_edge : node->getInEdgeSet())
+//       {
+//         // check if this instruction corresponds to a type tree node
+//         if (in_edge->getEdgeType() == EdgeType::VAL_DEP)
+//         {
+//           auto in_neighbor = in_edge->getSrcNode();
+//           TreeNode* tn = (TreeNode*)in_neighbor;
+//           if (!tn->isStructMember())
+//             continue;
+//           if (_SDA->isTreeNodeShared(*tn))
+//             errs() << "Find shared field update outside critical section: " << F.getName() << " - " << pdgutils::computeTreeNodeID(*tn) << "\n";
+//         }
+//       }
+//     }
+//   }
+// }
 
 llvm::Value* pdg::AtomicRegionAnalysis::getUsedLock(CallInst &lock_inst)
 {

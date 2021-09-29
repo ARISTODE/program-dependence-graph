@@ -49,8 +49,8 @@ namespace pdg
     bool isAliasOfBoundaryPtrs(llvm::Value &v);
     // used for checking shared states updated outside of critical regions.
     void computeCodeRegions();
-    void printCodeRegionsUpdateSharedStates(llvm::Module &M);
-    void findNextCheckpoints(std::set<llvm::Instruction *> &checkpoints, llvm::Instruction &cur_inst);
+    // void printCodeRegionsUpdateSharedStates(llvm::Module &M);
+    // void findNextCheckpoints(std::set<llvm::Instruction *> &checkpoints, llvm::Instruction &cur_inst);
     std::set<llvm::Value*> computeBoundaryAliasPtrs(llvm::Value &v);
     bool hasBoundaryAliasNodes(llvm::Value &v);
     // sync stub generation
