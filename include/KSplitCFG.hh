@@ -20,7 +20,7 @@ namespace pdg
       }
       void build(llvm::Module &M) override;
       void connectControlFlowEdges(llvm::Module &M);
-      void isBuild() { return _is_build; }
+      bool isBuild() { return _is_build; }
       std::set<Node *> searchCallNodes(Node &start_node, std::string called_func_name);
       std::set<llvm::Instruction *> computeNodesBetweenPoints(llvm::Instruction &start, llvm::Instruction &end);
 
