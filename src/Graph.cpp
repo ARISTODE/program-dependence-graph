@@ -53,6 +53,8 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeTy
   {
     auto current_node = node_queue.top();
     node_queue.pop();
+    if (current_node == nullptr)
+      continue;
     if (visited.find(current_node) != visited.end())
       continue;
     visited.insert(current_node);

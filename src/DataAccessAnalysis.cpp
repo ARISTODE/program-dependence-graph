@@ -169,6 +169,7 @@ void pdg::DataAccessAnalysis::readDriverExportedFuncSymbols(std::string file_nam
 
 void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
 {
+  // first composing the allocator string in format alloc<{{size, GP_FLAG}}>
   std::string alloc_str = "alloc";
   std::string size_str = "<{{";
   if (CallInst *ci = dyn_cast<CallInst>(&allocator))
@@ -205,9 +206,11 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   // in this case, the allocated object escaped.
   auto alias_nodes = _PDG->findNodesReachedByEdge(*val_node, EdgeType::DATA_ALIAS);
   alias_nodes.insert(val_node);
+  // if any alias is address variable of the parameter tree, then we consider the allocated 
+  // object need to be allocated at the caller side.
   for (auto alias_node : alias_nodes)
   {
-    alias_node->dump();
+    // alias_node->dump();
     if (alias_node->isAddrVarNode())
     {
       auto param_tree_node = alias_node->getAbstractTreeNode();
@@ -217,7 +220,7 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
     else
     {
       // in this case, the allocated object is passed across isolation boundary.
-      // the tracking is path insensitive. If two functions are called in different branches, both function woul have the alloca attributes created for the received parameter
+      // the tracking is path insensitive. If two functions are called in different branches, both function would have the alloc attributes created for the received parameter
       auto cross_domain_param_nodes = findCrossDomainParamNode(*alias_node);
       for (auto n : cross_domain_param_nodes)
       {
@@ -413,7 +416,8 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
     for (auto addr_var : child_node->getAddrVars())
     {
       auto addr_var_node = _PDG->getNode(*addr_var);
-      child_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
+      if (addr_var_node != nullptr)
+        child_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
     }
   }
 
@@ -1105,11 +1109,14 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
   }
 
   // infer the alloc/dealloc string.
-  if (!tree_node.getAllocStr().empty())
-    annotations.insert(tree_node.getAllocStr());
-  if (!tree_node.getDeallocStr().empty())
-    annotations.insert(tree_node.getDeallocStr());
-
+  auto node_di_type = tree_node.getDIType();
+  if (dbgutils::isCompositeType(*node_di_type) || dbgutils::isCompositePointerType(*node_di_type))
+  {
+    if (!tree_node.getAllocStr().empty())
+      annotations.insert(tree_node.getAllocStr());
+    if (!tree_node.getDeallocStr().empty())
+      annotations.insert(tree_node.getDeallocStr());
+  }
   return annotations;
 }
 
@@ -1207,7 +1214,6 @@ void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
           {
             if (!containerHasSharedFieldsAccessed(*bci))
               continue;
-            errs() << "hello\n";
             _container_of_insts.insert(bci);
             if (EnableAnalysisStats)
             {

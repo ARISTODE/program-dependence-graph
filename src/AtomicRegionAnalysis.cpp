@@ -35,7 +35,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   computeWarningAtomicOps();
   // check whether shared states are updated outside of critical region
   // computeCodeRegions();
-  // printCodeRegionsUpdateSharedStates();
+  // printCodeRegionsUpdateSharedStates(M);
 
   // if (EnableAnalysisStats)
   //   _ksplit_stats->printStats();
@@ -92,8 +92,11 @@ void pdg::AtomicRegionAnalysis::setupLockMap()
   _lock_map.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
   _lock_map.insert(std::make_pair("rcu_read_lock", "rcu_read_unlock"));
+  _lock_map.insert(std::make_pair("rcu_read_lock_bh", "rcu_read_unlock_bh"));
   _lock_map.insert(std::make_pair("read_seqcount_begin", "read_seqcount_retry"));
   _lock_map.insert(std::make_pair("write_seqcount_begin", "write_seqcount_end"));
+  _lock_map.insert(std::make_pair("kfree_rcu", "kfree_rcu_end")); // this is dummy pair for rcu
+  _lock_map.insert(std::make_pair("rcu_assign_pointer", "dummy"));
 }
 
 void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)
@@ -104,42 +107,27 @@ void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)
   {
     if (f->isDeclaration() || f->empty())
       continue;
-    // get the call sites of the boundary function
-    // for (auto u : f->users())
-    // {
-    //   if (CallInst *ci = dyn_cast<CallInst>(u))
-    //   {
-    //     for (auto arg_iter = ci->arg_begin(); arg_iter != ci->arg_end(); arg_iter++)
-    //     {
-    //       _boundary_objects.insert(*arg_iter);
-    //     }
-    //   }
-    //   // handle nested bit cast
-    //   for (auto uu : u->users())
-    //   {
-    //     if (CallInst* ci = dyn_cast<CallInst>(uu))
-    //     {
-    //       for (auto arg_iter = ci->arg_begin(); arg_iter != ci->arg_end(); arg_iter++)
-    //       {
-    //         _boundary_objects.insert(*arg_iter);
-    //       }
-    //     }
-    //   }
-    // }
-
+    auto func_w = _SDA->getPDG()->getFuncWrapper(*f);
     for (auto &arg : f->args())
     {
       if (arg.getType()->isPointerTy())
-        _boundary_ptrs.insert(&arg);
+      {
+        auto arg_tree = func_w->getArgFormalInTree(arg);
+        auto root_node = arg_tree->getRootNode();
+        if (root_node != nullptr)
+          _boundary_arg_nodes.insert(root_node);
+      }
     }
   }
 
-  // for (auto &global_var : M.getGlobalList())
-  // {
-  //   if (!global_var.getType()->isPointerTy())
-  //     continue;
-  //   _boundary_ptrs.insert(&global_var);
-  // }
+  for (auto &global_var : M.getGlobalList())
+  {
+    if (!global_var.getType()->isPointerTy())
+      continue;
+    auto global_root_node = _SDA->getPDG()->getNode(global_var);
+    if (global_root_node != nullptr)
+      _boundary_arg_nodes.insert(global_root_node);
+  }
 }
 
 pdg::AtomicRegionAnalysis::CSMap pdg::AtomicRegionAnalysis::computeCSInFunc(Function &F)
@@ -155,7 +143,10 @@ pdg::AtomicRegionAnalysis::CSMap pdg::AtomicRegionAnalysis::computeCSInFunc(Func
     std::vector<Instruction *> unlock_insts;
     for (auto tmp_inst_iter = inst_iter; tmp_inst_iter != inst_end(F); tmp_inst_iter++)
     {
-      auto lock_inst_name = pdgutils::getCalledFunc(*lock_call_inst)->getName();
+      Function* called_func = pdgutils::getCalledFunc(*lock_call_inst);
+      if (called_func == nullptr)
+        continue;
+      auto lock_inst_name = pdgutils::stripFuncNameVersionNumber(called_func->getName());
       if (isUnlockInst(*tmp_inst_iter, lock_inst_name))
         unlock_insts.push_back(&*tmp_inst_iter);
     }
@@ -222,7 +213,9 @@ std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicR
     cs_begin_iter++;
   auto cs_end_iter = inst_begin(f);
   while (&*cs_end_iter != unlock_inst)
+  {
     cs_end_iter++;
+  }
 
   std::set<Instruction *> ret;
   cs_begin_iter++;
@@ -237,54 +230,102 @@ std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicR
   return ret;
 }
 
+bool pdg::AtomicRegionAnalysis::isRcuLock(CallInst &lock_call_inst)
+{
+  auto called_func = pdgutils::getCalledFunc(lock_call_inst);
+  if (called_func == nullptr)
+    return false;
+  auto func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+  if (func_name == "rcu_read_lock")
+    return true;
+  return false;
+}
+
 void pdg::AtomicRegionAnalysis::computeWarningCS()
 {
   ProgramGraph *G = _SDA->getPDG();
   // PDGCallGraph &CG = PDGCallGraph::getInstance();
-
   for (auto cs_pair : _critical_sections)
   {
     bool cs_warning = false;
     bool has_nested_lock = false;
-
     bool is_shared_lock = false;
     auto lock_inst = cs_pair.first;
+    // collect instructions in critical sections
+    auto insts_in_cs = computeInstsInCS(cs_pair);
+    _insts_in_CS.insert(insts_in_cs.begin(), insts_in_cs.end());
+
     if (!isa<CallInst>(lock_inst))
       continue;
     Function* cur_func = lock_inst->getFunction();
-    if (!_SDA->isDriverFunc(*cur_func))
-      continue;
+    // if (!_SDA->isDriverFunc(*cur_func))
+    //   continue;
     CallInst* lock_call_inst = cast<CallInst>(lock_inst);
     auto used_lock = getUsedLock(*lock_call_inst);
-    // we aim to handle spin_lock and mutex_lock correctly for now
-    if (used_lock == nullptr)
+
+    // identify shared rcu lock
+    if (isRcuLock(*lock_call_inst))
     {
-      errs() << "[Warning]: potential shared lock - " << cur_func->getName() <<  " - " << *lock_call_inst <<"\n";
-      continue;
-    }
-    auto used_lock_node = G->getNode(*used_lock);
-    std::set<EdgeType> edge_types;
-    edge_types.insert(EdgeType::DATA_ALIAS);
-    auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edge_types);
-    for (auto alias_node : lock_node_alias)
-    {
-      if (alias_node->isAddrVarNode())
+      errs() << "find rcu lock: " << cur_func->getName() << "\n";
+      // find rcu_dereference call
+      auto rcu_dereference_inst = findRcuDereferenceInst(insts_in_cs);
+      if (!rcu_dereference_inst)
+        continue;
+      // if rcu_dereference is found
+      auto dereferenced_object = rcu_dereference_inst->getOperand(0);
+      assert(dereferenced_object != nullptr && "cannot find rcu shared lock on null object! \n");
+      errs() << "rcu dereference obj: " << *dereferenced_object << "\n";
+      auto object_node = _SDA->getPDG()->getNode(*dereferenced_object);
+      if (object_node != nullptr)
       {
-        TreeNode* abstract_tree_node = (TreeNode*)alias_node->getAbstractTreeNode();
-        auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
-        if (_SDA->isSharedFieldID(field_id))
+        DIType *dt = object_node->getDIType();
+        if (dt != nullptr)
         {
-          is_shared_lock = true;
-          errs() << "find shared lock: " << lock_inst->getFunction()->getName() << " - " << field_id << "\n";
-          break;
+          auto type_name = dbgutils::getSourceLevelTypeName(*dt);
+          if (_SDA->isSharedStructType(type_name))
+            is_shared_lock = true;
+          // TODO: need to find write sync stub at the other side for the same type
+        }
+      }
+    }
+    // we aim to handle spin_lock and mutex_lock correctly for now
+    else
+    {
+      if (used_lock == nullptr)
+      {
+        errs() << "[Warning]: potential shared lock - " << cur_func->getName() << " - " << *lock_call_inst << "\n";
+        continue;
+      }
+      auto used_lock_node = G->getNode(*used_lock);
+      std::set<EdgeType> edge_types;
+      edge_types.insert(EdgeType::DATA_ALIAS);
+      auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edge_types);
+      for (auto alias_node : lock_node_alias)
+      {
+        if (alias_node->isAddrVarNode())
+        {
+          TreeNode *abstract_tree_node = (TreeNode *)alias_node->getAbstractTreeNode();
+          auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
+          if (_SDA->isSharedFieldID(field_id))
+          {
+            is_shared_lock = true;
+            break;
+          }
         }
       }
     }
 
     if (!is_shared_lock)
       continue;
-    auto insts_in_cs = computeInstsInCS(cs_pair);
-    // errs() << "Critical Section found in func: " << cs_pair.first->getFunction()->getName() << "\n";
+    // speicial handle for kfree_rcu. No need to handle this, only need to identify where
+    // it is used.
+    Function *called_func = pdgutils::getCalledFunc(*lock_call_inst);
+    if (called_func == nullptr)
+      continue;
+    std::string lock_inst_name = pdgutils::stripFuncNameVersionNumber(called_func->getName());
+    if (lock_inst_name == "kfree_rcu")
+      continue;
+
     for (auto inst : insts_in_cs)
     {
       // detect nested lock here
@@ -309,11 +350,10 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       // obtianed the modified value (address)
       if (accessed_node == nullptr)
         continue;
-      // computeModifedNames(*val_node, modified_names);
-      // Function *f = si->getFunction();
-      // scenerio 1: check if a modified value could be a pointer alias of boundary pointers
-      auto alias_boundary_ptrs = computeBoundaryAliasPtrs(*accessed_val);
-      if (!alias_boundary_ptrs.empty())
+
+      // check if a modified value could be a pointer alias of boundary pointers
+      auto has_boundary_alias = hasBoundaryAliasNodes(*accessed_val);
+      if (has_boundary_alias)
       {
         cs_warning = true;
         for (auto in_neighbor : accessed_node->getInNeighborsWithDepType(EdgeType::PARAMETER_IN))
@@ -543,14 +583,37 @@ bool pdg::AtomicRegionAnalysis::isAliasOfBoundaryPtrs(Value &v)
 
 std::set<Value *> pdg::AtomicRegionAnalysis::computeBoundaryAliasPtrs(llvm::Value &v)
 {
-  std::set<Value *> alias_ptrs;
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
-  for (auto b_ptr : _boundary_ptrs)
+  // std::set<Value *> alias_ptrs;
+  // PTAWrapper &ptaw = PTAWrapper::getInstance();
+  // for (auto b_ptr : _boundary_ptrs)
+  // {
+  //   if (ptaw.queryAlias(v, *b_ptr) != NoAlias)
+  //     alias_ptrs.insert(b_ptr);
+  // }
+  // auto PDG = _SDA->getPDG();
+  // for (auto n : _boundary_arg_nodes)
+  // {
+
+  // }
+  // return alias_ptrs;
+}
+
+bool pdg::AtomicRegionAnalysis::hasBoundaryAliasNodes(llvm::Value &v)
+{
+  std::set<Node *> ret;
+  auto PDG = _SDA->getPDG();
+  auto val_node = PDG->getNode(v);
+  if (val_node == nullptr)
+    return false;
+  std::set<EdgeType> edge_types = {
+      EdgeType::DATA_ALIAS,
+      EdgeType::PARAMETER_IN };
+  for (auto n : _boundary_arg_nodes)
   {
-    if (ptaw.queryAlias(v, *b_ptr) != NoAlias)
-      alias_ptrs.insert(b_ptr);
+    if (PDG->canReach(*n, *val_node, edge_types))
+      return true;
   }
-  return alias_ptrs;
+  return false;
 }
 
 void pdg::AtomicRegionAnalysis::printWarningCS(pdg::AtomicRegionAnalysis::CSPair cs_pair, Value &v, Function &f, std::set<std::string> &modified_names, std::string source_type)
@@ -772,14 +835,37 @@ void pdg::AtomicRegionAnalysis::findNextCheckpoints(std::set<Instruction *> &che
   }
 }
 
-void pdg::AtomicRegionAnalysis::printCodeRegionsUpdateSharedStates()
+// the idea is to find a shared state update outside of critical region.
+void pdg::AtomicRegionAnalysis::printCodeRegionsUpdateSharedStates(Module &M)
 {
-  for (auto boundary_func : _SDA->getBoundaryFuncs())
+  ProgramGraph *PDG = _SDA->getPDG();
+  // scan through all the instructions and find the shared state update outside of critical region
+  for (auto &F : M)
   {
-    if (boundary_func->isDeclaration())
+    if (F.isDeclaration())
       continue;
-    Instruction* first_inst = &*inst_begin(boundary_func);
-
+    for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
+    {
+      if (_insts_in_CS.find(&*inst_iter) != _insts_in_CS.end())
+        continue;
+      auto node = PDG->getNode(*inst_iter);
+      assert(node != nullptr && "printCodeRegionsUpdateSharedStates cannot get instruction node\n");
+      if (!pdgutils::hasWriteAccess(*inst_iter))
+        continue;
+      for (auto in_edge : node->getInEdgeSet())
+      {
+        // check if this instruction corresponds to a type tree node
+        if (in_edge->getEdgeType() == EdgeType::VAL_DEP)
+        {
+          auto in_neighbor = in_edge->getSrcNode();
+          TreeNode* tn = (TreeNode*)in_neighbor;
+          if (!tn->isStructMember())
+            continue;
+          if (_SDA->isTreeNodeShared(*tn))
+            errs() << "Find shared field update outside critical section: " << F.getName() << " - " << pdgutils::computeTreeNodeID(*tn) << "\n";
+        }
+      }
+    }
   }
 }
 
@@ -796,6 +882,23 @@ llvm::Value* pdg::AtomicRegionAnalysis::getUsedLock(CallInst &lock_inst)
     {
       if (auto li = dyn_cast<LoadInst>(gep->getPointerOperand()))
         return li;
+    }
+  }
+  return nullptr;
+}
+
+Instruction *pdg::AtomicRegionAnalysis::findRcuDereferenceInst(std::set<Instruction *> insts_in_cs)
+{
+  for (auto inst : insts_in_cs)
+  {
+    if (CallInst *ci = dyn_cast<CallInst>(inst))
+    {
+      auto called_func = pdgutils::getCalledFunc(*ci);
+      if (called_func == nullptr)
+        continue;
+      std::string called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+      if (called_func_name == "rcu_dereference_lvds")
+        return ci;
     }
   }
   return nullptr;

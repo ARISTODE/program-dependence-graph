@@ -9,6 +9,8 @@ namespace pdg
   namespace dbgutils
   {
     bool isPointerType(llvm::DIType &dt);
+    bool isCompositeType(llvm::DIType &dt);
+    bool isCompositePointerType(llvm::DIType &dt);
     bool isUnionPointerType(llvm::DIType &dt);
     bool isUnionType(llvm::DIType &dt);
     bool isStructPointerType(llvm::DIType &dt);

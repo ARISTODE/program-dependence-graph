@@ -121,6 +121,8 @@ bool pdg::PDGCallGraph::canReach(Node &src, Node &sink)
     while (!node_queue.empty())
     {
       Node* n = node_queue.front();
+      if (n == nullptr)
+        continue;
       node_queue.pop();
       if (n == &sink)
         return true;

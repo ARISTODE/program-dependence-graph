@@ -37,6 +37,8 @@ void pdg::BoundaryAnalysis::setupBlackListFuncNames()
   {
     _black_list_func_names.insert(line);
   }
+  // some default filters
+  _black_list_func_names.insert("llvm");
 }
 
 void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)

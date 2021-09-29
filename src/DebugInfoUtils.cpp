@@ -42,6 +42,23 @@ bool pdg::dbgutils::isPointerType(DIType &dt)
   return (d->getTag() == dwarf::DW_TAG_pointer_type);
 }
 
+bool pdg::dbgutils::isCompositeType(DIType &dt)
+{
+  return (isStructType(dt) || isArrayType(dt) || isUnionType(dt));
+}
+
+bool pdg::dbgutils::isCompositePointerType(DIType &dt)
+{
+  if (!isPointerType(dt))
+    return false;
+  auto d = getBaseDIType(dt);
+  if (d == nullptr)
+    return false;
+  if (isCompositeType(*d))
+    return true;
+  return false;
+}
+
 bool pdg::dbgutils::isStructType(DIType &dt)
 {
   return (dt.getTag() == dwarf::DW_TAG_structure_type);

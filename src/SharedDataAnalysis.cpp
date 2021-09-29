@@ -268,7 +268,8 @@ void pdg::SharedDataAnalysis::buildTreesForSharedStructDIType(Module &M)
     Tree *type_tree = new Tree();
     TreeNode *root_node = new TreeNode(shared_struct_di_type, 0, nullptr, type_tree, GraphNodeType::GLOBAL_TYPE);
     std::string shared_struct_type_name = dbgutils::getSourceLevelTypeName(*shared_struct_di_type, true);
-    _shared_struct_type_names.insert(shared_struct_type_name);
+    if (!shared_struct_type_name.empty())
+      _shared_struct_type_names.insert(shared_struct_type_name);
     // this finds all the variable (global/local) in the code that have the struct type.
     // we will analylze the accesses to these variables to determine shared fields.
     auto vars_with_di_type = computeVarsWithDITypeInModule(*shared_struct_di_type, M);
