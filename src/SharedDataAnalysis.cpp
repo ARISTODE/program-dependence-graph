@@ -33,8 +33,8 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   computeSharedFieldID();
   _shared_field_id.insert("struct inodei_rdev");
   _shared_field_id.insert("struct inodedevt");
-  dumpSharedFieldID();
-  computeSharedGlobalVars();
+  // dumpSharedFieldID();
+  // computeSharedGlobalVars();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
@@ -169,7 +169,8 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       if (dbgutils::isStructType(*lowest_di_type))
       {
         std::string di_type_name = dbgutils::getSourceLevelTypeName(*lowest_di_type, true);
-        driver_struct_type_names.insert(pdgutils::stripVersionTag(di_type_name));
+        if (!di_type_name.empty())
+          driver_struct_type_names.insert(pdgutils::stripVersionTag(di_type_name));
       }
     }
   }

@@ -24,6 +24,9 @@ bool pdg::BoundaryAnalysis::runOnModule(Module &M)
 
 void pdg::BoundaryAnalysis::setupBlackListFuncNames()
 {
+  // some default filters
+  _black_list_func_names.insert("llvm");
+  // read default library func list from liblcd_func.txt
   if (BlackListFileName.empty())
     BlackListFileName = "liblcd_funcs.txt";
   std::ifstream black_list_func_file(BlackListFileName);
@@ -37,8 +40,6 @@ void pdg::BoundaryAnalysis::setupBlackListFuncNames()
   {
     _black_list_func_names.insert(line);
   }
-  // some default filters
-  _black_list_func_names.insert("llvm");
 }
 
 void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)

@@ -262,7 +262,6 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
     //   continue;
     CallInst* lock_call_inst = cast<CallInst>(lock_inst);
     auto used_lock = getUsedLock(*lock_call_inst);
-
     // identify shared rcu lock
     if (isRcuLock(*lock_call_inst))
     {
@@ -297,6 +296,8 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         continue;
       }
       auto used_lock_node = G->getNode(*used_lock);
+      if (used_lock_node == nullptr)
+        continue;
       std::set<EdgeType> edge_types;
       edge_types.insert(EdgeType::DATA_ALIAS);
       auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edge_types);
@@ -351,11 +352,30 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       if (accessed_node == nullptr)
         continue;
 
-      // check if a modified value could be a pointer alias of boundary pointers
-      auto has_boundary_alias = hasBoundaryAliasNodes(*accessed_val);
-      if (has_boundary_alias)
+      // if shared fields is accessed
+      if (accessed_node->isAddrVarNode())
       {
-        cs_warning = true;
+          TreeNode *abstract_tree_node = (TreeNode *)accessed_node->getAbstractTreeNode();
+          auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
+          if (_SDA->isSharedFieldID(field_id))
+            cs_warning = true;
+      }
+      else
+      {
+        // check if shared container is accessed
+        auto dt = accessed_node->getDIType();
+        if (dt != nullptr)
+        {
+          auto type_name = dbgutils::getSourceLevelTypeName(*dt);
+          if (_SDA->isSharedStructType(type_name))
+            cs_warning = true;
+        }
+      }
+
+      // check if a modified value could be a pointer alias of boundary pointers
+      // auto has_boundary_alias = hasBoundaryAliasNodes(*accessed_val);
+      if (cs_warning)
+      {
         for (auto in_neighbor : accessed_node->getInNeighborsWithDepType(EdgeType::PARAMETER_IN))
         {
           TreeNode *formal_param_in_node = (TreeNode *)in_neighbor;
@@ -884,6 +904,8 @@ llvm::Value* pdg::AtomicRegionAnalysis::getUsedLock(CallInst &lock_inst)
         return li;
     }
   }
+  else
+    return lock_inst.getOperand(0);
   return nullptr;
 }
 
