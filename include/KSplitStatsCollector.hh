@@ -69,7 +69,7 @@ namespace pdg
     void increaseTotalIORemap() { _total_ioremap++; }
     void increaseSharedIORemap() { _shared_ioremap++; }
     void collectTotalPointerStats(llvm::DIType &dt);
-    void collectSharedPointerStats(llvm::DIType &dt);
+    void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string func_name);
     void collectStringStats(std::set<std::string> &annotations);
     void printStats();
     void printStatsRaw();

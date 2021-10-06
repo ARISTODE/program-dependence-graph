@@ -404,6 +404,8 @@ bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
 
 bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string field_type_name)
 {
+  if (field_id.empty())
+    return false;
   bool is_shared_id = (_shared_field_id.find(field_id) != _shared_field_id.end());
   // bool is_shared_struct_type = isSharedStructType(field_type_name);
   // return (is_shared_id || is_shared_struct_type && !field_type_name.empty());
@@ -439,7 +441,8 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
         else if (isTreeNodeShared(*current_tree_node))
         {
           auto field_id = pdgutils::computeTreeNodeID(*current_tree_node);
-          _shared_field_id.insert(field_id);
+          if (!field_id.empty())
+            _shared_field_id.insert(field_id);
           // check whether a shared field is used in string operation.
           if (isFieldUsedInStringOps(*current_tree_node))
             _string_field_id.insert(field_id);

@@ -61,14 +61,14 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _ksplit_stats->increaseTotalFuncSize(total_num_funcs);
 
   // genereate additional func call stubs for kernel funcs registered on the driver side
-  EnableAnalysisStats = false;
+  // EnableAnalysisStats = false;
   for (auto F : _kernel_funcs_regsitered_with_indirect_ptr)
   {
     if (F->isDeclaration())
       continue;
     generateIDLForFunc(*F, true);
   }
-  EnableAnalysisStats = true;
+  // EnableAnalysisStats = true;
   
   // generate rpc_export stub for functions exported form driver through export_symbol
   for (auto s : _driver_exported_func_symbols)
@@ -564,7 +564,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (EnableAnalysisStats)
     {
       // this field is shared, collect shared pointer stats
-      _ksplit_stats->collectSharedPointerStats(*field_di_type);
+      _ksplit_stats->collectSharedPointerStats(*field_di_type, field_id, child_node->getFunc()->getName().str());
       // check for pointer arithmetic on shared fields
       if (pdgutils::hasPtrArith(*child_node))
         _ksplit_stats->increasePtrArithNum();
@@ -763,17 +763,18 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
   TreeNode *root_node = arg_tree->getRootNode();
   DIType *root_node_di_type = root_node->getDIType();
   // collect root node stats
-  if (EnableAnalysisStats)
+  if (EnableAnalysisStats && !is_global)
   {
     _ksplit_stats->increaseFieldsDeepCopy(dbgutils::computeDeepCopyFields(*root_node_di_type)); // transitively count the number of field
     _ksplit_stats->increaseTotalPtrNum(dbgutils::computeDeepCopyFields(*root_node_di_type, true)); // transitively count the number of pointer field in this type
-    _ksplit_stats->collectTotalPointerStats(*root_node_di_type); // accessed
-    _ksplit_stats->collectSharedPointerStats(*root_node_di_type);
+    _ksplit_stats->collectTotalPointerStats(*root_node_di_type); // total accessed pointer
+    std::string var_name = dbgutils::getSourceLevelVariableName(*root_node->getDILocalVar());
+    _ksplit_stats->collectSharedPointerStats(*root_node_di_type, var_name, root_node->getFunc()->getName().str()); // if root node is pointer, then it is shared
     if (dbgutils::isUnionType(*root_node_di_type))
       _ksplit_stats->increaseTotalUnionNum();
   }
   // check whether void pointer is unhandled
-  if (pdgutils::isVoidPointerHasMultipleCasts(*root_node))
+  if (pdgutils::isVoidPointerHasMultipleCasts(*root_node) && !is_global)
   {
     _ksplit_stats->increaseUnhandledVoidPtrNum();
     if (root_node->getFunc())

@@ -197,7 +197,6 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
     if (!formal_in_tree)
       return;
     Tree *formal_out_tree = func_w->getArgFormalOutTree(*arg);
-
     entry_node->addNeighbor(*formal_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
     entry_node->addNeighbor(*formal_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);
     connectFormalInTreeWithAddrVars(*formal_in_tree);

@@ -104,12 +104,15 @@ void pdg::KSplitStats::collectTotalPointerStats(DIType &dt)
   }
 }
 
-void pdg::KSplitStats::collectSharedPointerStats(DIType &dt)
+void pdg::KSplitStats::collectSharedPointerStats(DIType &dt, std::string var_name, std::string func_name)
 {
   // only count total and shared. Private then can be computed by substracting shared from total
   if (dbgutils::isPointerType(dt))
   {
-    increaseSharedPtrNum();
+    if (!dbgutils::isFuncPointerType(dt))
+    {
+      increaseSharedPtrNum();
+    }
     if (dbgutils::isVoidPointerType(dt))
       increaseSharedVoidPtrNum();
     else if (dbgutils::isUnionPointerType(dt))

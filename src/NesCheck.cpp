@@ -411,8 +411,16 @@ namespace NesCheck
       std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
       for (auto func : _DDA->getSDA()->getBoundaryFuncs())
       {
+        std::string func_name = func->getName().str();
+        Function* cur_func = func;
+        // need to handle specially becuase nescheck rewrite function signature
         if (func->isDeclaration())
-          continue;
+        {
+          std::string nescheck_func_name = func_name + "_nesCheck";
+          cur_func = CurrentModule->getFunction(StringRef(nescheck_func_name));
+          if (cur_func->isDeclaration())
+            continue;
+        }
         auto func_w = _PDG->getFuncWrapper(*func);
         std::vector<pdg::Node *> root_nodes;
         for (auto arg : func_w->getArgList())
@@ -435,25 +443,34 @@ namespace NesCheck
           {
             pdg::TreeNode* front = (pdg::TreeNode*)queue.front();
             queue.pop();
+            // push child nodes
+            for (auto child_node : front->getChildNodes())
+            {
+              queue.push(child_node);
+            }
+            auto field_id = pdg::pdgutils::computeTreeNodeID(*front);
+            field_id = pdg::pdgutils::trimStr(field_id);
+            if (!front->getDIType())
+              continue;
+            if (!pdg::dbgutils::isPointerType(*front->getDIType()))
+              continue;
+            if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
+              continue;
             // check reachable address variables
             auto reachable_nodes = _PDG->findNodesReachedByEdge(*front, pdg::EdgeType::PARAMETER_IN);
-            errs() << "reachable node size: " << reachable_nodes.size() << "\n";
             for (auto n : reachable_nodes)
             {
               auto node_val = n->getValue();
               if (!node_val)
                 continue;
+              // if (Instruction *ii = dyn_cast<Instruction>(node_val))
+              //   errs() << "find val node: " << field_id << " - " << *ii << " - " << ii->getFunction()->getName() << "\n";
               if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
               {
-                ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
                 // TODO: check possible conflict here
+                ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
                 break;
               }
-            }
-            // push child nodes
-            for (auto child_node : front->getChildNodes())
-            {
-              queue.push(child_node);
             }
           }
         }
@@ -469,6 +486,16 @@ namespace NesCheck
       {
         _ksplit_stats->increaseSafePtrNum();
         // SafePtrs.insert(ptr);
+        if (Instruction *i = dyn_cast<Instruction>(&ptr))
+        {
+          std::string var_name =  "";
+          if (tree_node.isRootNode())
+            var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDILocalVar());
+          else
+            var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
+          errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName() << " - " << var_name << "\n";
+        }
+
       }
       else if (ptr_type == "SEQ")
       {
@@ -540,6 +567,8 @@ namespace NesCheck
       //   if (ProcessedNodes.find(tree_node) != ProcessedNodes.end())
       //     continue;
       //   ProcessedNodes.insert(tree_node);
+      //   errs() << pdg::dbgutils::getSourceLevelTypeName(*tree_node->getDIType()) << "\n";
+      //   ksplitRecordPtrType(*ptr, ptrType, *tree_node);
       // }
     }
 
@@ -695,7 +724,6 @@ namespace NesCheck
           }
         }
       }
-
       else if (ReturnInst *RI = dyn_cast_or_null<ReturnInst>(I))
       {
         // errs() << "(R) " << *RI << "\n";
@@ -734,13 +762,11 @@ namespace NesCheck
             // Insert the globals return value in field 1
             Return = llvm::InsertValueInst::Create(Return, CCC, 1, "ret", RI);
             // errs() << "Return: " << *Return->getType();
-
             // And update the return instruction
             RI->setOperand(0, Return);
           }
         }
       }
-
       else if (StoreInst *II = dyn_cast_or_null<StoreInst>(I))
       {
         Value *valoperand = II->getValueOperand();
@@ -751,14 +777,11 @@ namespace NesCheck
         // else
         //   errs() << "(~) " << *II << "\t" << DETAIL << " // {" << ((Function *)valoperand)->getName() << " -> " << *(II->getPointerOperand()) << " }"
         //          << "" << NORMAL << "\n";
-
         if (valoperand->getType()->isPointerTy())
         {
           VariableInfo *varinfo = TheState.GetPointerVariableInfo(valoperand);
-
           if (!varinfo && isa<Constant>(valoperand))
             varinfo = TheState.SetSizeForPointerVariable(valoperand, getSizeForValue(valoperand));
-
           bool differentBasicBlock = false;
           if (Instruction *instr = dyn_cast<Instruction>(II->getPointerOperand()))
           {
@@ -837,29 +860,29 @@ namespace NesCheck
           }
         }
       }
-
       else if (GetElementPtrInst *II = dyn_cast_or_null<GetElementPtrInst>(I))
       {
         Value *Ptr = II->getPointerOperand();
-
         // errs() << "(*) " << *II << "\t" << DETAIL << " // {" << *(Ptr) << " (" << *(II->getPointerOperandType()) << ") | " << *(II->getType()) << " -> " << *(II->getResultElementType()) << " }" << NORMAL << "\n";
-
         // errs() << "\tIndices = " << (II->getNumOperands() - 1) << ": ";
         // errs() << "\t";
         // for (unsigned int operd = 1; operd < II->getNumOperands(); operd++)
         // errs() << *(II->getOperand(operd)) << " ; ";
         // errs() << "\n";
-
         // we're accessing the pointer at an offset != 0, classify it as SEQ
         if (!(II->hasAllZeroIndices()))
         {
           Type *pointerOpType = II->getPointerOperand()->getType();
           if (pointerOpType->isPointerTy())
-            pointerOpType = pointerOpType->getPointerElementType();
           {
-            if (!pointerOpType->isStructTy())
+            pointerOpType = pointerOpType->getPointerElementType();
             {
-              std::string ptrTypeName = TheState.ClassifyPointerVariable(Ptr, VariableStates::Seq);
+              std::string ptrTypeName = "";
+              if (!pointerOpType->isStructTy())
+                ptrTypeName = TheState.ClassifyPointerVariable(Ptr, VariableStates::Seq);
+              else
+                ptrTypeName = TheState.ClassifyPointerVariable(Ptr, VariableStates::Safe);
+              errs() << "recording gep: " << *II << " - " << II->getFunction()->getName() << "\n";
               recordPtrTypes(ptrTypeName, Ptr);
             }
           }

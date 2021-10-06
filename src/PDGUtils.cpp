@@ -339,7 +339,7 @@ std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
   DIType *node_di_type = dbgutils::stripAttributes(*tree_node.getDIType());
   node_field_name = dbgutils::getSourceLevelVariableName(*node_di_type);
 
-  return (parent_type_name + node_field_name);
+  return trimStr(parent_type_name + node_field_name);
 }
 
 std::string pdg::pdgutils::stripVersionTag(std::string str)
