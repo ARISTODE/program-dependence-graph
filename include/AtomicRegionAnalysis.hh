@@ -31,6 +31,7 @@ namespace pdg
     void setupLockMap();
     void setupFenceNames();
     void computeBoundaryObjects(llvm::Module &M);
+    BoundaryArgNodeSet getBoundaryArgNodes() { return _boundary_arg_nodes; }
     void computeCriticalSections(llvm::Module &M);
     void computeAtomicOperations(llvm::Module &M);
     void computeWarningCS();

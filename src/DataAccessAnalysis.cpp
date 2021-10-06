@@ -46,7 +46,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   }
 
   computeAllocSizeAnnos(M);
-  computeDeallocAnnos(M);
+  // computeDeallocAnnos(M);
 
   _idl_file << "module kernel {\n";
   std::vector<std::string> boundary_func_names(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
@@ -114,7 +114,8 @@ std::set<pdg::Node *> pdg::DataAccessAnalysis::findCrossDomainParamNode(Node &n,
   std::queue<Node *> node_queue;
   std::set<EdgeType> search_edge_types = {
       EdgeType::PARAMETER_IN,
-      EdgeType::DATA_ALIAS};
+      EdgeType::DATA_ALIAS,
+      EdgeType::DATA_RET};
   node_queue.push(&n);
   std::set<Node *> seen_nodes;
   std::set<Node*> cross_domain_nodes;
@@ -537,14 +538,20 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (child_node->getAccessTags().size() == 0 && !is_func_ptr_type)
       continue;
 
-    if (EnableAnalysisStats)
+    if (EnableAnalysisStats) // collect stats
     {
-      if (dbgutils::isUnionPointerType(*field_di_type) || dbgutils::isUnionType(*field_di_type))
-        _ksplit_stats->increaseTotalUnionNum();
-    }
-
-    if (EnableAnalysisStats)
+      // increase total number of accessed fields
       _ksplit_stats->increaseFieldsFieldAccess();
+      // collect pointer stats
+      _ksplit_stats->collectTotalPointerStats(*field_di_type);
+      // classify union
+      if (dbgutils::isUnionType(*field_di_type))
+      {
+        assert(tree_node.getDIType() != nullptr && "cannot accumulate stats for void parent DI (generateIDLFromTreeNode)\n");
+        if (!dbgutils::isUnionPointerType(*tree_node.getDIType()))
+          _ksplit_stats->increaseTotalUnionNum();
+      }
+    }
 
     // check for shared fields
     std::string field_id = pdgutils::computeTreeNodeID(*child_node);
@@ -553,22 +560,27 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
       continue;
-
-    // check for pointer arithmetic
-    if (pdgutils::hasPtrArith(*child_node))
-      _ksplit_stats->increasePtrArithNum();
-
+    // at this point, the field is accessed and shared
     if (EnableAnalysisStats)
+    {
+      // this field is shared, collect shared pointer stats
+      _ksplit_stats->collectSharedPointerStats(*field_di_type);
+      // check for pointer arithmetic on shared fields
+      if (pdgutils::hasPtrArith(*child_node))
+        _ksplit_stats->increasePtrArithNum();
+      // increase shared field number
       _ksplit_stats->increaseFieldsSharedData();
-
+    }
+    // opt out field
     if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
     {
-      _ksplit_stats->increaseFieldsBoundaryOpt();
+      if (EnableAnalysisStats)
+        _ksplit_stats->increaseFieldsBoundaryOpt();
       continue;
     }
 
+    //  collect bit field stats
     auto bw = 0;
-
     if (field_di_type->isBitField())
     {
       bw = field_di_type->getSizeInBits();
@@ -578,9 +590,12 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
 
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     field_di_type = dbgutils::stripAttributes(*field_di_type);
-
     // compute access attributes
     auto annotations = inferTreeNodeAnnotations(*child_node);
+    // infer may_within attribute
+    inferMayWithin(*child_node, annotations);
+    if (EnableAnalysisStats)
+      _ksplit_stats->collectStringStats(annotations);
     // handle attribute for return value. The in attr should be eliminated if return val is not alias of arguments
     if (is_ret)
     {
@@ -592,10 +607,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     for (auto anno : annotations)
       anno_str += anno;
 
-    // collect fields stat
+    // collect  unhandled shared void pointer
     if (EnableAnalysisStats)
     {
-      _ksplit_stats->collectStats(*field_di_type, annotations);
       if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
       {
         errs() << "find void pointer casted to multiple types: " << _current_processing_func << " - " << field_id << "\n";
@@ -748,13 +762,22 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     return;
   TreeNode *root_node = arg_tree->getRootNode();
   DIType *root_node_di_type = root_node->getDIType();
-
+  // collect root node stats
   if (EnableAnalysisStats)
   {
-    _ksplit_stats->increaseFieldsDeepCopy(dbgutils::computeDeepCopyFields(*root_node_di_type));
-    _ksplit_stats->increaseTotalPtrNum(dbgutils::computeDeepCopyFields(*root_node_di_type, true));
-    if (dbgutils::isPointerType(*root_node_di_type))
-      _ksplit_stats->increaseTotalPtrNum();
+    _ksplit_stats->increaseFieldsDeepCopy(dbgutils::computeDeepCopyFields(*root_node_di_type)); // transitively count the number of field
+    _ksplit_stats->increaseTotalPtrNum(dbgutils::computeDeepCopyFields(*root_node_di_type, true)); // transitively count the number of pointer field in this type
+    _ksplit_stats->collectTotalPointerStats(*root_node_di_type); // accessed
+    _ksplit_stats->collectSharedPointerStats(*root_node_di_type);
+    if (dbgutils::isUnionType(*root_node_di_type))
+      _ksplit_stats->increaseTotalUnionNum();
+  }
+  // check whether void pointer is unhandled
+  if (pdgutils::isVoidPointerHasMultipleCasts(*root_node))
+  {
+    _ksplit_stats->increaseUnhandledVoidPtrNum();
+    if (root_node->getFunc())
+      errs() << "find void pointer casted to multiple types: " << root_node->getFunc()->getName() << "\n";
   }
 
   DIType *root_node_lowest_di_type = dbgutils::getLowestDIType(*root_node_di_type);
@@ -765,6 +788,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
   node_queue.push(root_node);
   while (!node_queue.empty())
   {
+    // retrive node and obtian its di type
     TreeNode *current_node = node_queue.front();
     TreeNode *parent_node = current_node->getParentNode();
     node_queue.pop();
@@ -779,11 +803,16 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     {
       proj_type_name.pop_back();
     }
+    // for non-root node, the node must be a field. Thus, we retrive the field name through the node di type itself
     auto proj_var_name = dbgutils::getSourceLevelVariableName(*node_di_type);
+    // for root node, the name is the variable's name. We retrive it through DILocalVar.
     if (current_node->isRootNode())
     {
       if (current_node->getDILocalVar() != nullptr)
+      {
         proj_var_name = dbgutils::getSourceLevelVariableName(*current_node->getDILocalVar());
+        assert(proj_var_name != "" && "cannot find parameter name in generateIDLFromArgTree\n");
+      }
     }
     std::string s;
     raw_string_ostream fields_projection_str(s);
@@ -876,6 +905,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
   DIType *func_ret_di_type = fw->getReturnValDIType();
   std::string ret_type_str = "";
   std::string anno_str = "";
+  // handle return type str
   if (func_ret_di_type != nullptr)
   {
     ret_type_str = dbgutils::getSourceLevelTypeName(*func_ret_di_type, true);
@@ -887,21 +917,9 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     {
       auto ret_annotations = inferTreeNodeAnnotations(*ret_tree_formal_in_root_node, true);
 
-      if (EnableAnalysisStats)
-      {
-        _ksplit_stats->collectStats(*func_ret_di_type, ret_annotations);
-        if (dbgutils::isUnionPointerType(*func_ret_di_type) || dbgutils::isUnionType(*func_ret_di_type))
-          _ksplit_stats->increaseTotalUnionNum();
-      }
-
       for (auto anno : ret_annotations)
       {
         anno_str += anno;
-      }
-      if (pdgutils::isVoidPointerHasMultipleCasts(*ret_tree_formal_in_root_node))
-      {
-        errs() << "find void pointer casted to multiple types: " << F.getName() << " - " << "ret value" << "\n";
-        _ksplit_stats->increaseUnhandledVoidPtrNum();
       }
     }
   }
@@ -981,18 +999,6 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
 
     rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + arg_name;
 
-    if (EnableAnalysisStats)
-    {
-      _ksplit_stats->collectStats(*arg_di_type, annotations);
-      if (dbgutils::isUnionPointerType(*arg_di_type) || dbgutils::isUnionType(*arg_di_type))
-        _ksplit_stats->increaseTotalUnionNum();
-    }
-    if (pdgutils::isVoidPointerHasMultipleCasts(*root_node))
-    {
-      _ksplit_stats->increaseUnhandledVoidPtrNum();
-      errs() << "find void pointer casted to multiple types: " << F.getName() << " - " << arg_name << "\n";
-    }
-
     if (i != arg_list.size() - 1)
       rpc_str += ", ";
   }
@@ -1038,6 +1044,45 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool process_expor
     generateIDLFromArgTree(arg_tree, _idl_file, false, false);
   }
   _idl_file << "}\n";
+}
+
+void pdg::DataAccessAnalysis::inferMayWithin(TreeNode &tree_node, std::set<std::string> &anno_str)
+{
+  // check the tree_node's address variable against other nodes address variables, and determine whether it alias with other nodes
+  DIType *cur_node_di_type = tree_node.getDIType();
+  if (!cur_node_di_type)
+    return;
+  if (!dbgutils::isPointerType(*cur_node_di_type))
+    return;
+  auto parent_node = tree_node.getParentNode();
+  if (!parent_node)
+    return;
+
+  auto cur_node_addr_vars = tree_node.getAddrVars();
+  for (auto child_node : parent_node->getChildNodes())
+  {
+    if (child_node == &tree_node)
+      continue;
+    auto field_name = dbgutils::getSourceLevelVariableName(*child_node->getDIType());
+    auto child_node_di_type = child_node->getDIType();
+    if (!dbgutils::isPointerType(*child_node_di_type))
+      continue;
+    auto field_id = pdgutils::computeTreeNodeID(*child_node);
+    if (!_SDA->isSharedFieldID(field_id))
+      continue;
+    auto child_node_addr_vars = child_node->getAddrVars();
+    // if the address variable overlap with each other, then print within warning
+    for (auto cur_node_addr_var : cur_node_addr_vars)
+    {
+      if (child_node_addr_vars.find(cur_node_addr_var) != child_node_addr_vars.end())
+      {
+        // construct within string
+        std::string may_within_anno = "may_within<self->" + field_name + ", " + "size>";
+        anno_str.insert(may_within_anno);
+        break;
+      }
+    }
+  }
 }
 
 void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &tree_node, std::string &anno_str)
@@ -1108,15 +1153,67 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
     }
   }
 
-  // infer the alloc/dealloc string.
+  // infer alloc_stack
   auto node_di_type = tree_node.getDIType();
-  if (dbgutils::isCompositeType(*node_di_type) || dbgutils::isCompositePointerType(*node_di_type))
+  auto func = tree_node.getFunc();
+  assert(func != nullptr && "cannot infer alloc_stack attribute because of missing calling function\n");
+  // If this is a struct node or struct pointer node, then we have to check whether some private fields are accessed
+  if (_SDA->isDriverFunc(*func))
   {
-    if (!tree_node.getAllocStr().empty())
-      annotations.insert(tree_node.getAllocStr());
-    if (!tree_node.getDeallocStr().empty())
-      annotations.insert(tree_node.getDeallocStr());
+    bool access_private_field = false;
+    // here, if the current node represent a struct pointer, we check whether the pointed
+    // sturct object have private field accessed. This info is used in alloc_stack inferrence
+    if (dbgutils::isStructPointerType(*tree_node.getDIType()))
+    {
+      auto child_nodes = tree_node.getChildNodes();
+      if (!child_nodes.empty())
+      {
+        auto struct_node = child_nodes[0];
+        for (auto field_node : struct_node->getChildNodes())
+        {
+          if (!_SDA->isSharedFieldID(pdgutils::computeTreeNodeID(*field_node)) && !field_node->getAccessTags().empty())
+          {
+            access_private_field = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (access_private_field)
+      return annotations;
+
+    if (dbgutils::isAllocableObjType(*node_di_type) || dbgutils::isCharPointer(*node_di_type))
+    {
+      // find all the abstract nodes in the call chain tha represent this field
+      auto abstract_nodes = _PDG->findNodesReachedByEdge(tree_node, EdgeType::PARAMETER_IN);
+      abstract_nodes.insert(&tree_node);
+      for (auto n : abstract_nodes)
+      {
+        auto node_func = n->getFunc();
+        assert(node_func != nullptr && "cannot infer alloc_stack because missing abstract node function\n");
+        // TODO: we have to slice the call chian. Now, we just conservatively consider all the potential callee in driver, even if the ping-pong behavior is presented.
+        if (_SDA->isKernelFunc(*node_func))
+          continue;
+        TreeNode *tn = dynamic_cast<TreeNode *>(n);
+        if (tn == nullptr)
+          continue;
+        // then obtain the address variables for these abstract nodes and check whether
+        // they are captured.
+        auto addr_vars = tn->getAddrVars();
+        for (auto a_var : addr_vars)
+        {
+          assert(a_var != nullptr && "[Warning]: find null address variable\n");
+          if (PointerMayBeCaptured(a_var, true, true, 30))
+          {
+            annotations.insert("alloc_stack");
+            break;
+          }
+        }
+      }
+    }
   }
+
   return annotations;
 }
 
@@ -1237,29 +1334,6 @@ void pdg::DataAccessAnalysis::printContainerOfStats()
     errs() << "container_of: " << i->getFunction()->getName() << " -- " << *i << "\n";
   }
   errs() << " ===============================================\n";
-}
-
-// ksplit stats collect
-void pdg::KSplitStats::collectStats(DIType &dt, std::set<std::string> &annotations)
-{
-  if (dbgutils::isVoidPointerType(dt))
-  {
-    increaseVoidPtrNum();
-    increaseSharedPtrNum();
-  }
-  else if (dbgutils::isUnionPointerType(dt))
-  {
-    increaseSharedUnionNum();
-    increaseSharedPtrNum();
-  }
-  else if (dbgutils::isArrayType(dt))
-    increaseArrayNum();
-  else if (dbgutils::isFuncPointerType(dt))
-    increaseFuncPtrNum();
-  else if (annotations.find("[string]") != annotations.end())
-    increaseStringNum();
-  else if (dbgutils::isPointerType(dt))
-    increaseSharedPtrNum();
 }
 
 pdg::DomainTag pdg::DataAccessAnalysis::computeFuncDomainTag(Function &F)

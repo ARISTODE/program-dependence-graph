@@ -51,11 +51,14 @@ bool pdg::dbgutils::isCompositePointerType(DIType &dt)
 {
   if (!isPointerType(dt))
     return false;
+
   auto d = getBaseDIType(dt);
-  if (d == nullptr)
-    return false;
-  if (isCompositeType(*d))
-    return true;
+  while (d != nullptr)
+  {
+    if (isCompositeType(*d))
+      return true;
+    d = getBaseDIType(*d);
+  }
   return false;
 }
 
@@ -136,6 +139,23 @@ bool pdg::dbgutils::isArrayType(DIType &dt)
   if (d != nullptr)
     return (d->getTag() == dwarf::DW_TAG_array_type);
   return false;
+}
+
+bool pdg::dbgutils::isAllocableObjType(DIType &dt)
+{
+  return (isArrayType(dt) || isCompositePointerType(dt) || isCompositeType(dt));
+}
+
+bool pdg::dbgutils::isCharPointer(DIType &dt)
+{
+  DIType* d = stripMemberTag(dt);
+  d = stripAttributes(*d);
+  if (!isPointerType(*d))
+    return false;
+  auto base_type = getLowestDIType(*d); // new lowest to skip violatile node
+  if (base_type == nullptr)
+    return false;
+  return (base_type->getName() == "char");
 }
 
 bool pdg::dbgutils::hasSameDIName(DIType &d1, DIType &d2)
@@ -547,6 +567,8 @@ unsigned pdg::dbgutils::computeDeepCopyFields(DIType &dt, bool only_count_pointe
   std::set<DIType*> seen_types;
   type_queue.push(&dt);
   unsigned field_num = 0;
+  if (isPointerType(dt))
+    field_num++;
   while (!type_queue.empty())
   {
     DIType* cur_dt = type_queue.front();

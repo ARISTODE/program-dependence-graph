@@ -1,6 +1,7 @@
 #ifndef DATAACCESSANALYSIS_H_
 #define DATAACCESSANALYSIS_H_
 #include "SharedDataAnalysis.hh"
+#include "llvm/Analysis/CaptureTracking.h"
 #include <fstream>
 #include <sstream>
 
@@ -35,7 +36,10 @@ namespace pdg
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
+    void inferAllocStackForKernelToDriverCalls();
+    std::string inferAllocStackAnnotation(TreeNode &tree_node);
     void inferUserAnnotation(TreeNode &tree_node, std::string &anno_str);
+    void inferMayWithin(TreeNode &tree_node, std::set<std::string> &anno_str);
     bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
     bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);
     bool containerHasSharedFieldsAccessed(llvm::BitCastInst &bci);

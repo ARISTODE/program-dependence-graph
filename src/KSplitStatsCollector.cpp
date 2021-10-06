@@ -1,4 +1,5 @@
 #include "KSplitStatsCollector.hh"
+using namespace llvm;
 
 void pdg::KSplitStats::printStats()
 {
@@ -21,10 +22,10 @@ void pdg::KSplitStats::printStats()
   _stats_file << "num fields have ptr ptrtoint arith in daa: " << _ptr_ptrtoint_arith_daa << "\n";
 
   _stats_file << "=============== Pointer Classification ================\n";
-  unsigned total_shared_ptr = _safe_ptr_num + _void_ptr_num + _unhandled_void_ptr_num + _string_num + _array_num + _unhandled_array_num + _non_void_wild_ptr_num + _unknown_ptr_num;
+  unsigned total_shared_ptr = _safe_ptr_num + _shared_void_ptr_num + _unhandled_void_ptr_num + _string_num + _array_num + _unhandled_array_num + _non_void_wild_ptr_num + _unknown_ptr_num;
   _stats_file << "shared ptr fields: " << total_shared_ptr << "\n";
   _stats_file << "safe ptr num: " << _safe_ptr_num << "\n";
-  _stats_file << "void ptr num: " << _void_ptr_num << "\n";
+  _stats_file << "void ptr num: " << _shared_void_ptr_num << "\n";
   _stats_file << "unhandled void ptr num: " << _unhandled_void_ptr_num << "\n";
   _stats_file << "unhandled void ptr num SD: " << _unhandled_void_ptr_sd_num << "\n";
   _stats_file << "void wild ptr num: " << _void_wild_ptr_num << "\n";
@@ -37,7 +38,7 @@ void pdg::KSplitStats::printStats()
   _stats_file << "unknown num: " << _unknown_ptr_num << "\n";
 
   _stats_file << "=============== Private/Shared Data Classification ================\n";
-  _stats_file << "pointers: " << _total_ptr_num << " / " << (_total_ptr_num - total_shared_ptr) << " / " << total_shared_ptr << "\n";
+  _stats_file << "pointers: " << _total_ptr_num << " / " << (_total_ptr_num - total_shared_ptr) << " / " << total_shared_ptr << " / " << _shared_ptr_num << "\n";
   _stats_file << "unions: " << _total_union_num << " / " << (_total_union_num - _shared_union_num) << " / " << _shared_union_num << "\n";
   _stats_file << "CS: " << _total_CS << " / " << (_total_CS - _shared_CS) << " / " << _shared_CS << "\n";
   _stats_file << "Atomic Ops: " << _total_atomic_op << " / " << (_total_atomic_op - _shared_atomic_op) << " / " << _shared_atomic_op << "\n";
@@ -84,4 +85,42 @@ void pdg::KSplitStats::printStatsRaw()
   // _stats_file << total_shared_ptr << "/0" << "\n";
 
   _stats_file.close();
+}
+
+// ksplit stats collect
+void pdg::KSplitStats::collectTotalPointerStats(DIType &dt)
+{
+  // totoal pointer type is computed using di type transitively
+  // only count total and shared. Private then can be computed by substracting shared from total
+  if (dbgutils::isPointerType(dt))
+  {
+    increaseTotalPtrNum(); // total accessed pointer fields
+    if (dbgutils::isVoidPointerType(dt))
+      increaseTotalVoidPtrNum();
+    else if (dbgutils::isUnionPointerType(dt))
+      increaseTotalUnionNum();
+    else if (dbgutils::isFuncPointerType(dt))
+      increaseFuncPtrNum();
+  }
+}
+
+void pdg::KSplitStats::collectSharedPointerStats(DIType &dt)
+{
+  // only count total and shared. Private then can be computed by substracting shared from total
+  if (dbgutils::isPointerType(dt))
+  {
+    increaseSharedPtrNum();
+    if (dbgutils::isVoidPointerType(dt))
+      increaseSharedVoidPtrNum();
+    else if (dbgutils::isUnionPointerType(dt))
+      increaseSharedUnionNum();
+    // else if (dbgutils::isFuncPointerType(dt))
+    //   increaseFuncPtrNum();
+  }
+}
+
+void pdg::KSplitStats::collectStringStats(std::set<std::string> &annotations)
+{
+  if (annotations.find("string") != annotations.end())
+    increaseStringNum(); // shared string field
 }

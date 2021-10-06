@@ -1,6 +1,7 @@
 #ifndef KSPLIT_STATS_COLLECTOR_H_
 #define KSPLIT_STATS_COLLECTOR_H_
 #include "LLVMEssentials.hh"
+#include "DebugInfoUtils.hh"
 #include <set>
 #include <fstream>
 #include <sstream>
@@ -26,7 +27,8 @@ namespace pdg
     void increaseTotalPtrNum(unsigned num = 0) { _total_ptr_num = (num == 0 ? _total_ptr_num + 1 : _total_ptr_num + num); }
     void increaseSharedPtrNum() { _shared_ptr_num++; }
     void increaseSafePtrNum() { _safe_ptr_num++; }
-    void increaseVoidPtrNum() { _void_ptr_num++; }
+    void increaseTotalVoidPtrNum() { _void_ptr_num++; }
+    void increaseSharedVoidPtrNum() { _shared_void_ptr_num++; }
     void increasePtrArithNum() { _ptr_arith_num++; }
     void increasePtrGEPArithSDNum() { _ptr_gep_arith_sd++; }
     void increasePtrtoIntArithSDNum() { _ptr_ptrtoint_arith_sd++; }
@@ -66,7 +68,9 @@ namespace pdg
     void increaseSharedContainerof() { _shared_containerof++; }
     void increaseTotalIORemap() { _total_ioremap++; }
     void increaseSharedIORemap() { _shared_ioremap++; }
-    void collectStats(llvm::DIType &dt, std::set<std::string> &annotations);
+    void collectTotalPointerStats(llvm::DIType &dt);
+    void collectSharedPointerStats(llvm::DIType &dt);
+    void collectStringStats(std::set<std::string> &annotations);
     void printStats();
     void printStatsRaw();
 
@@ -78,6 +82,7 @@ namespace pdg
     unsigned _shared_ptr_num = 0;
     unsigned _safe_ptr_num = 0;
     unsigned _void_ptr_num = 0;
+    unsigned _shared_void_ptr_num = 0;
     unsigned _unhandled_void_ptr_num = 0;
     unsigned _unhandled_void_ptr_sd_num = 0;
     unsigned _handled_void_ptr_num = 0;

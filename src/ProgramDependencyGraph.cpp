@@ -58,15 +58,15 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   }
 
   // errs() << "connecting interproc addrvar\n";
-  // for (auto &F : M)
-  // {
-  //   if (F.isDeclaration())
-  //     continue;
-  //   connectAddrVarsReachableFromInterprocFlow(F);
-  //   // connectInterprocDependencies(F);
-  //   connectFormalInTreeWithActualTree(F);
-  //   // connectIntraprocDependencies(F);
-  // }
+  for (auto &F : M)
+  {
+    if (F.isDeclaration())
+      continue;
+    connectAddrVarsReachableFromInterprocFlow(F);
+    // connectInterprocDependencies(F);
+    connectFormalInTreeWithActualTree(F);
+    // connectIntraprocDependencies(F);
+  }
   errs() << "func size: " << func_size << "\n";
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
   return false;
@@ -307,7 +307,7 @@ void pdg::ProgramDependencyGraph::connectGlobalTreeWithAddrVars(Tree &global_var
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_in_tree)
 {
   TreeNode *root_node = formal_in_tree.getRootNode();
-  Function* current_func = formal_in_tree.getFunc();
+  Function *current_func = formal_in_tree.getFunc();
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
 
@@ -497,7 +497,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithActualTree(Function &F)
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &formal_in_tree)
 {
   TreeNode *root_node = formal_in_tree.getRootNode();
-  Function* func = root_node->getFunc();
+  Function *func = root_node->getFunc();
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
 
@@ -570,7 +570,7 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
       EdgeType::PARAMETER_IN,
       EdgeType::DATA_RET,
   };
-  Function* current_func = formal_in_tree.getFunc();
+  Function *current_func = formal_in_tree.getFunc();
   if (current_func == nullptr)
     return;
   while (!node_queue.empty())
