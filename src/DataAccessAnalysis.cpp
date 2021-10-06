@@ -658,6 +658,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       std::string nested_struct_str;
       raw_string_ostream field_nested_struct_proj(nested_struct_str);
 
+      // handle nested struct or union
       generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t", field_type_name, is_ret);
 
       if (!nested_fields_proj.str().empty())
@@ -676,15 +677,15 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
         nested_struct_proj_str << field_nested_struct_proj.str();
       }
 
-      if (!field_var_name.empty())
-      {
-        fields_projection_str << indent_level
-                              << "projection "
-                              << field_type_name
-                              << " "
-                              << field_var_name
-                              << ";\n";
-      }
+      // if (!field_var_name.empty())
+      // {
+      //   fields_projection_str << indent_level
+      //                         << "projection "
+      //                         << field_type_name
+      //                         << " "
+      //                         << field_var_name
+      //                         << ";\n";
+      // }
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
     {

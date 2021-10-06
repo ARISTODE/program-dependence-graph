@@ -451,7 +451,13 @@ bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
   }
 
   if (cast_count > 1)
+  {
+    for (auto t : casted_types)
+    {
+      errs() << "casted type: " << *t << "\n";
+    }
     return true;
+  }
   return false;
 }
 

@@ -166,14 +166,6 @@ std::set<Value *> pdg::FunctionWrapper::computeAddrVarDerivedFromArg(Argument &a
     for (auto addr_var : current_node->getAddrVars())
     {
       ret.insert(addr_var);
-      // TODO: check if addr var is passed in interprocedural calls
-      // for (auto user : addr_var->users())
-      // {
-      //   if (CallInst *ci = dyn_cast<CallInst>(user))
-      //   {
-          
-      //   }
-      // }
     }
     for (auto child_node : current_node->getChildNodes())
     {
