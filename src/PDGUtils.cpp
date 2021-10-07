@@ -546,6 +546,16 @@ bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
   return false;
 }
 
+bool pdg::pdgutils::isStructPointerType(Type& ty)
+{
+  if (!ty.isPointerTy())
+    return false;
+  auto ele_type = ty.getPointerElementType();
+  if (ele_type->isStructTy())
+    return true;
+  return false;
+}
+
 bool pdg::pdgutils::isFileExist(std::string file_name)
 {
   std::ifstream in_file(file_name);

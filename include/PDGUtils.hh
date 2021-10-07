@@ -30,6 +30,7 @@ namespace pdg
     bool hasAsmWriteAccess(llvm::InlineAsm &ia);
     bool isWriteAccessAsmOpcode(std::string op_code);
     bool hasPtrArith(TreeNode &tree_node, bool is_shared_data=false);
+    bool isStructPointerType(llvm::Type &type);
     llvm::Instruction* getNextInst(llvm::Instruction &i);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);

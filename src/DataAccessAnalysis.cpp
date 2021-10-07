@@ -50,6 +50,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 
   _idl_file << "module kernel {\n";
   std::vector<std::string> boundary_func_names(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
+  _transitive_boundary_funcs = _SDA->computeBoundaryTransitiveClosure();
   std::sort(boundary_func_names.begin(), boundary_func_names.end());
   for (auto func_name : boundary_func_names)
   {
@@ -333,6 +334,19 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
         {
           auto func_name = f->getName().str();
           _exported_funcs_ptr_name_map.insert(std::make_pair(field_var_name, func_name));
+        }
+      }
+      if (_transitive_boundary_funcs.find(func) == _transitive_boundary_funcs.end())
+        continue;
+      // detect variadic gep accesses
+      if (auto gep = dyn_cast<GetElementPtrInst>(user))
+      {
+        if (!gep->hasAllConstantIndices())
+        {
+          if (pdgutils::isStructPointerType(*gep->getPointerOperand()->getType()))
+          {
+            errs() << "[Warning]: GEP has variadic idx. May miss field access - " << gep->getFunction()->getName() << "\n";
+          }
         }
       }
     }
@@ -763,11 +777,23 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     return;
   TreeNode *root_node = arg_tree->getRootNode();
   DIType *root_node_di_type = root_node->getDIType();
+  if (!root_node_di_type)
+    return;
   // collect root node stats
   if (EnableAnalysisStats && !is_global)
   {
-    _ksplit_stats->increaseFieldsDeepCopy(dbgutils::computeDeepCopyFields(*root_node_di_type)); // transitively count the number of field
-    _ksplit_stats->increaseTotalPtrNum(dbgutils::computeDeepCopyFields(*root_node_di_type, true)); // transitively count the number of pointer field in this type
+    auto root_type_name = dbgutils::getSourceLevelTypeName(*root_node_di_type, true);
+    auto deep_copy_fields_num = dbgutils::computeDeepCopyFields(*root_node_di_type);
+    auto deep_copy_ptr_num = dbgutils::computeDeepCopyFields(*root_node_di_type, true);
+    _ksplit_stats->increaseFieldsDeepCopy(deep_copy_fields_num); // transitively count the number of field
+    _ksplit_stats->increaseTotalPtrNum(deep_copy_ptr_num); // transitively count the number of pointer field in this type
+    // // collect skb_buf
+    // if (root_type_name == "sk_buff*")
+    // {
+    //   errs() << "skb deep copy field: " << deep_copy_fields_num << "\n";
+    //   errs() << "skb deep copy ptr field: " << deep_copy_ptr_num << "\n";
+    // }
+
     _ksplit_stats->collectTotalPointerStats(*root_node_di_type); // total accessed pointer
     std::string var_name = dbgutils::getSourceLevelVariableName(*root_node->getDILocalVar());
     _ksplit_stats->collectSharedPointerStats(*root_node_di_type, var_name, root_node->getFunc()->getName().str()); // if root node is pointer, then it is shared
@@ -1119,8 +1145,11 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
   std::set<std::string> annotations;
   if (tree_node.isRootNode())
   {
-    if (_SDA->isFieldUsedInStringOps(tree_node))
-      annotations.insert("[string]");
+    if (tree_node.getDIType())
+    {
+      if (_SDA->isFieldUsedInStringOps(tree_node) && dbgutils::isCharPointer(*tree_node.getDIType()))
+        annotations.insert("[string]");
+    }
     if (tree_node.getAccessTags().size() == 0)
     {
       bool is_used = false;

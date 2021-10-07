@@ -94,7 +94,7 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
       continue;
     for (auto user : base_node_addr_var->users())
     {
-      // handle load instruction, field should not get the load inst from the sturct pointer.
+      // handle load instruction, field should not inherit the load inst from the sturct pointer.
       if (LoadInst *li = dyn_cast<LoadInst>(user))
       {
         if (!is_struct_field)
