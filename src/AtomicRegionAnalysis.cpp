@@ -232,6 +232,17 @@ std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicR
 
   while (cs_begin_iter != cs_end_iter)
   {
+    if (CallInst *ci = dyn_cast<CallInst>(&*cs_begin_iter))
+    {
+      auto called_func = pdgutils::getCalledFunc(*ci);
+      if (called_func != nullptr && !called_func->isDeclaration())
+      {
+        for (auto it = inst_begin(called_func); it != inst_end(called_func); ++it)
+        {
+          ret.insert(&*it);
+        }
+      }
+    }
     ret.insert(&*cs_begin_iter);
     cs_begin_iter++;
   }
@@ -298,27 +309,32 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
     // we aim to handle spin_lock and mutex_lock correctly for now
     else
     {
+      // empty lock instance
       if (used_lock == nullptr)
       {
         errs() << "[Warning]: potential shared lock - " << cur_func->getName() << " - " << *lock_call_inst << "\n";
-        continue;
+        if (isRtnlLockInst(*lock_call_inst))
+          is_shared_lock = true;
       }
-      auto used_lock_node = G->getNode(*used_lock);
-      if (used_lock_node == nullptr)
-        continue;
-      std::set<EdgeType> edge_types;
-      edge_types.insert(EdgeType::DATA_ALIAS);
-      auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edge_types);
-      for (auto alias_node : lock_node_alias)
+      else
       {
-        if (alias_node->isAddrVarNode())
+        auto used_lock_node = G->getNode(*used_lock);
+        if (used_lock_node == nullptr)
+          continue;
+        std::set<EdgeType> edge_types;
+        edge_types.insert(EdgeType::DATA_ALIAS);
+        auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edge_types);
+        for (auto alias_node : lock_node_alias)
         {
-          TreeNode *abstract_tree_node = (TreeNode *)alias_node->getAbstractTreeNode();
-          auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
-          if (_SDA->isSharedFieldID(field_id) && isKernelLockInstance(field_id))
+          if (alias_node->isAddrVarNode())
           {
-            is_shared_lock = true;
-            break;
+            TreeNode *abstract_tree_node = (TreeNode *)alias_node->getAbstractTreeNode();
+            auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
+            if (_SDA->isSharedFieldID(field_id) && isKernelLockInstance(field_id))
+            {
+              is_shared_lock = true;
+              break;
+            }
           }
         }
       }
@@ -328,15 +344,12 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       continue;
     // speicial handle for kfree_rcu. No need to handle this, only need to identify where
     // it is used.
-    Function *called_func = pdgutils::getCalledFunc(*lock_call_inst);
-    if (called_func == nullptr)
-      continue;
-    std::string lock_inst_name = pdgutils::stripFuncNameVersionNumber(called_func->getName());
-    if (lock_inst_name == "kfree_rcu")
+    if (isKfreeRcuInst(*lock_call_inst))
       continue;
 
     for (auto inst : insts_in_cs)
     {
+      bool inst_access_shared_state = false;
       // detect nested lock here
       if (EnableAnalysisStats)
       {
@@ -347,7 +360,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         }
       }
 
-      std::set<std::string> modified_names;
+      // std::set<std::string> modified_names;
       Value *accessed_val = nullptr;
       if (LoadInst *li = dyn_cast<LoadInst>(inst))
         accessed_val = li->getPointerOperand();
@@ -366,23 +379,29 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
           TreeNode *abstract_tree_node = (TreeNode *)accessed_node->getAbstractTreeNode();
           auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
           if (_SDA->isSharedFieldID(field_id))
+          {
             cs_warning = true;
+            inst_access_shared_state = true;
+          }
       }
       else
       {
-        // check if shared container is accessed
+        // check if shared struct type is accessed
         auto dt = accessed_node->getDIType();
         if (dt != nullptr)
         {
           auto type_name = dbgutils::getSourceLevelTypeName(*dt);
           if (_SDA->isSharedStructType(type_name))
+          {
             cs_warning = true;
+            inst_access_shared_state = true;
+          }
         }
       }
 
       // check if a modified value could be a pointer alias of boundary pointers
       // auto has_boundary_alias = hasBoundaryAliasNodes(*accessed_val);
-      if (cs_warning)
+      if (inst_access_shared_state)
       {
         for (auto in_neighbor : accessed_node->getInNeighborsWithDepType(EdgeType::PARAMETER_IN))
         {
@@ -398,6 +417,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
     {
       if (cs_warning)
       {
+        _warning_cs_count++;
         _ksplit_stats->increaseSharedCS();
         if (isRcuLockInst(*cs_pair.first))
           _ksplit_stats->increaseSharedRCU();
@@ -535,6 +555,36 @@ bool pdg::AtomicRegionAnalysis::isRcuLockInst(Instruction &i)
     std::string lock_call_name = called_func->getName().str();
     lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
     if (lock_call_name == "rcu_read_lock")
+      return true;
+  }
+  return false;
+}
+
+bool pdg::AtomicRegionAnalysis::isKfreeRcuInst(Instruction &i)
+{
+  if (CallInst *ci = dyn_cast<CallInst>(&i))
+  {
+    auto called_func = pdgutils::getCalledFunc(*ci);
+    if (called_func == nullptr)
+      return false;
+    std::string lock_call_name = called_func->getName().str();
+    lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
+    if (lock_call_name == "kfree_rcu")
+      return true;
+  }
+  return false;
+}
+
+bool pdg::AtomicRegionAnalysis::isRtnlLockInst(Instruction &i)
+{
+  if (CallInst *ci = dyn_cast<CallInst>(&i))
+  {
+    auto called_func = pdgutils::getCalledFunc(*ci);
+    if (called_func == nullptr)
+      return false;
+    std::string lock_call_name = called_func->getName().str();
+    lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
+    if (lock_call_name == "rtnl_lock")
       return true;
   }
   return false;
@@ -830,6 +880,15 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
                        << field_var_name
                        << ";\n";
       node_queue.push(child_node);
+    }
+    else if (dbgutils::isFuncPointerType(*field_di_type))
+    {
+      std::string func_ptr_name = field_var_name;
+      if (acc_tags.find(AccessTag::DATA_READ) != acc_tags.end())
+        // TODO: correct format later
+        read_proj_str << indent_level << "rpc_ptr " << func_ptr_name << " " << field_var_name << ";\n";
+      if (acc_tags.find(AccessTag::DATA_WRITE) != acc_tags.end())
+        write_proj_str << indent_level << "rpc_ptr " << func_ptr_name << " " << field_var_name << ";\n";
     }
     else
     {

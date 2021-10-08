@@ -43,7 +43,9 @@ namespace pdg
     void printWarningAtomicOp(llvm::Instruction &i, std::set<std::string> &modified_names, std::string source_type);
     bool isLockInst(llvm::Instruction &i);
     bool isRcuLockInst(llvm::Instruction &i); // only read is counted for now
+    bool isKfreeRcuInst(llvm::Instruction &i); // only read is counted for now
     bool isSeqLockInst(llvm::Instruction &i);
+    bool isRtnlLockInst(llvm::Instruction &i);
     bool isUnlockInst(llvm::Instruction &i, std::string lock_inst_name);
     bool isAtomicFenceString(std::string str);
     bool isAtomicAsmString(std::string str);

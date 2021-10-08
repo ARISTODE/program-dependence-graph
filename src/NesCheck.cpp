@@ -493,7 +493,7 @@ namespace NesCheck
             var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDILocalVar());
           else
             var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
-          errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName() << " - " << var_name << "\n";
+          // errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName() << " - " << var_name << "\n";
         }
 
       }
@@ -513,8 +513,8 @@ namespace NesCheck
       {
         if (!pdg::dbgutils::isVoidPointerType(*tree_node.getDIType()))
         {
-          // if (Instruction *i = dyn_cast<Instruction>(&ptr))
-          //   errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node->getDIType()) << "\n";
+          if (Instruction *i = dyn_cast<Instruction>(&ptr))
+            errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
           _ksplit_stats->increaseNonVoidWildPtrNum();
         }
         else
@@ -525,8 +525,8 @@ namespace NesCheck
       }
       else if (ptr_type == "UNKNOWN")
       {
-        // if (Instruction *i = dyn_cast<Instruction>(&ptr))
-        //   errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node->getDIType()) << "\n";
+        if (Instruction *i = dyn_cast<Instruction>(&ptr))
+          errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
         _ksplit_stats->increaseUnknownPtrNum();
         errs() << "unknown: " << ptr << "\n";
         // UnknownPtrs.insert(ptr);
@@ -885,7 +885,6 @@ namespace NesCheck
                 ptrTypeName = TheState.ClassifyPointerVariable(Ptr, VariableStates::Seq);
               else
                 ptrTypeName = TheState.ClassifyPointerVariable(Ptr, VariableStates::Safe);
-              errs() << "recording gep: " << *II << " - " << II->getFunction()->getName() << "\n";
               recordPtrTypes(ptrTypeName, Ptr);
             }
           }
@@ -1218,15 +1217,15 @@ namespace NesCheck
 
     void analyzeFunction(Function *F)
     {
-      errs() << "\n\n*********\n ANALYZING FUNCTION: " << F->getName() << "\n";
-      if (isCurrentFunctionWhitelisted)
-      {
-        errs() << "\t[whitelisted]\n";
-      }
-      if (isCurrentFunctionWhitelistedForInstrumentation)
-      {
-        errs() << "\t[whitelisted for instrumentation]\n";
-      }
+      // errs() << "\n\n*********\n ANALYZING FUNCTION: " << F->getName() << "\n";
+      // if (isCurrentFunctionWhitelisted)
+      // {
+      //   errs() << "\t[whitelisted]\n";
+      // }
+      // if (isCurrentFunctionWhitelistedForInstrumentation)
+      // {
+      //   errs() << "\t[whitelisted for instrumentation]\n";
+      // }
 
       TheState.RegisterFunction(F);
 
