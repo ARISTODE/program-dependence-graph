@@ -90,6 +90,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   _idl_file << "\n};\n";
 
   // generate IDL for global variables
+  _generating_idl_for_global = true;
   for (auto pair : _PDG->getGlobalVarTreeMap())
   {
     Tree *tree = pair.second;
@@ -100,6 +101,8 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     computeDataAccessForGlobalTree(tree);
     generateIDLFromGlobalVarTree(*pair.first, tree);
   }
+
+  _generating_idl_for_global = false;
 
   errs() << "Finish analyzing data access info.";
   _idl_file.close();
@@ -532,6 +535,8 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
   for (auto child_node : tree_node.getChildNodes())
   {
     DIType *field_di_type = child_node->getDIType();
+    if (!field_di_type) // void retrun value etc
+      continue;
     DIType *field_lowest_di_type = dbgutils::getLowestDIType(*field_di_type);
     std::string field_lowest_di_type_name = "";
     if (field_lowest_di_type != nullptr)
@@ -540,7 +545,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     auto field_var_name = dbgutils::getSourceLevelVariableName(*field_di_type);
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
 
-    if (EnableAnalysisStats)
+    if (EnableAnalysisStats && !_generating_idl_for_global)
     {
       if (field_di_type->isBitField())
         _ksplit_stats->increaseTotalBitfield();
@@ -552,19 +557,16 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (child_node->getAccessTags().size() == 0 && !is_func_ptr_type)
       continue;
 
-    if (EnableAnalysisStats) // collect stats
+    if (EnableAnalysisStats && !_generating_idl_for_global) // collect stats
     {
       // increase total number of accessed fields
-      _ksplit_stats->increaseFieldsFieldAccess();
+      if (!is_func_ptr_type)
+        _ksplit_stats->increaseFieldsFieldAccess();
       // collect pointer stats
       _ksplit_stats->collectTotalPointerStats(*field_di_type);
       // classify union
       if (dbgutils::isUnionType(*field_di_type))
-      {
-        assert(tree_node.getDIType() != nullptr && "cannot accumulate stats for void parent DI (generateIDLFromTreeNode)\n");
-        if (!dbgutils::isUnionPointerType(*tree_node.getDIType()))
-          _ksplit_stats->increaseTotalUnionNum();
-      }
+        _ksplit_stats->increaseTotalUnionNum();
     }
 
     // check for shared fields
@@ -572,10 +574,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
     bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
     bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
+    // skip private fields
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
       continue;
     // at this point, the field is accessed and shared
-    if (EnableAnalysisStats)
+    if (EnableAnalysisStats && !_generating_idl_for_global)
     {
       // this field is shared, collect shared pointer stats
       _ksplit_stats->collectSharedPointerStats(*field_di_type, field_id, child_node->getFunc()->getName().str());
@@ -583,12 +586,27 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       if (pdgutils::hasPtrArith(*child_node))
         _ksplit_stats->increasePtrArithNum();
       // increase shared field number
-      _ksplit_stats->increaseFieldsSharedData();
+      if (!is_func_ptr_type)
+        _ksplit_stats->increaseFieldsSharedData();
+      if (dbgutils::isUnionType(*field_di_type))
+        _ksplit_stats->increaseSharedUnionNum();
+      // count array
+      if (dbgutils::isArrayType(*field_di_type))
+        _ksplit_stats->increaseArrayNum();
+      // count  unhandled shared void pointer
+      if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
+      {
+        errs() << "find void pointer casted to multiple types: " << _current_processing_func << " - " << field_id << "\n";
+        _ksplit_stats->increaseUnhandledVoidPtrNum();
+      }
+      if (dbgutils::isCharPointer(*field_di_type))
+        _ksplit_stats->increaseStringNum();
     }
+
     // opt out field
     if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
     {
-      if (EnableAnalysisStats)
+      if (EnableAnalysisStats && !_generating_idl_for_global)
         _ksplit_stats->increaseFieldsBoundaryOpt();
       continue;
     }
@@ -598,7 +616,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (field_di_type->isBitField())
     {
       bw = field_di_type->getSizeInBits();
-      if (EnableAnalysisStats)
+      if (EnableAnalysisStats && !_generating_idl_for_global)
         _ksplit_stats->increaseSharedBitfield();
     }
 
@@ -608,8 +626,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     auto annotations = inferTreeNodeAnnotations(*child_node);
     // infer may_within attribute
     inferMayWithin(*child_node, annotations);
-    if (EnableAnalysisStats)
-      _ksplit_stats->collectStringStats(annotations);
+    // count inferred string
+    if (EnableAnalysisStats && !_generating_idl_for_global)
+      _ksplit_stats->collectInferredStringStats(annotations);
     // handle attribute for return value. The in attr should be eliminated if return val is not alias of arguments
     if (is_ret)
     {
@@ -620,16 +639,6 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;
-
-    // collect  unhandled shared void pointer
-    if (EnableAnalysisStats)
-    {
-      if (pdgutils::isVoidPointerHasMultipleCasts(*child_node))
-      {
-        errs() << "find void pointer casted to multiple types: " << _current_processing_func << " - " << field_id << "\n";
-        _ksplit_stats->increaseUnhandledVoidPtrNum();
-      }
-    }
 
     if (is_sentinel_field)
     {
@@ -787,18 +796,19 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     auto deep_copy_ptr_num = dbgutils::computeDeepCopyFields(*root_node_di_type, true);
     _ksplit_stats->increaseFieldsDeepCopy(deep_copy_fields_num); // transitively count the number of field
     _ksplit_stats->increaseTotalPtrNum(deep_copy_ptr_num); // transitively count the number of pointer field in this type
-    // // collect skb_buf
-    // if (root_type_name == "sk_buff*")
-    // {
-    //   errs() << "skb deep copy field: " << deep_copy_fields_num << "\n";
-    //   errs() << "skb deep copy ptr field: " << deep_copy_ptr_num << "\n";
-    // }
 
     _ksplit_stats->collectTotalPointerStats(*root_node_di_type); // total accessed pointer
     std::string var_name = dbgutils::getSourceLevelVariableName(*root_node->getDILocalVar());
     _ksplit_stats->collectSharedPointerStats(*root_node_di_type, var_name, root_node->getFunc()->getName().str()); // if root node is pointer, then it is shared
+    // collect union
     if (dbgutils::isUnionType(*root_node_di_type))
+    {
       _ksplit_stats->increaseTotalUnionNum();
+      _ksplit_stats->increaseSharedUnionNum();
+    }
+    // collect array
+    if (dbgutils::isArrayType(*root_node_di_type))
+      _ksplit_stats->increaseArrayNum();
   }
   // check whether void pointer is unhandled
   if (pdgutils::isVoidPointerHasMultipleCasts(*root_node) && !is_global)
@@ -944,6 +954,13 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     if (ret_tree_formal_in_root_node != nullptr)
     {
       auto ret_annotations = inferTreeNodeAnnotations(*ret_tree_formal_in_root_node, true);
+      //count string num
+      if (EnableAnalysisStats)
+      {
+        if (func_ret_di_type != nullptr && dbgutils::isCharPointer(*func_ret_di_type))
+          _ksplit_stats->increaseStringNum();
+        _ksplit_stats->collectInferredStringStats(ret_annotations);
+      }
 
       for (auto anno : ret_annotations)
       {
@@ -1018,6 +1035,15 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     }
 
     auto annotations = inferTreeNodeAnnotations(*root_node);
+    // count string stats
+    if (EnableAnalysisStats)
+    {
+      if (arg_di_type != nullptr && dbgutils::isCharPointer(*arg_di_type))
+        _ksplit_stats->increaseStringNum();
+      _ksplit_stats->collectInferredStringStats(annotations);
+    }
+      
+
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;

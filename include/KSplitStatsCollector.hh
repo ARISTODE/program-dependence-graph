@@ -37,6 +37,7 @@ namespace pdg
     void increaseUnhandledVoidPtrNum() { _unhandled_void_ptr_num++; }
     void increaseUnhandledVoidPtrSDNum() { _unhandled_void_ptr_sd_num++; }
     void increaseStringNum() { _string_num++; }
+    void increaseInferredStringNum() { _inferred_string_num++; }
     void increaseArrayNum() { _array_num++; }
     void increaseUnhandledArrayNum() { _unhandled_array_num++; }
     void increaseStructArrayNum() { _struct_array_num++; }
@@ -49,7 +50,9 @@ namespace pdg
     void increaseFieldsSharedData() { _fields_shared_analysis++; }
     void increaseFieldsBoundaryOpt() { _fields_removed_boundary_opt++; }
     void increaseTotalUnionNum() { _total_union_num++; }
+    void increaseTotalUnionPtrNum() { _total_union_ptr_num++; }
     void increaseSharedUnionNum() { _shared_union_num++; }
+    void increaseSharedUnionPtrNum() { _shared_union_ptr_num++; }
     void increaseTotalCS() { _total_CS++; }
     void increaseSharedCS() { _shared_CS++; }
     void increaseTotalAtomicOps() { _total_atomic_op++; }
@@ -70,7 +73,7 @@ namespace pdg
     void increaseSharedIORemap() { _shared_ioremap++; }
     void collectTotalPointerStats(llvm::DIType &dt);
     void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string func_name);
-    void collectStringStats(std::set<std::string> &annotations);
+    void collectInferredStringStats(std::set<std::string> &annotations);
     void printStats();
     void printStatsRaw();
 
@@ -87,6 +90,7 @@ namespace pdg
     unsigned _unhandled_void_ptr_sd_num = 0;
     unsigned _handled_void_ptr_num = 0;
     unsigned _string_num = 0;
+    unsigned _inferred_string_num = 0;
     unsigned _array_num = 0;
     unsigned _unhandled_array_num = 0;
     unsigned _struct_array_num = 0;
@@ -102,7 +106,9 @@ namespace pdg
     // shared / private stats
     unsigned _total_ptr_num = 0;
     unsigned _total_union_num = 0;
+    unsigned _total_union_ptr_num = 0;
     unsigned _shared_union_num = 0;
+    unsigned _shared_union_ptr_num = 0;
     unsigned _ptr_arith_num = 0;
     unsigned _ptr_gep_arith_daa = 0;
     unsigned _ptr_ptrtoint_arith_daa = 0;

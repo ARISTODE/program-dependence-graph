@@ -29,6 +29,7 @@ namespace pdg
     AtomicOpSet &getAtomicOpSet() {return _atomic_operations;}
     CSMap computeCSInFunc(llvm::Function &F);
     void setupLockMap();
+    void setupLockInstanceMap();
     void setupFenceNames();
     void computeBoundaryObjects(llvm::Module &M);
     BoundaryArgNodeSet getBoundaryArgNodes() { return _boundary_arg_nodes; }
@@ -48,6 +49,7 @@ namespace pdg
     bool isAtomicAsmString(std::string str);
     bool isAtomicOperation(llvm::Instruction &i);
     bool isAliasOfBoundaryPtrs(llvm::Value &v);
+    bool isKernelLockInstance(std::string field_id);
     // used for checking shared states updated outside of critical regions.
     void computeCodeRegions();
     // void printCodeRegionsUpdateSharedStates(llvm::Module &M);
@@ -84,6 +86,7 @@ namespace pdg
     int _cs_warning_count;
     std::set<std::string> _fence_names;
     std::set<std::string> _processed_func_names;
+    std::set<std::string> _lock_instance_map;
     std::set<llvm::Function *> _funcs_need_sync_stub_gen;
     std::map<llvm::Instruction *, Tree *> _sync_data_inst_tree_map;
     std::set<llvm::Instruction *> _insts_in_CS;

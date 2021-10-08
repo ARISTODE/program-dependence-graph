@@ -28,6 +28,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   _cs_warning_count = 0;
   setupFenceNames();
   setupLockMap();
+  setupLockInstanceMap();
   computeBoundaryObjects(M);
   computeCriticalSections(M);
   computeAtomicOperations(M);
@@ -97,6 +98,13 @@ void pdg::AtomicRegionAnalysis::setupLockMap()
   _lock_map.insert(std::make_pair("write_seqcount_begin", "write_seqcount_end"));
   _lock_map.insert(std::make_pair("kfree_rcu", "kfree_rcu_end")); // this is dummy pair for rcu
   _lock_map.insert(std::make_pair("rcu_assign_pointer", "dummy"));
+}
+
+void pdg::AtomicRegionAnalysis::setupLockInstanceMap()
+{
+  _lock_instance_map.insert("struct mutex");
+  _lock_instance_map.insert("struct spinlock");
+  _lock_instance_map.insert("spinlock_t");
 }
 
 void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)
@@ -307,7 +315,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         {
           TreeNode *abstract_tree_node = (TreeNode *)alias_node->getAbstractTreeNode();
           auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
-          if (_SDA->isSharedFieldID(field_id))
+          if (_SDA->isSharedFieldID(field_id) && isKernelLockInstance(field_id))
           {
             is_shared_lock = true;
             break;
@@ -599,6 +607,11 @@ bool pdg::AtomicRegionAnalysis::isAliasOfBoundaryPtrs(Value &v)
       return true;
   }
   return false;
+}
+
+bool pdg::AtomicRegionAnalysis::isKernelLockInstance(std::string field_id)
+{
+  return (_lock_instance_map.find(field_id) != _lock_instance_map.end());
 }
 
 std::set<Value *> pdg::AtomicRegionAnalysis::computeBoundaryAliasPtrs(llvm::Value &v)

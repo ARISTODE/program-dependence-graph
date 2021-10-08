@@ -74,6 +74,7 @@ namespace pdg
     std::set<Node*> _funcs_reachable_from_boundary;
     std::set<llvm::Function *> _kernel_funcs_regsitered_with_indirect_ptr;
     std::set<llvm::Function *> _transitive_boundary_funcs;
+    bool _generating_idl_for_global = false;
   };
 }
 

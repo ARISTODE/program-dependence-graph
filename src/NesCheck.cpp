@@ -502,7 +502,10 @@ namespace NesCheck
         // if (Instruction *i = dyn_cast<Instruction>(&ptr))
         //   errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node->getDIType()) << "\n";
         if (!pdg::dbgutils::isArrayType(*tree_node.getDIType()))
+        {
+          _ksplit_stats->increaseArrayNum();
           _ksplit_stats->increaseUnhandledArrayNum();
+        }
         if (pdg::dbgutils::isStructPointerType(*tree_node.getDIType()))
           _ksplit_stats->increaseStructArrayNum();
       }

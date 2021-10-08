@@ -30,6 +30,7 @@ void pdg::KSplitStats::printStats()
   _stats_file << "unhandled void ptr num SD: " << _unhandled_void_ptr_sd_num << "\n";
   _stats_file << "void wild ptr num: " << _void_wild_ptr_num << "\n";
   _stats_file << "string num: " << _string_num << "\n";
+  _stats_file << "inferred string num: " << _inferred_string_num << "\n";
   _stats_file << "array num: " << _array_num << "\n";
   _stats_file << "unhandled array num: " << _unhandled_array_num << "\n";
   _stats_file << "struct array num: " << _struct_array_num << "\n";
@@ -39,7 +40,8 @@ void pdg::KSplitStats::printStats()
 
   _stats_file << "=============== Private/Shared Data Classification ================\n";
   _stats_file << "pointers: " << _total_ptr_num << " / " << (_total_ptr_num - total_shared_ptr) << " / " << total_shared_ptr << " / " << _shared_ptr_num << "\n";
-  _stats_file << "unions: " << _total_union_num << " / " << (_total_union_num - _shared_union_num) << " / " << _shared_union_num << "\n";
+  _stats_file << "union ptr: " << _total_union_ptr_num << " / " << (_total_union_ptr_num - _shared_union_ptr_num) << " / " << _shared_union_ptr_num << "\n";
+  _stats_file << "union: " << _total_union_num << " / " << (_total_union_num - _shared_union_num) << " / " << _shared_union_num << "\n";
   _stats_file << "CS: " << _total_CS << " / " << (_total_CS - _shared_CS) << " / " << _shared_CS << "\n";
   _stats_file << "Atomic Ops: " << _total_atomic_op << " / " << (_total_atomic_op - _shared_atomic_op) << " / " << _shared_atomic_op << "\n";
   _stats_file << "RCU: " << _total_rcu << " / " << (_total_rcu - _shared_rcu) << " / " << _shared_rcu << "\n";
@@ -98,7 +100,7 @@ void pdg::KSplitStats::collectTotalPointerStats(DIType &dt)
     if (dbgutils::isVoidPointerType(dt))
       increaseTotalVoidPtrNum();
     else if (dbgutils::isUnionPointerType(dt))
-      increaseTotalUnionNum();
+      increaseTotalUnionPtrNum();
     else if (dbgutils::isFuncPointerType(dt))
       increaseFuncPtrNum();
   }
@@ -116,14 +118,14 @@ void pdg::KSplitStats::collectSharedPointerStats(DIType &dt, std::string var_nam
     if (dbgutils::isVoidPointerType(dt))
       increaseSharedVoidPtrNum();
     else if (dbgutils::isUnionPointerType(dt))
-      increaseSharedUnionNum();
+      increaseSharedUnionPtrNum();
     // else if (dbgutils::isFuncPointerType(dt))
     //   increaseFuncPtrNum();
   }
 }
 
-void pdg::KSplitStats::collectStringStats(std::set<std::string> &annotations)
+void pdg::KSplitStats::collectInferredStringStats(std::set<std::string> &annotations)
 {
   if (annotations.find("string") != annotations.end())
-    increaseStringNum(); // shared string field
+    increaseInferredStringNum();
 }
