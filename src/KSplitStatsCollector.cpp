@@ -25,7 +25,7 @@ void pdg::KSplitStats::printStats()
   unsigned total_shared_ptr = _safe_ptr_num + _shared_void_ptr_num + _unhandled_void_ptr_num + _string_num + _array_num + _unhandled_array_num + _non_void_wild_ptr_num + _unknown_ptr_num;
   _stats_file << "shared ptr fields: " << total_shared_ptr << "\n";
   _stats_file << "safe ptr num: " << _safe_ptr_num << "\n";
-  _stats_file << "void ptr num: " << _shared_void_ptr_num << "\n";
+  _stats_file << "shared void ptr num: " << _shared_void_ptr_num << "\n";
   _stats_file << "unhandled void ptr num: " << _unhandled_void_ptr_num << "\n";
   _stats_file << "unhandled void ptr num SD: " << _unhandled_void_ptr_sd_num << "\n";
   _stats_file << "void wild ptr num: " << _void_wild_ptr_num << "\n";
@@ -112,9 +112,7 @@ void pdg::KSplitStats::collectSharedPointerStats(DIType &dt, std::string var_nam
   if (dbgutils::isPointerType(dt))
   {
     if (!dbgutils::isFuncPointerType(dt))
-    {
       increaseSharedPtrNum();
-    }
     if (dbgutils::isVoidPointerType(dt))
       increaseSharedVoidPtrNum();
     else if (dbgutils::isUnionPointerType(dt))
@@ -126,6 +124,9 @@ void pdg::KSplitStats::collectSharedPointerStats(DIType &dt, std::string var_nam
 
 void pdg::KSplitStats::collectInferredStringStats(std::set<std::string> &annotations)
 {
-  if (annotations.find("string") != annotations.end())
+  if (annotations.find("[string]") != annotations.end())
+  {
+    increaseStringNum();
     increaseInferredStringNum();
+  }
 }

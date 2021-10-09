@@ -38,6 +38,7 @@ namespace pdg
       int numOfChild() { return _children.size(); }
       bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
+      bool hasAccess() { return (_acc_tag_set.size() != 0); }
       void setAccessInAtomicRegion() { _is_accessed_in_atomic_region = true; }
       bool isAccessedInAtomicRegion() { return _is_accessed_in_atomic_region; }
       void setAllocStr(std::string str) { _alloc_str = str; }

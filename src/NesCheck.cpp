@@ -142,13 +142,13 @@ namespace NesCheck
     {
       if (isCurrentFunctionWhitelistedForInstrumentation)
       {
-        errs() << "\tSKIPPING Metadata Table lookup for " << *Ptr << " because of whitelisting\n";
+        // errs() << "\tSKIPPING Metadata Table lookup for " << *Ptr << " because of whitelisting\n";
         Value *lookedupsize = ConstantInt::get(MySizeType, 10000);
         TheState.SetSizeForPointerVariable(Ptr, lookedupsize);
         return lookedupsize;
       }
 
-      errs() << "\tInjecting Metadata Table lookup for " << *Ptr << "\n";
+      // errs() << "\tInjecting Metadata Table lookup for " << *Ptr << "\n";
       Instruction *ptrcast = (Instruction *)Builder->CreatePtrToInt(Ptr, CurrentDL->getIntPtrType(Ptr->getType()));
 
       ptrcast->removeFromParent();
@@ -158,7 +158,7 @@ namespace NesCheck
       if (lookupMetadataFunction != NULL)
       {
         CallInst *call = Builder->CreateCall(lookupMetadataFunction, ptrcast);
-        errs() << "\tPtrcast at " << ptrcast << "\n";
+        // errs() << "\tPtrcast at " << ptrcast << "\n";
         call->removeFromParent();
         call->insertAfter(ptrcast);
         ++MetadataTableLookups;
@@ -174,10 +174,10 @@ namespace NesCheck
     {
       if (isCurrentFunctionWhitelistedForInstrumentation)
       {
-        errs() << "\tSKIPPING Metadata Table update for " << *Ptr << " because of whitelisting\n";
+        // errs() << "\tSKIPPING Metadata Table update for " << *Ptr << " because of whitelisting\n";
         return;
       }
-      errs() << "\tInjecting Metadata Table update for " << *Ptr << "\n";
+      // errs() << "\tInjecting Metadata Table update for " << *Ptr << "\n";
       Value *P = Builder->CreatePtrToInt(Ptr, CurrentDL->getIntPtrType(Ptr->getType()));
       Value *addr = ConstantInt::get(MySizeType, (long)((const void *)CurrInst));
       if (setMetadataFunction != NULL)
@@ -456,7 +456,7 @@ namespace NesCheck
               continue;
             if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
               continue;
-            if (front->getAccessTags().size() == 0)
+            if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
             // check reachable address variables
             auto reachable_nodes = _PDG->findNodesReachedByEdge(*front, pdg::EdgeType::PARAMETER_IN);
@@ -488,21 +488,21 @@ namespace NesCheck
       {
         _ksplit_stats->increaseSafePtrNum();
         // SafePtrs.insert(ptr);
-        if (Instruction *i = dyn_cast<Instruction>(&ptr))
-        {
-          std::string var_name =  "";
-          if (tree_node.isRootNode())
-            var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDILocalVar());
-          else
-            var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
-          // errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName() << " - " << var_name << "\n";
-        }
+        // if (Instruction *i = dyn_cast<Instruction>(&ptr))
+        // {
+        //   std::string var_name =  "";
+        //   if (tree_node.isRootNode())
+        //     var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDILocalVar());
+        //   else
+        //     var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
+        //   errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName() << " - " << var_name << "\n";
+        // }
 
       }
       else if (ptr_type == "SEQ")
       {
         // if (Instruction *i = dyn_cast<Instruction>(&ptr))
-        //   errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node->getDIType()) << "\n";
+        //   errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
         if (!pdg::dbgutils::isArrayType(*tree_node.getDIType()))
         {
           _ksplit_stats->increaseArrayNum();

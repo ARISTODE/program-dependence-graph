@@ -126,7 +126,7 @@ bool pdg::dbgutils::isVoidPointerType(DIType &dt)
   if (d1->getTag() == dwarf::DW_TAG_pointer_type)
   {
     auto baseTy = getBaseDIType(*d1);
-    if (baseTy == nullptr)
+    if (!baseTy)
       return true;
   }
   return false;

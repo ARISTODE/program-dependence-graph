@@ -599,8 +599,6 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
         errs() << "find void pointer casted to multiple types: " << _current_processing_func << " - " << field_id << "\n";
         _ksplit_stats->increaseUnhandledVoidPtrNum();
       }
-      if (dbgutils::isCharPointer(*field_di_type))
-        _ksplit_stats->increaseStringNum();
     }
 
     // opt out field
@@ -796,7 +794,6 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     auto deep_copy_ptr_num = dbgutils::computeDeepCopyFields(*root_node_di_type, true);
     _ksplit_stats->increaseFieldsDeepCopy(deep_copy_fields_num); // transitively count the number of field
     _ksplit_stats->increaseTotalPtrNum(deep_copy_ptr_num); // transitively count the number of pointer field in this type
-
     _ksplit_stats->collectTotalPointerStats(*root_node_di_type); // total accessed pointer
     std::string var_name = dbgutils::getSourceLevelVariableName(*root_node->getDILocalVar());
     _ksplit_stats->collectSharedPointerStats(*root_node_di_type, var_name, root_node->getFunc()->getName().str()); // if root node is pointer, then it is shared
@@ -957,8 +954,6 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
       //count string num
       if (EnableAnalysisStats)
       {
-        if (func_ret_di_type != nullptr && dbgutils::isCharPointer(*func_ret_di_type))
-          _ksplit_stats->increaseStringNum();
         _ksplit_stats->collectInferredStringStats(ret_annotations);
       }
 
@@ -1038,12 +1033,9 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     // count string stats
     if (EnableAnalysisStats)
     {
-      if (arg_di_type != nullptr && dbgutils::isCharPointer(*arg_di_type))
-        _ksplit_stats->increaseStringNum();
       _ksplit_stats->collectInferredStringStats(annotations);
     }
       
-
     std::string anno_str = "";
     for (auto anno : annotations)
       anno_str += anno;

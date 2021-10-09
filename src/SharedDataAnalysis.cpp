@@ -48,6 +48,7 @@ void pdg::SharedDataAnalysis::setupStrOps()
   _string_op_names.insert("strlen");
   _string_op_names.insert("strlcpy");
   _string_op_names.insert("strcmp");
+  _string_op_names.insert("strchr");
   _string_op_names.insert("strncmp");
   _string_op_names.insert("kobject_set_name");
 }
