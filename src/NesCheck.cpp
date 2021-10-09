@@ -426,12 +426,16 @@ namespace NesCheck
         for (auto arg : func_w->getArgList())
         {
           auto arg_tree = func_w->getArgFormalInTree(*arg);
+          if (!arg_tree)
+            continue;
           if (!arg_tree->getRootNode())
             continue;
           root_nodes.push_back(arg_tree->getRootNode());
         }
         // return type root nodes
         auto ret_arg_tree = func_w->getRetFormalInTree();
+        if (!ret_arg_tree)
+          continue;
         if (ret_arg_tree->getRootNode())
           root_nodes.push_back(ret_arg_tree->getRootNode());
 

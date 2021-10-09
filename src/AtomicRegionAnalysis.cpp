@@ -121,6 +121,8 @@ void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)
       if (arg.getType()->isPointerTy())
       {
         auto arg_tree = func_w->getArgFormalInTree(arg);
+        if (!arg_tree)
+          continue;
         auto root_node = arg_tree->getRootNode();
         if (root_node != nullptr)
           _boundary_arg_nodes.insert(root_node);
