@@ -456,6 +456,8 @@ namespace NesCheck
               continue;
             if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
               continue;
+            if (front->getAccessTags().size() == 0)
+              continue;
             // check reachable address variables
             auto reachable_nodes = _PDG->findNodesReachedByEdge(*front, pdg::EdgeType::PARAMETER_IN);
             for (auto n : reachable_nodes)

@@ -450,7 +450,7 @@ bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
     }
   }
 
-  if (cast_count > 1)
+  if (cast_count > 1) // the default would be 1 (void*), if only one casted type is used, then the number would be 2.
   {
     for (auto t : casted_types)
     {
