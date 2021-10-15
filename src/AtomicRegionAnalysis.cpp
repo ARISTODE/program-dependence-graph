@@ -94,10 +94,10 @@ void pdg::AtomicRegionAnalysis::setupLockMap()
   _lock_map.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
   _lock_map.insert(std::make_pair("rcu_read_lock", "rcu_read_unlock"));
   _lock_map.insert(std::make_pair("rcu_read_lock_bh", "rcu_read_unlock_bh"));
-  _lock_map.insert(std::make_pair("read_seqcount_begin", "read_seqcount_retry"));
-  _lock_map.insert(std::make_pair("write_seqcount_begin", "write_seqcount_end"));
   _lock_map.insert(std::make_pair("kfree_rcu", "kfree_rcu_end")); // this is dummy pair for rcu
   _lock_map.insert(std::make_pair("rcu_assign_pointer", "dummy"));
+  _lock_map.insert(std::make_pair("read_seqcount_begin", "read_seqcount_retry"));
+  _lock_map.insert(std::make_pair("write_seqcount_begin", "write_seqcount_end"));
 }
 
 void pdg::AtomicRegionAnalysis::setupLockInstanceMap()
@@ -426,7 +426,10 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         if (isSeqLockInst(*cs_pair.first))
           _ksplit_stats->increaseSharedSeqlock();
         if (has_nested_lock)
+        {
           _ksplit_stats->increaseSharedNestLock();
+          errs() << "nested lock: " << lock_inst->getFunction()->getName()  << "\n";
+        }
       }
     }
   }

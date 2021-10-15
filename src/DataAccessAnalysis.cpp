@@ -531,6 +531,23 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
   DIType *node_lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
   if (!node_lowest_di_type || !dbgutils::isProjectableType(*node_lowest_di_type))
     return;
+
+  // if (root_di_type_name_raw == "sk_buff")
+  // {
+  //   errs() << "skb fields: " << tree_node.getChildNodes().size() << "\n";
+  //   unsigned ptr_field_num = 0;
+  //   for (auto child_node : tree_node.getChildNodes())
+  //   {
+  //     auto child_di_type = child_node->getDIType();
+  //     if (dbgutils::isPointerType(*child_di_type))
+  //     {
+  //       ptr_field_num += 1;
+  //       errs() << "ptr field name: " << dbgutils::getSourceLevelVariableName(*child_di_type) << "\n";
+  //     }
+  //   }
+  //   errs() << "skb ptr fields: " << ptr_field_num << "\n";
+  // }
+
   // generate idl for each field
   for (auto child_node : tree_node.getChildNodes())
   {
@@ -577,6 +594,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     // skip private fields
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && !is_sentinel_field)
       continue;
+
     // at this point, the field is accessed and shared
     if (EnableAnalysisStats && !_generating_idl_for_global)
     {

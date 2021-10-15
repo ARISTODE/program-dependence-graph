@@ -351,7 +351,6 @@ namespace NesCheck
       }
 
       // errs() << "\tVariable found, size = " << *(varinfo->size) << "\n";
-
       // add instrumentation to check that index is within boundaries
       uint64_t typeStoreSize = CurrentDL->getTypeStoreSize(GEPInstr->getResultElementType());
 
@@ -520,7 +519,7 @@ namespace NesCheck
         if (!pdg::dbgutils::isVoidPointerType(*tree_node.getDIType()))
         {
           if (Instruction *i = dyn_cast<Instruction>(&ptr))
-            errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
+            errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << " - " << tree_node.getFunc()->getName() << "\n";
           _ksplit_stats->increaseNonVoidWildPtrNum();
         }
         else
