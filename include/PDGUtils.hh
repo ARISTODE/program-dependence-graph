@@ -43,6 +43,7 @@ namespace pdg
     llvm::Value *getLShrOnGep(llvm::GetElementPtrInst &gep);
     std::string stripFuncNameVersionNumber(std::string func_name);
     std::string computeTreeNodeID(TreeNode &tree_node);
+    std::string computeFieldID(llvm::DIType &parent_dt, llvm::DIType &field_dt);
     std::string stripVersionTag(std::string str);
     std::string ltrim(std::string str);
     std::string rtrim(std::string str);

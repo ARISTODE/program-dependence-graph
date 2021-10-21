@@ -342,6 +342,15 @@ std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
   return trimStr(parent_type_name + node_field_name);
 }
 
+std::string pdg::pdgutils::computeFieldID(DIType &parent_dt, DIType &field_dt)
+{
+  auto parent_type_name = dbgutils::getSourceLevelTypeName(parent_dt, true);
+  auto field_name = dbgutils::getSourceLevelVariableName(field_dt);
+  if (parent_type_name.empty() || field_name.empty())
+    return "";
+  return trimStr(parent_type_name + field_name);
+}
+
 std::string pdg::pdgutils::stripVersionTag(std::string str)
 {
   size_t pos = 0;

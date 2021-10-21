@@ -273,6 +273,7 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
   // alloc inst
   if (isa<AllocaInst>(val))
   {
+    // this is used to borrow di type form other struct poiter types
     if (n.getDIType() == nullptr)
     {
       for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); ++inst_iter)
@@ -319,8 +320,7 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
       DIType *global_var_di_type = dbgutils::getGlobalVarDIType(*gv);
       if (!global_var_di_type)
         return nullptr;
-      auto global_type = gv->getType();
-
+      // auto global_type = gv->getType();
       return dbgutils::getBaseDIType(*global_var_di_type);
     }
   }

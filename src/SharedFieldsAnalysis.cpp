@@ -1,0 +1,230 @@
+#include "SharedFieldsAnalysis.hh"
+
+char pdg::SharedFieldsAnalysis::ID = 0;
+
+using namespace llvm;
+
+void pdg::SharedFieldsAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
+{
+  AU.setPreservesAll();
+}
+
+// this pass is used to compute shared fields between kernel and driver domain
+bool pdg::SharedFieldsAnalysis::runOnModule(Module &M)
+{
+  // step 1: propagates debugging infomration for instructions
+  for (auto &F : M)
+  {
+    if (F.isDeclaration())
+      continue;
+    propagateDebuggingInfoInFunc(F);
+  }
+  // step 2: obtain driver side functions
+  readDriverFuncs(M);
+  // step 3: compute accessed fields in driver/kernel domain
+  computeAccessFields(M);
+  // step 4: compute shared fields
+  computeSharedAccessFields();
+  dumpSharedFields();
+  return false;
+}
+
+void pdg::SharedFieldsAnalysis::getDbgDeclareInstsInFunc(Function &F, std::set<DbgDeclareInst *> &dbg_insts)
+{
+  // obtain all the dbg declare inst and obtain debugging info
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+  {
+    if (auto dbg_inst = dyn_cast<DbgDeclareInst>(&*inst_iter))
+      dbg_insts.insert(dbg_inst);
+  }
+}
+
+void pdg::SharedFieldsAnalysis::propagateDebuggingInfoInFunc(Function &F)
+{
+  std::set<DbgDeclareInst *> dbg_declare_insts;
+  getDbgDeclareInstsInFunc(F, dbg_declare_insts);
+  // bind ditype to the top-level pointer (alloca)
+  for (auto dbg_declare_inst : dbg_declare_insts)
+  {
+    auto addr = dbg_declare_inst->getVariableLocation();
+    auto DLV = dbg_declare_inst->getVariable(); // di local variable instance
+    assert(DLV != nullptr && "cannot find DILocalVariable Node for computing DIType");
+    DIType *var_di_type = DLV->getType();
+    assert(var_di_type != nullptr && "cannot bind nullptr ditype to node!");
+    insertValueDITypePair(addr, nullptr, var_di_type);
+  }
+
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+  {
+    Instruction &i = *inst_iter;
+    auto dt_pair = computeInstDIType(i);
+    insertValueDITypePair(&i, dt_pair.second, dt_pair.first);
+  }
+}
+
+std::pair<llvm::DIType *, llvm::DIType *> pdg::SharedFieldsAnalysis::computeInstDIType(Instruction &i)
+{
+  if (isa<AllocaInst>(&i))
+  {
+    if (_inst_ditype_map.find(&i) != _inst_ditype_map.end())
+      return std::make_pair(_inst_ditype_map[&i].first, nullptr);
+  }
+  else if (LoadInst *li = dyn_cast<LoadInst>(&i))
+  {
+    if (Instruction *load_addr = dyn_cast<Instruction>(li->getPointerOperand()))
+    {
+      if (_inst_ditype_map.find(load_addr) == _inst_ditype_map.end())
+      {
+        errs() << "[WARNING]: empty di type on load address in func" << li->getFunction()->getName() << "\n";
+        errs() << *load_addr << "\n";
+        assert(false);
+      }
+      DIType *load_addr_di_type = getValDIType(*load_addr);
+      if (!load_addr_di_type)
+        return std::pair<DIType *, DIType *>(nullptr, nullptr);
+      DIType *loaded_val_di_type = dbgutils::getBaseDIType(*load_addr_di_type);
+      if (loaded_val_di_type != nullptr)
+        return std::make_pair(dbgutils::stripAttributes(*loaded_val_di_type), load_addr_di_type);
+      return std::pair<DIType*, DIType*>(nullptr, nullptr);
+    }
+    else if (GlobalVariable *gv = dyn_cast<GlobalVariable>(li->getPointerOperand()))
+    {
+      DIType *global_var_di_type = dbgutils::getGlobalVarDIType(*gv);
+      if (!global_var_di_type)
+        return std::pair<DIType *, DIType *>(nullptr, nullptr);
+      return std::make_pair(dbgutils::getBaseDIType(*global_var_di_type), global_var_di_type);
+    }
+  }
+  else if (StoreInst *si = dyn_cast<StoreInst>(&i))
+  {
+    Value* value_operand = si->getValueOperand();
+    Value* pointer_operand = si->getPointerOperand();
+    DIType* ptr_op_di_type = getValDIType(*pointer_operand);
+    if (ptr_op_di_type == nullptr)
+      return std::pair<DIType *, DIType *>(nullptr, nullptr);
+    DIType *value_op_di_type = dbgutils::getBaseDIType(*ptr_op_di_type);
+    return std::make_pair(value_op_di_type, ptr_op_di_type);
+  }
+  else if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&i))
+  {
+    Value* base_addr = gep->getPointerOperand();
+    auto base_addr_dt = getValDIType(*base_addr);
+    if (!base_addr_dt)
+      return std::make_pair(nullptr, nullptr);
+    DIType* base_addr_lowest_di_type = dbgutils::getLowestDIType(*base_addr_dt);
+    if (!base_addr_lowest_di_type)
+      return std::make_pair(nullptr, nullptr);
+    if (!dbgutils::isStructType(*base_addr_lowest_di_type))
+      return std::make_pair(nullptr, nullptr);
+    if (auto dict = dyn_cast<DICompositeType>(base_addr_lowest_di_type))
+    {
+      auto di_node_arr = dict->getElements();
+      for (unsigned i = 0; i < di_node_arr.size(); ++i)
+      {
+        DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
+        assert(field_di_type != nullptr && "fail to retrive field di type (computeNodeDIType)");
+        if (pdgutils::isGEPOffsetMatchDIOffset(*field_di_type, *gep))
+          return std::make_pair(field_di_type, base_addr_lowest_di_type);
+      }
+    }
+  }
+  else if (CastInst *cast_inst = dyn_cast<CastInst>(&i))
+  {
+    Value *casted_val = cast_inst->getOperand(0);
+    return getValDITypePair(*casted_val);
+  }
+  return std::make_pair(nullptr, nullptr);
+}
+
+void pdg::SharedFieldsAnalysis::insertValueDITypePair(Value *val, DIType* parent_dt, DIType *field_dt)
+{
+  if (_inst_ditype_map.find(val) != _inst_ditype_map.end())
+    _inst_ditype_map[val] = std::make_pair(field_dt, parent_dt);
+  else
+    _inst_ditype_map.insert(std::make_pair(val, std::make_pair(field_dt, parent_dt)));
+}
+
+std::pair<DIType *, DIType *> pdg::SharedFieldsAnalysis::getValDITypePair(Value &val)
+{
+  if (_inst_ditype_map.find(&val) != _inst_ditype_map.end())
+    return _inst_ditype_map[&val];
+  return std::pair<DIType *, DIType *>(nullptr, nullptr);
+}
+
+DIType *pdg::SharedFieldsAnalysis::getValDIType(Value &val)
+{
+  if (_inst_ditype_map.find(&val) == _inst_ditype_map.end())
+    return nullptr;
+  auto pair = _inst_ditype_map[&val];
+  return pair.first;
+}
+
+void pdg::SharedFieldsAnalysis::readDriverFuncs(Module &M)
+{
+  std::ifstream ReadFile("driver_funcs");
+  for (std::string line; std::getline(ReadFile, line);)
+  {
+    Function *func = M.getFunction(StringRef(line));
+    if (func != nullptr)
+      _driver_funcs.insert(func);
+  }
+}
+
+void pdg::SharedFieldsAnalysis::computeAccessFields(Module &M)
+{
+  // obtain a list of driver function names
+  for (auto &F : M)
+  {
+    if (F.isDeclaration())
+      continue;
+    if (isDriverFunc(F))
+      computeAccessedFieldsInFunc(F, _driver_access_fields);
+    else
+      computeAccessedFieldsInFunc(F, _kernel_access_fields);
+  }
+}
+
+void pdg::SharedFieldsAnalysis::computeAccessedFieldsInFunc(Function &F, std::set<std::string> & access_fields)
+{
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
+  {
+    Instruction* cur_inst = &*inst_iter;
+    if (!isa<LoadInst>(cur_inst) && !isa<StoreInst>(cur_inst))
+      continue;
+    // for load, check the load addr. It refers to the loaded field
+    if (LoadInst *li = dyn_cast<LoadInst>(cur_inst))
+    {
+      auto load_addr = li->getPointerOperand();
+      auto dt_pair = getValDITypePair(*load_addr);
+      if (!dt_pair.first || !dt_pair.second)
+        continue;
+      access_fields.insert(pdgutils::computeFieldID(*dt_pair.second, *dt_pair.first));
+    }
+    else if (StoreInst *si = dyn_cast<StoreInst>(cur_inst))
+    {
+      auto mod_addr = si->getPointerOperand();
+      auto dt_pair = getValDITypePair(*mod_addr);
+      if (!dt_pair.first || !dt_pair.second)
+        continue;
+      access_fields.insert(pdgutils::computeFieldID(*dt_pair.second, *dt_pair.first));
+    }
+  }
+}
+
+void pdg::SharedFieldsAnalysis::computeSharedAccessFields()
+{
+  set_intersection(_driver_access_fields.begin(), _driver_access_fields.end(),
+                   _kernel_access_fields.begin(), _kernel_access_fields.end(),
+                   std::inserter(_shared_fields, _shared_fields.begin()));
+}
+
+void pdg::SharedFieldsAnalysis::dumpSharedFields()
+{
+  for (auto shared_field : _shared_fields)
+  {
+    errs() << shared_field << "\n";
+  }
+}
+
+static RegisterPass<pdg::SharedFieldsAnalysis>
+    SharedFieldsAnalysis("shared-fields", "Shared Fields Analysis", false, true);
