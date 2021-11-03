@@ -326,6 +326,10 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   if (is_sentinel_type)
     tree_node.addAccessTag(AccessTag::DATA_READ);
 
+  // check for special cases:
+  // 1. check if current field is stored with a function address. If so, add the function to exported function list
+  // 2. check whether a new object is stored to the current node's address. If this is true and current node is a struct pointer, mark all fields to be synchronized.
+  // 3. detect variadic gep accesses. If this case happen, we might fail to detect some field accesses
   for (auto addr_var : tree_node.getAddrVars())
   {
     for (auto user : addr_var->users())
@@ -337,6 +341,33 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
         {
           auto func_name = f->getName().str();
           _exported_funcs_ptr_name_map.insert(std::make_pair(field_var_name, func_name));
+        }
+
+        // add a function and check whether this value is newly allocated
+        // here the strategy is mark all the fields
+        if (isa<GlobalVariable>(val_op))
+        {
+          for (auto child_node : tree_node.getChildNodes())
+          {
+            child_node->addAccessTag(AccessTag::DATA_READ);
+          }
+          // stop processing since we find a new object stored to this address
+          return;
+        }
+      }
+      if (MemCpyInst *mci = dyn_cast<MemCpyInst>(user))
+      {
+        auto dst_val = mci->getDest();
+        auto src_val = mci->getSource()->stripPointerCasts();
+        // TODO: we should switch the logic to detect whether a new 
+        // object is stored copied to the passed pointer
+        if (isa<GlobalVariable>(src_val))
+        {
+          // mark the whole tree as read
+          auto tree = tree_node.getTree();
+          tree->addAccessForAllNodes(AccessTag::DATA_READ);
+          // stop processing since we find a new object stored to this address
+          return;
         }
       }
       if (_transitive_boundary_funcs.find(func) == _transitive_boundary_funcs.end())
@@ -1087,7 +1118,7 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool process_expor
   auto func_iter = func_wrapper_map.find(&F);
   assert(func_iter != func_wrapper_map.end() && "no function wrapper found (IDL-GEN)!");
   auto fw = func_iter->second;
-  // process exported funcs later in special manner
+  // process exported funcs later in special manner because of syntax requirement
   if (isExportedFunc(F) && !process_exported_func)
   {
     _kernel_funcs_regsitered_with_indirect_ptr.insert(&F);

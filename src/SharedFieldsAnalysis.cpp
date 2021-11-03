@@ -12,6 +12,7 @@ void pdg::SharedFieldsAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 // this pass is used to compute shared fields between kernel and driver domain
 bool pdg::SharedFieldsAnalysis::runOnModule(Module &M)
 {
+  _num_wild_cast = 0;
   // step 1: propagates debugging infomration for instructions
   for (auto &F : M)
   {
@@ -26,6 +27,7 @@ bool pdg::SharedFieldsAnalysis::runOnModule(Module &M)
   // step 4: compute shared fields
   computeSharedAccessFields();
   dumpSharedFields();
+  errs() << "number of unsafe casting: " << _num_wild_cast << "\n";
   return false;
 }
 
@@ -58,7 +60,8 @@ void pdg::SharedFieldsAnalysis::propagateDebuggingInfoInFunc(Function &F)
   {
     Instruction &i = *inst_iter;
     auto dt_pair = computeInstDIType(i);
-    insertValueDITypePair(&i, dt_pair.second, dt_pair.first);
+    if (dt_pair.first != nullptr)
+      insertValueDITypePair(&i, dt_pair.second, dt_pair.first);
   }
 }
 
@@ -77,7 +80,7 @@ std::pair<llvm::DIType *, llvm::DIType *> pdg::SharedFieldsAnalysis::computeInst
       {
         errs() << "[WARNING]: empty di type on load address in func" << li->getFunction()->getName() << "\n";
         errs() << *load_addr << "\n";
-        assert(false);
+        // assert(false);
       }
       DIType *load_addr_di_type = getValDIType(*load_addr);
       if (!load_addr_di_type)
@@ -184,12 +187,39 @@ void pdg::SharedFieldsAnalysis::computeAccessFields(Module &M)
   }
 }
 
+void pdg::SharedFieldsAnalysis::printWarningsForUnsafeTypeCastsOnInst(Instruction &i)
+{
+  Function &F = *i.getFunction();
+  for (auto user : i.users())
+  {
+    if (auto cast_inst = dyn_cast<CastInst>(user))
+    {
+      auto casting_type = cast_inst->getSrcTy();
+      auto casted_type = cast_inst->getDestTy();
+      // casting from a non-void ptr type to other types
+      if (pdgutils::isStructPointerType(*casting_type) && pdgutils::isStructPointerType(*casted_type))
+      {
+        // if the casting value doesn't has debugging info, ignore this cast
+        if (_inst_ditype_map.find(cast_inst->getOperand(0)) != _inst_ditype_map.end())
+        {
+          auto casting_source_type_name = dbgutils::getSourceLevelTypeName(*_inst_ditype_map[cast_inst->getOperand(0)].first);
+          if (casting_source_type_name.find("union") != std::string::npos)
+            continue;
+          errs() << "casting source type: " << casting_source_type_name << "\n";
+          errs() << "potential wild casting that may cause missing shared fields: " << F.getName() << " - " << *cast_inst << "\n";
+          _num_wild_cast++;
+        }
+      }
+    }
+  }
+}
+
 void pdg::SharedFieldsAnalysis::computeAccessedFieldsInFunc(Function &F, std::set<std::string> & access_fields)
 {
   for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
   {
     Instruction* cur_inst = &*inst_iter;
-    if (!isa<LoadInst>(cur_inst) && !isa<StoreInst>(cur_inst))
+    if (!isa<LoadInst>(cur_inst) && !isa<StoreInst>(cur_inst) && !isa<GetElementPtrInst>(cur_inst))
       continue;
     // for load, check the load addr. It refers to the loaded field
     if (LoadInst *li = dyn_cast<LoadInst>(cur_inst))
@@ -208,6 +238,15 @@ void pdg::SharedFieldsAnalysis::computeAccessedFieldsInFunc(Function &F, std::se
         continue;
       access_fields.insert(pdgutils::computeFieldID(*dt_pair.second, *dt_pair.first));
     }
+    else if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(cur_inst))
+    {
+      auto gep_base_addr = gep->getPointerOperand();
+      auto dt_pair = getValDITypePair(*gep_base_addr);
+      if (!dt_pair.first || !dt_pair.second)
+        continue;
+      access_fields.insert(pdgutils::computeFieldID(*dt_pair.second, *dt_pair.first));
+    }
+    printWarningsForUnsafeTypeCastsOnInst(*cur_inst);
   }
 }
 

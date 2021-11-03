@@ -78,6 +78,7 @@ namespace pdg
     llvm::Value *getBaseVal() { return _base_val; }
     void setBaseVal(llvm::Value &v) { _base_val = &v; }
     llvm::Function *getFunc() { return (_root_node == nullptr ? nullptr : _root_node->getFunc()); }
+    void addAccessForAllNodes(AccessTag acc_tag);
 
   private:
     llvm::Value *_base_val;

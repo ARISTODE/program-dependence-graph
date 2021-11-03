@@ -180,3 +180,19 @@ void pdg::Tree::build(int max_tree_depth)
     }
   }
 }
+
+void pdg::Tree::addAccessForAllNodes(AccessTag acc_tag)
+{
+  std::queue<TreeNode *> node_queue;
+  node_queue.push(_root_node);
+  while (!node_queue.empty()) // have more child to expand
+  {
+    auto current_node = node_queue.front();
+    node_queue.pop();
+    current_node->addAccessTag(acc_tag);
+    for (auto child_node : current_node->getChildNodes())
+    {
+      node_queue.push(child_node);
+    }
+  }
+}

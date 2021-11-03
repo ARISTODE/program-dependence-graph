@@ -26,6 +26,7 @@ namespace pdg
     bool isDriverFunc(llvm::Function &F) { return _driver_funcs.find(&F) != _driver_funcs.end(); }
     void computeAccessedFieldsInFunc(llvm::Function &F, std::set<std::string>& access_fields);
     void computeAccessFields(llvm::Module &M);
+    void printWarningsForUnsafeTypeCastsOnInst(llvm::Instruction &i);
     void computeSharedAccessFields();
     void dumpSharedFields();
 
@@ -35,6 +36,7 @@ namespace pdg
     std::set<std::string> _driver_access_fields;
     std::set<std::string> _kernel_access_fields;
     std::set<llvm::Function *> _driver_funcs;
+    unsigned _num_wild_cast;
   };
 }
 
