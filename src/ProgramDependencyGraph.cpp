@@ -37,8 +37,9 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
     connectIntraprocDependencies(F);
     connectInterprocDependencies(F);
     func_size++;
+    errs() << "func size: " << func_size << "\n";
   }
-  errs() << "func size: " << func_size << "\n";
+  // errs() << "func size: " << func_size << "\n";
   errs() << "Finsh adding dependencies" << "\n";
   auto stop = std::chrono::high_resolution_clock::now();
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);

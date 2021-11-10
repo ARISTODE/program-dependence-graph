@@ -17,6 +17,7 @@ bool pdg::TaintBoundaryAnalysis::runOnModule(Module &M)
   _call_graph = &PDGCallGraph::getInstance();
   identifyTaintSources();
   propagateTaints();
+  propagateTaintSlices();
   computeBoundaryFuncs();
   dumpBoundaryFuncs();
   return false;
@@ -60,11 +61,26 @@ void pdg::TaintBoundaryAnalysis::propagateTaints()
     auto reachable_nodes = _PDG->findNodesReachableByEdges(*taint_source, edge_types);
     for (auto node : reachable_nodes)
     {
-      Function* node_func = node->getFunc();
-      if (node_func != nullptr)
-        _taint_funcs.insert(node_func);
+      Function* func_node = node->getFunc();
+      if (func_node != nullptr)
+        _taint_funcs.insert(func_node);
     }
   }
+}
+
+// taint all the code slices that access sensitive information
+void pdg::TaintBoundaryAnalysis::propagateTaintSlices()
+{
+  std::set<EdgeType> edge_types = {
+      EdgeType::DATA_DEF_USE,
+      EdgeType::CONTROLDEP_CALLINV,
+      EdgeType::CONTROLDEP_CALLRET,
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_ALIAS,
+      EdgeType::DATA_RET};
+
+  // here are all the tained slices
+  _taint_nodes = _PDG->findNodesReachableByEdges(*taint_source, edge_types);
 }
 
 void pdg::TaintBoundaryAnalysis::computeBoundaryFuncs()

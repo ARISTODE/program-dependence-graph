@@ -18,6 +18,7 @@ namespace pdg
     bool runOnModule(llvm::Module &M) override;
     void identifyTaintSources();
     void propagateTaints();
+    void propagateTaintSlices();
     void computeBoundaryFuncs();
     void dumpBoundaryFuncs();
     void dumpToFile(std::string file_name, std::set<std::string> &names);
@@ -25,6 +26,7 @@ namespace pdg
   private:
     llvm::Module* _module;
     std::set<Node*> _taint_sources;
+    std::set<Node*> _taint_nodes;
     std::set<llvm::Function*> _taint_funcs;
     ProgramGraph* _PDG;
     PDGCallGraph* _call_graph;
