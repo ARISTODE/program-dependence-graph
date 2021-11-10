@@ -55,6 +55,7 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
     // this is a simplification from caller's formal tree to call site actual trees
     connectFormalInTreeWithActualTree(F);
     func_size++;
+    errs() << "func size: " << func_size << "\n";
   }
 
   // errs() << "connecting interproc addrvar\n";

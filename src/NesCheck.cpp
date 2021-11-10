@@ -490,7 +490,7 @@ namespace NesCheck
       if (ptr_type == "SAFE")
       {
         _ksplit_stats->increaseSafePtrNum();
-        // SafePtrs.insert(ptr);
+        SafePtrs.insert(&ptr);
         // if (Instruction *i = dyn_cast<Instruction>(&ptr))
         // {
         //   std::string var_name =  "";
@@ -504,8 +504,8 @@ namespace NesCheck
       }
       else if (ptr_type == "SEQ")
       {
-        // if (Instruction *i = dyn_cast<Instruction>(&ptr))
-        //   errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
+        if (Instruction *i = dyn_cast<Instruction>(&ptr))
+          errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
         if (!pdg::dbgutils::isArrayType(*tree_node.getDIType()))
         {
           _ksplit_stats->increaseArrayNum();
@@ -513,6 +513,7 @@ namespace NesCheck
         }
         if (pdg::dbgutils::isStructPointerType(*tree_node.getDIType()))
           _ksplit_stats->increaseStructArrayNum();
+        SeqPtrs.insert(&ptr);
       }
       else if (ptr_type == "DYN")
       {
@@ -526,7 +527,7 @@ namespace NesCheck
         {
           _ksplit_stats->increaseVoidWildPtrNum();
         }
-        // WildPtrs.insert(ptr);
+        WildPtrs.insert(&ptr);
       }
       else if (ptr_type == "UNKNOWN")
       {
@@ -534,7 +535,7 @@ namespace NesCheck
           errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
         _ksplit_stats->increaseUnknownPtrNum();
         errs() << "unknown: " << ptr << "\n";
-        // UnknownPtrs.insert(ptr);
+        UnknownPtrs.insert(&ptr);
       }
     }
 

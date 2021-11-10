@@ -14,11 +14,17 @@ bool pdg::SharedFieldsAnalysis::runOnModule(Module &M)
 {
   _num_wild_cast = 0;
   // step 1: propagates debugging infomration for instructions
+  unsigned num_defined_func = 0;
+  unsigned num_undefined_func = 0;
   for (auto &F : M)
   {
     if (F.isDeclaration())
+    {
+      num_undefined_func++;
       continue;
+    }
     propagateDebuggingInfoInFunc(F);
+    num_defined_func++;
   }
   // step 2: obtain driver side functions
   readDriverFuncs(M);
@@ -28,6 +34,7 @@ bool pdg::SharedFieldsAnalysis::runOnModule(Module &M)
   computeSharedAccessFields();
   dumpSharedFields();
   errs() << "number of unsafe casting: " << _num_wild_cast << "\n";
+  errs() << "func num: " << num_defined_func << " / " << num_undefined_func << "\n";
   return false;
 }
 
