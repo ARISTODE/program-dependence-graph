@@ -1,0 +1,16 @@
+syntax = "proto3";
+option java_multiple_files = true;
+option java_package = "io.grpc.examples.prog";
+option java_outer_classname = "ProgProto";
+option objc_class_prefix = "PRG";
+package prog;
+service Prog {
+	rpc logCompressSizeGrpc(logCompressSizeRequest)returns (logCompressSizeReply){}
+}
+message logCompressSizeReply { 
+	
+}
+message logCompressSizeRequest {
+ 	int64 sz = 1;
+}
+

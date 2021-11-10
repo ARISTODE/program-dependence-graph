@@ -376,28 +376,28 @@ bool pdg::AtomicRegionAnalysis::isAtomicOperation(Instruction &i)
   return false;
 }
 
-bool pdg::AtomicRegionAnalysis::isAliasOfBoundaryPtrs(Value &v)
-{
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
-  for (auto b_ptr : _boundary_ptrs)
-  {
-    if (ptaw.queryAlias(v, *b_ptr) != NoAlias)
-      return true;
-  }
-  return false;
-}
+// bool pdg::AtomicRegionAnalysis::isAliasOfBoundaryPtrs(Value &v)
+// {
+//   PTAWrapper &ptaw = PTAWrapper::getInstance();
+//   for (auto b_ptr : _boundary_ptrs)
+//   {
+//     if (ptaw.queryAlias(v, *b_ptr) != NoAlias)
+//       return true;
+//   }
+//   return false;
+// }
 
-std::set<Value *> pdg::AtomicRegionAnalysis::computeBoundaryAliasPtrs(llvm::Value &v)
-{
-  std::set<Value *> alias_ptrs;
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
-  for (auto b_ptr : _boundary_ptrs)
-  {
-    if (ptaw.queryAlias(v, *b_ptr) != NoAlias)
-      alias_ptrs.insert(b_ptr);
-  }
-  return alias_ptrs;
-}
+// std::set<Value *> pdg::AtomicRegionAnalysis::computeBoundaryAliasPtrs(llvm::Value &v)
+// {
+//   std::set<Value *> alias_ptrs;
+//   PTAWrapper &ptaw = PTAWrapper::getInstance();
+//   for (auto b_ptr : _boundary_ptrs)
+//   {
+//     if (ptaw.queryAlias(v, *b_ptr) != NoAlias)
+//       alias_ptrs.insert(b_ptr);
+//   }
+//   return alias_ptrs;
+// }
 
 void pdg::AtomicRegionAnalysis::printWarningCS(pdg::AtomicRegionAnalysis::CSPair cs_pair, Value &v, Function &f, std::set<std::string> &modified_names, std::string source_type)
 {

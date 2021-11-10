@@ -22,6 +22,7 @@ namespace pdg
     void setupKernelFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
     void setupBoundaryFuncs(llvm::Module &M);
+    void setupServerFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; };
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     void computeSharedStructDITypes();
@@ -44,6 +45,7 @@ namespace pdg
     // some side tests
     void printPingPongCalls(llvm::Module &M);
     void dumpSharedTypes(std::string file_name);
+    std::set<llvm::Function *> getServerFuncs() { return _server_funcs; }
 
   private:
     ProgramGraph *_PDG;
@@ -60,6 +62,7 @@ namespace pdg
     std::set<std::string> _global_struct_di_type_names;
     std::set<std::string> _shared_struct_type_names;
     std::set<std::string> _driver_global_struct_types;
+    std::set<llvm::Function *> _server_funcs;
   };
 } // namespace pdg
 #endif

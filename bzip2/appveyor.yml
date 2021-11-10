@@ -1,0 +1,25 @@
+version: 1.0.{build}
+image:
+- Visual Studio 2013
+- Visual Studio 2015
+- Visual Studio 2017
+configuration: Release
+platform:
+- x86
+- x64
+clone_folder: c:\projects\bzip2
+build_script:
+- cmd: >-
+    cd c:\projects\bzip2
+
+    mkdir build
+
+    cd build
+
+    if "%PLATFORM%" == "x86" ( set ARCH=Win32 ) else ( set ARCH=%PLATFORM% )
+
+    cmake .. -A %ARCH%
+
+    cmake --build . --config Release
+test_script:
+- cmd: ctest --output-on-failure -C Release
