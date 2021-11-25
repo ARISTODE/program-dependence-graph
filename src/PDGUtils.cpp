@@ -570,3 +570,19 @@ bool pdg::pdgutils::isFileExist(std::string file_name)
   std::ifstream in_file(file_name);
   return in_file.good();
 }
+
+std::set<Function *> pdg::pdgutils::readFuncsFromFile(std::string file_name, Module &M)
+{
+  std::set<Function *> ret;
+  std::ifstream ReadFile(file_name);
+  for (std::string line; std::getline(ReadFile, line);)
+  {
+    Function *f = M.getFunction(StringRef(line));
+    if (!f)
+      continue;
+    if (f->isDeclaration() || f->empty())
+      continue;
+    ret.insert(f);
+  }
+  return ret;
+}

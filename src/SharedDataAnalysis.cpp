@@ -15,6 +15,9 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   _module = &M;
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
   _call_graph = &PDGCallGraph::getInstance();
+  if (!_call_graph->isBuild())
+    _call_graph->build(M);
+
   // read driver/kernel domian funcs
   setupStrOps();
   readSentinelFields();
@@ -22,7 +25,8 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   setupDriverFuncs(M);
   setupKernelFuncs(M);
   // get boundary functions
-  setupBoundaryFuncs(M);
+  // setupBoundaryFuncs(M);
+  _boundary_funcs = _call_graph->getBoundaryFuncs();
   // compute struct type passed through boundary (shared struct type)
   readDriverGlobalStrucTypes();
   computeSharedStructDITypes();
@@ -55,7 +59,7 @@ void pdg::SharedDataAnalysis::setupStrOps()
 
 void pdg::SharedDataAnalysis::setupDriverFuncs(Module &M)
 {
-  _driver_domain_funcs = readFuncsFromFile("driver_funcs", M);
+  _driver_domain_funcs = pdgutils::readFuncsFromFile("driver_funcs", M);
 }
 
 void pdg::SharedDataAnalysis::readDriverGlobalStrucTypes()
@@ -76,69 +80,6 @@ void pdg::SharedDataAnalysis::setupKernelFuncs(Module &M)
     if (_driver_domain_funcs.find(&F) == _driver_domain_funcs.end())
       _kernel_domain_funcs.insert(&F);
   }
-}
-
-void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
-{
-  auto imported_funcs = readFuncsFromFile("imported_funcs", M);
-  auto exported_funcs = readFuncsFromFile("exported_funcs", M);
-
-  if (EnableAnalysisStats)
-  {
-    auto &ksplit = KSplitStats::getInstance();
-    ksplit.increaseKernelToDriverCallNum(exported_funcs.size());
-    ksplit.increaseDriverToKernelCallNum(imported_funcs.size());
-  }
-
-  _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
-  _boundary_funcs.insert(exported_funcs.begin(), exported_funcs.end());
-  // module init functions
-  Function* init_func = getModuleInitFunc(M);
-  if (init_func != nullptr)
-    _boundary_funcs.insert(init_func);
-
-  for (auto bf : _boundary_funcs)
-  {
-    _boundary_func_names.insert(bf->getName().str());
-  }
-}
-
-std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file_name, Module &M)
-{
-  std::set<Function *> ret;
-  std::ifstream ReadFile(file_name);
-  for (std::string line; std::getline(ReadFile, line);)
-  {
-    Function *f = M.getFunction(StringRef(line));
-    if (!f)
-      continue;
-    if (f->isDeclaration() || f->empty())
-      continue;
-    ret.insert(f);
-  }
-  return ret;
-}
-
-std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
-{
-  std::set<Function*> boundary_trans_funcs;
-  for (auto boundary_func : _boundary_funcs)
-  {
-    if (_call_graph->isExcludeFunc(*boundary_func))
-    {
-      errs() << "found exclude func " << boundary_func->getName() << "\n";
-      continue;
-    }
-    auto func_node = _call_graph->getNode(*boundary_func);
-    assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
-    auto trans_func_nodes = _call_graph->computeTransitiveClosure(*func_node);
-    for (auto n : trans_func_nodes)
-    {
-      if (Function *trans_func = dyn_cast<Function>(n->getValue()))
-        boundary_trans_funcs.insert(trans_func);
-    }
-  }
-  return boundary_trans_funcs;
 }
 
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()
@@ -592,19 +533,6 @@ void pdg::SharedDataAnalysis::dumpSharedTypes(std::string file_name)
       output_file << shared_struct_type << "\n";
   }
   output_file.close();
-}
-
-Function *pdg::SharedDataAnalysis::getModuleInitFunc(Module &M)
-{
-  for (auto &F : M)
-  {
-    if (F.isDeclaration())
-      continue;
-    std::string func_name = F.getName().str();
-    if (func_name.find("_init_module") != std::string::npos)
-      return &F;
-  }
-  return nullptr;
 }
 
 static RegisterPass<pdg::SharedDataAnalysis>

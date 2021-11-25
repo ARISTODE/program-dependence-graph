@@ -11,7 +11,7 @@ void pdg::PDGCallGraph::build(Module &M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
-    Node* n = new Node(F, GraphNodeType::FUNC);
+    Node *n = new Node(F, GraphNodeType::FUNC);
     _val_node_map.insert(std::make_pair(&F, n));
     addNode(*n);
   }
@@ -39,7 +39,7 @@ void pdg::PDGCallGraph::build(Module &M)
           auto ind_call_candidates = getIndirectCallCandidates(*ci, M);
           for (auto ind_call_can : ind_call_candidates)
           {
-            Node* callee_node = getNode(*ind_call_can);
+            Node *callee_node = getNode(*ind_call_can);
             if (callee_node != nullptr)
               caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
           }
@@ -47,7 +47,11 @@ void pdg::PDGCallGraph::build(Module &M)
       }
     }
   }
-  
+
+  // check the calls from interface functions
+  setupBoundaryFuncs(M);
+  auto boundary_trans_funcs = computeBoundaryTransitiveClosure();
+  errs() << "finish building call graph\n";
   _is_build = true;
 }
 
@@ -64,7 +68,7 @@ bool pdg::PDGCallGraph::isFuncSignatureMatch(CallInst &ci, llvm::Function &f)
   auto formal_ret_type = f.getReturnType();
   if (!isTypeEqual(*actual_ret_type, *formal_ret_type))
     return false;
-  
+
   for (unsigned i = 0; i < actual_arg_list_size; i++)
   {
     auto actual_arg = ci.getOperand(i);
@@ -75,7 +79,7 @@ bool pdg::PDGCallGraph::isFuncSignatureMatch(CallInst &ci, llvm::Function &f)
   return true;
 }
 
-bool pdg::PDGCallGraph::isTypeEqual(Type& t1, Type &t2)
+bool pdg::PDGCallGraph::isTypeEqual(Type &t1, Type &t2)
 {
   if (&t1 == &t2)
     return true;
@@ -88,7 +92,7 @@ bool pdg::PDGCallGraph::isTypeEqual(Type& t1, Type &t2)
 
   if (!t1_pointed_ty->isStructTy() || !t2_pointed_ty->isStructTy())
     return false;
-  
+
   auto t1_name = pdgutils::stripVersionTag(t1_pointed_ty->getStructName().str());
   auto t2_name = pdgutils::stripVersionTag(t2_pointed_ty->getStructName().str());
 
@@ -115,27 +119,27 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
 
 bool pdg::PDGCallGraph::canReach(Node &src, Node &sink)
 {
-    std::queue<Node*> node_queue;
-    std::unordered_set<Node *> seen_node;
-    node_queue.push(&src);
-    while (!node_queue.empty())
-    {
-      Node* n = node_queue.front();
-      if (n == nullptr)
-        continue;
-      node_queue.pop();
-      if (n == &sink)
-        return true;
-      if (seen_node.find(n) != seen_node.end())
-        continue;
-      seen_node.insert(n);
+  std::queue<Node *> node_queue;
+  std::unordered_set<Node *> seen_node;
+  node_queue.push(&src);
+  while (!node_queue.empty())
+  {
+    Node *n = node_queue.front();
+    if (n == nullptr)
+      continue;
+    node_queue.pop();
+    if (n == &sink)
+      return true;
+    if (seen_node.find(n) != seen_node.end())
+      continue;
+    seen_node.insert(n);
 
-      for (auto out_neighbor : n->getOutNeighbors())
-      {
-        node_queue.push(out_neighbor);
-      }
+    for (auto out_neighbor : n->getOutNeighbors())
+    {
+      node_queue.push(out_neighbor);
     }
-    return false;
+  }
+  return false;
 }
 
 void pdg::PDGCallGraph::dump()
@@ -167,11 +171,11 @@ void pdg::PDGCallGraph::printPaths(Node &src, Node &sink)
       errs() << (*iter)->getName();
       if (std::next(iter, 1) != path.end())
         errs() << " -> ";
-      else 
+      else
         errs() << "\n\b";
     }
     errs() << "********************************************\n";
-    count ++;
+    count++;
   }
 }
 
@@ -190,8 +194,8 @@ void pdg::PDGCallGraph::computePathsHelper(PathVecs &path_vecs, Node &src, Node 
     return;
   assert(isa<Function>(src.getValue()) && "cannot process non function node (compute path, src)\n");
   assert(isa<Function>(sink.getValue()) && "cannot process non function node (compute path, sink)\n");
-  Function* src_func = cast<Function>(src.getValue());
-  Function* sink_func = cast<Function>(sink.getValue());
+  Function *src_func = cast<Function>(src.getValue());
+  Function *sink_func = cast<Function>(sink.getValue());
   if (visited_funcs.find(src_func) != visited_funcs.end())
     return;
   visited_funcs.insert(src_func);
@@ -214,7 +218,7 @@ std::vector<pdg::Node *> pdg::PDGCallGraph::computeTransitiveClosure(pdg::Node &
 {
   std::queue<Node *> node_queue;
   std::unordered_set<Node *> seen_node;
-  std::vector<Node*> ret;
+  std::vector<Node *> ret;
   node_queue.push(&src);
   while (!node_queue.empty())
   {
@@ -274,4 +278,93 @@ bool pdg::PDGCallGraph::isExportedFunc(Function &F)
   auto func_name = F.getName().str();
   func_name = pdgutils::stripFuncNameVersionNumber(func_name);
   return (_exported_func_names.find(func_name) != _exported_func_names.end());
+}
+
+// speical handling for boundary functions
+void pdg::PDGCallGraph::setupBoundaryFuncs(Module &M)
+{
+  auto imported_funcs = pdgutils::readFuncsFromFile("imported_funcs", M);
+  auto exported_funcs = pdgutils::readFuncsFromFile("exported_funcs", M);
+
+  if (EnableAnalysisStats)
+  {
+    auto &ksplit = KSplitStats::getInstance();
+    ksplit.increaseKernelToDriverCallNum(exported_funcs.size());
+    ksplit.increaseDriverToKernelCallNum(imported_funcs.size());
+  }
+
+  _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
+  _boundary_funcs.insert(exported_funcs.begin(), exported_funcs.end());
+  // module init functions
+  Function *init_func = getModuleInitFunc(M);
+  if (init_func != nullptr)
+    _boundary_funcs.insert(init_func);
+  // retrive all boundary func names
+
+  for (auto f : _boundary_funcs)
+  {
+    auto func_name = f->getName().str();
+    _boundary_func_names.insert(func_name);
+  }
+}
+
+void pdg::PDGCallGraph::initializeCommonCallFuncs(Function &boundary_func, std::set<Function *> &common_func)
+{
+  auto func_node = getNode(boundary_func);
+  assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
+  auto trans_func_nodes = computeTransitiveClosure(*func_node);
+  for (Node *func_node : trans_func_nodes)
+  {
+    if (Function *trans_func = dyn_cast<Function>(func_node->getValue()))
+      common_func.insert(trans_func);
+  }
+}
+
+std::set<Function *> pdg::PDGCallGraph::computeBoundaryTransitiveClosure()
+{
+  std::set<Function *> boundary_trans_funcs;
+  std::set<Function *> common_funcs;
+
+  initializeCommonCallFuncs(**_boundary_funcs.begin(), common_funcs);
+
+  for (auto boundary_func : _boundary_funcs)
+  {
+    if (isExcludeFunc(*boundary_func))
+    {
+      errs() << "found exclude func " << boundary_func->getName() << "\n";
+      continue;
+    }
+    auto func_node = getNode(*boundary_func);
+    assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
+    auto trans_func_nodes = computeTransitiveClosure(*func_node);
+    errs() << "transitive nodes for " << boundary_func->getName() << " - " << trans_func_nodes.size() << "\n";
+    for (auto n : trans_func_nodes)
+    {
+      if (Function *trans_func = dyn_cast<Function>(n->getValue()))
+      {
+        boundary_trans_funcs.insert(trans_func);
+        auto it = common_funcs.find(trans_func);
+        if (it != common_funcs.end())
+          common_funcs.erase(it);
+      }
+    }
+  }
+  for (auto common_func : common_funcs)
+  {
+    errs() << "common func: " << common_func->getName() << "\n";
+  }
+  return boundary_trans_funcs;
+}
+
+Function *pdg::PDGCallGraph::getModuleInitFunc(Module &M)
+{
+  for (auto &F : M)
+  {
+    if (F.isDeclaration())
+      continue;
+    std::string func_name = F.getName().str();
+    if (func_name.find("_init_module") != std::string::npos)
+      return &F;
+  }
+  return nullptr;
 }

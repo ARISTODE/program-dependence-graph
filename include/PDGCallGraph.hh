@@ -34,10 +34,19 @@ namespace pdg
     void setupExportedFuncs();
     bool isExcludeFunc(llvm::Function &F);
     bool isExportedFunc(llvm::Function &F);
+    // some special handling for boundary functions
+    void setupBoundaryFuncs(llvm::Module &M);
+    void initializeCommonCallFuncs(llvm::Function &boundary_func, std::set<llvm::Function*> &common_func);
+    std::set<llvm::Function *> computeBoundaryTransitiveClosure();
+    llvm::Function *getModuleInitFunc(llvm::Module &M);
+    std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
+    std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
 
   private:
     std::set<std::string> _exclude_func_names;
     std::set<std::string> _exported_func_names;
+    std::set<std::string> _boundary_func_names;
+    std::set<llvm::Function*> _boundary_funcs;
   };
 } // namespace pdg
 

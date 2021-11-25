@@ -99,6 +99,7 @@ namespace NesCheck
     pdg::AtomicRegionAnalysis *_ARA;
     pdg::DataAccessAnalysis *_DDA;
     pdg::ProgramGraph* _PDG;
+    pdg::PDGCallGraph* _call_graph;
     std::set<std::string> BoundaryFuncNames;
     pdg::KSplitStats *_ksplit_stats;
 
@@ -408,7 +409,7 @@ namespace NesCheck
     void classifyBoundaryPtrs()
     {
       std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
-      for (auto func : _DDA->getSDA()->getBoundaryFuncs())
+      for (auto func : _call_graph->getBoundaryFuncs())
       {
         std::string func_name = func->getName().str();
         Function* cur_func = func;
@@ -1298,9 +1299,10 @@ namespace NesCheck
       _ARA = &getAnalysis<pdg::AtomicRegionAnalysis>();
       _DDA = _ARA->getDAA();
       _PDG = _DDA->getPDG();
+      _call_graph = &pdg::PDGCallGraph::getInstance();
       _ksplit_stats = &pdg::KSplitStats::getInstance();
       auto start = std::chrono::high_resolution_clock::now();
-      BoundaryFuncNames = _DDA->getSDA()->getBoundaryFuncNames();
+      BoundaryFuncNames = _call_graph->getBoundaryFuncNames();
 
       srand(time(NULL));
 

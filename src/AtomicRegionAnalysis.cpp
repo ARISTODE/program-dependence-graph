@@ -16,7 +16,7 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   _SDA = _DAA->getSDA();
   _sync_stub_file.open("kernel.idl", std::ios_base::app);
   _ksplit_stats = _DAA->getKSplitStats();
-  _funcs_need_sync_stub_gen = _SDA->computeBoundaryTransitiveClosure();
+  // _funcs_need_sync_stub_gen = _SDA->computeBoundaryTransitiveClosure();
   _call_graph = &PDGCallGraph::getInstance();
   // build control flow graph
   // _ksplit_cfg = &KSplitCFG::getInstance();
@@ -110,7 +110,7 @@ void pdg::AtomicRegionAnalysis::setupLockInstanceMap()
 void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)
 {
   // collect all the arguments passed across interface functions and global variables
-  auto boundary_funcs = _SDA->getBoundaryFuncs();
+  auto boundary_funcs = _call_graph->getBoundaryFuncs();
   for (auto f : boundary_funcs)
   {
     if (f->isDeclaration() || f->empty())
@@ -496,7 +496,7 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           {
             printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
             auto dst_func_node = _call_graph->getNode(*atomic_op->getFunction());
-            for (auto boundary_f : _SDA->getBoundaryFuncs())
+            for (auto boundary_f : _call_graph->getBoundaryFuncs())
             {
               auto boundary_func_node = _call_graph->getNode(*boundary_f);
               _call_graph->printPaths(*boundary_func_node, *dst_func_node);

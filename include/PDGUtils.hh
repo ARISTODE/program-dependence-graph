@@ -49,6 +49,7 @@ namespace pdg
     std::string rtrim(std::string str);
     std::string trimStr(std::string str);
     bool isFileExist(std::string file_name);
+    std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
   } // namespace pdgutils
 } // namespace pdg
 #endif

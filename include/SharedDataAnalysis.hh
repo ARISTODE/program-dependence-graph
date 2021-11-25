@@ -24,15 +24,12 @@ namespace pdg
     bool isDriverFunc(llvm::Function &F) { return (_driver_domain_funcs.find(&F) != _driver_domain_funcs.end()); }
     std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
     bool isKernelFunc(llvm::Function &F) { return (_kernel_domain_funcs.find(&F) != _kernel_domain_funcs.end()); }
-    void setupBoundaryFuncs(llvm::Module &M);
-    std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
-    std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
+    // std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
+    // std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
     std::set<std::string> &getSentinelFields() { return _sentinel_fields; }
     std::set<std::string> &getGlobalOpStructNames() { return _global_op_struct_names; }
     bool isSentinelField(std::string &s) { return _sentinel_fields.find(s) != _sentinel_fields.end(); }
     bool isGlobalOpStruct(std::string &s) { return _global_op_struct_names.find(s) != _global_op_struct_names.end(); }
-    std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
-    std::set<llvm::Function *> computeBoundaryTransitiveClosure();
     void computeSharedStructDITypes();
     void computeGlobalStructTypeNames();
     void buildTreesForSharedStructDIType(llvm::Module &M);
@@ -52,7 +49,6 @@ namespace pdg
     void dumpSharedFieldID();
     void readSentinelFields();
     void readGlobalOpStructNames();
-    llvm::Function *getModuleInitFunc(llvm::Module &M);
     ProgramGraph *getPDG() { return _PDG; }
     // some side tests
     void printPingPongCalls(llvm::Module &M);
@@ -67,7 +63,7 @@ namespace pdg
     std::set<llvm::Function *> _driver_domain_funcs;
     std::set<llvm::Function *> _kernel_domain_funcs;
     std::set<llvm::Function *> _boundary_funcs;
-    std::set<std::string> _boundary_func_names;
+    // std::set<std::string> _boundary_func_names;
     std::map<llvm::DIType *, Tree *> _global_struct_di_type_map;
     std::set<std::string> _shared_field_id;
     std::set<std::string> _string_field_id;

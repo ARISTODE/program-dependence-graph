@@ -25,6 +25,8 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   _PDG = &ProgramGraph::getInstance();
   PTAWrapper &ptaw = PTAWrapper::getInstance();
 
+  // build program call graph. Used to reason about interprocedural
+  // dependencies. 
   PDGCallGraph &call_g = PDGCallGraph::getInstance();
   if (!call_g.isBuild())
     call_g.build(M);
