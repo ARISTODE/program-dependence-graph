@@ -9,6 +9,7 @@ void pdg::PTAWrapper::setupPTA(Module &M)
   PAGBuilder builder;
   PAG *pag = builder.build(module);
   _ander_pta = AndersenWaveDiff::createAndersenWaveDiff(pag);
+  errs() << "finish setting PTA (pag) - using ander_pta\n";
 }
 
 AliasResult pdg::PTAWrapper::queryAlias(Value &v1, Value &v2)

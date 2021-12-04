@@ -32,7 +32,7 @@ uint64_t pdg::pdgutils::getGEPOffsetInBits(Module& M, StructType &struct_type, G
   auto const struct_layout = data_layout.getStructLayout(&struct_type);
   if (gep_offset >= struct_type.getNumElements())
   {
-    errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
+    // errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
     return INT_MIN;
   }
   uint64_t field_bit_offset = struct_layout->getElementOffsetInBits(gep_offset);

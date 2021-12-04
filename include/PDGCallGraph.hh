@@ -32,21 +32,34 @@ namespace pdg
     std::vector<Node*> computeTransitiveClosure(Node &src);
     void setupExcludeFuncs();
     void setupExportedFuncs();
+    void setupDriverFuncs(llvm::Module &M);
     bool isExcludeFunc(llvm::Function &F);
     bool isExportedFunc(llvm::Function &F);
     // some special handling for boundary functions
     void setupBoundaryFuncs(llvm::Module &M);
     void initializeCommonCallFuncs(llvm::Function &boundary_func, std::set<llvm::Function*> &common_func);
-    std::set<llvm::Function *> computeBoundaryTransitiveClosure();
+    void collectDriverAccessedGlobalVars(llvm::Function &F);
+    std::set<llvm::Function *> &getBoundaryTransFuncs() { return _boundary_trans_funcs; }
+    std::set<llvm::Function *> &getTaintedFuncs() { return _taint_funcs; }
+    void computeBoundaryTransFuncs();
     llvm::Function *getModuleInitFunc(llvm::Module &M);
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
     std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
+    std::set<llvm::GlobalVariable *> &getAnalysisGlobalVar() { return _global_var_analysis; }
+    unsigned evaluateTransClosureSize(llvm::Function &F);
+    void computeTaintGlobals();
+    void computeTaintFuncs(llvm::Module &M);
 
   private:
     std::set<std::string> _exclude_func_names;
     std::set<std::string> _exported_func_names;
     std::set<std::string> _boundary_func_names;
-    std::set<llvm::Function*> _boundary_funcs;
+    std::set<llvm::Value *> _taint_vals;
+    std::set<llvm::Function *> _taint_funcs;
+    std::set<llvm::Function *> _driver_domain_funcs;
+    std::set<llvm::Function *> _boundary_funcs;
+    std::set<llvm::Function *> _boundary_trans_funcs;
+    std::set<llvm::GlobalVariable *> _global_var_analysis;
   };
 } // namespace pdg
 

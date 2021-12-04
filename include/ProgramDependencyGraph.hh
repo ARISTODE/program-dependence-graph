@@ -1,8 +1,6 @@
 #ifndef PROGRAMDEPENDENCYGRAPH_H_
 #define PROGRAMDEPENDENCYGRAPH_H_
 #include "LLVMEssentials.hh"
-#include "Graph.hh"
-#include "PDGCallGraph.hh"
 #include "DataDependencyGraph.hh"
 #include "ControlDependencyGraph.hh"
 

@@ -50,7 +50,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 
   _idl_file << "module kernel {\n";
   std::vector<std::string> boundary_func_names(_call_graph->getBoundaryFuncNames().begin(), _call_graph->getBoundaryFuncNames().end());
-  _transitive_boundary_funcs = _call_graph->computeBoundaryTransitiveClosure();
+  _transitive_boundary_funcs = _call_graph->getBoundaryTransFuncs();
   std::sort(boundary_func_names.begin(), boundary_func_names.end());
   for (auto func_name : boundary_func_names)
   {

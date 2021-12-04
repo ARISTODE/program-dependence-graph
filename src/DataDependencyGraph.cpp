@@ -6,28 +6,32 @@ using namespace llvm;
 
 bool pdg::DataDependencyGraph::runOnModule(Module &M)
 {
+  PDGCallGraph &call_g = PDGCallGraph::getInstance();
+  if (!call_g.isBuild())
+    call_g.build(M);
   // setup SVF 
   ProgramGraph &g = ProgramGraph::getInstance();
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
   if (!g.isBuild())
   {
     g.build(M);
-    g.bindDITypeToNodes(M);
+    g.bindDITypeToNodes();
   }
 
-  if (!ptaw.hasPTASetup())
-    ptaw.setupPTA(M);
-
+  // TODO: make this a command line option.
+  // PTAWrapper &ptaw = PTAWrapper::getInstance();
+  // if (!ptaw.hasPTASetup())
+  //   ptaw.setupPTA(M);
 
   std::chrono::milliseconds defuse = std::chrono::milliseconds::zero();
   std::chrono::milliseconds raw = std::chrono::milliseconds::zero();
   std::chrono::milliseconds alias = std::chrono::milliseconds::zero();
 
-  for (auto &F : M)
+  // for (auto &F : M)
+  for (auto F : call_g.getBoundaryTransFuncs())
   {
-    if (F.isDeclaration() || F.empty())
+    if (F->isDeclaration() || F->empty())
       continue;
-    _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
+    _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(*F).getMemDep();
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
       auto t1 = std::chrono::high_resolution_clock::now();
@@ -52,7 +56,7 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
 void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
+  // PTAWrapper &ptaw = PTAWrapper::getInstance();
   Function* func = inst.getFunction();
   for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); inst_iter++)
   {
@@ -60,9 +64,10 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
       continue;
     if (!inst.getType()->isPointerTy())
       continue;
-    auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
+    // auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
     auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
-    if (anders_aa_result != NoAlias || alias_result != NoAlias)
+    // if (anders_aa_result != NoAlias || alias_result != NoAlias)
+    if (alias_result != NoAlias)
     {
       Node* src = g.getNode(inst);
       Node* dst = g.getNode(*inst_iter);
@@ -91,11 +96,6 @@ void pdg::DataDependencyGraph::addDefUseEdges(Instruction &inst)
       continue;
     src->addNeighbor(*dst, EdgeType::DATA_DEF_USE);
   }
-}
-
-void pdg::DataDependencyGraph::addDefUseEdgesForGlobalVars(Module &M)
-{
-  
 }
 
 void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)

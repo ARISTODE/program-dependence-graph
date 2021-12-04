@@ -1,6 +1,6 @@
 #ifndef CONTROLDEPENDENCYGRAPH_H_
 #define CONTROLDEPENDENCYGRAPH_H_
-#include "Graph.hh"
+#include "ProgramGraph.hh"
 #include "llvm/Analysis/PostDominators.h"
 
 namespace pdg

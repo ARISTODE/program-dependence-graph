@@ -4,19 +4,26 @@ using namespace llvm;
 
 void pdg::PDGCallGraph::build(Module &M)
 {
+  // setup functions that we don't need to consider during the analysis
   setupExcludeFuncs();
   setupExportedFuncs();
-
+  // setup driver functions
+  setupDriverFuncs(M);
+  // setup interface functions
+  setupBoundaryFuncs(M);
+  unsigned total_num_func = 0;
+  // build call graph nodes
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
+    total_num_func += 1;
     Node *n = new Node(F, GraphNodeType::FUNC);
     _val_node_map.insert(std::make_pair(&F, n));
     addNode(*n);
   }
-
-  // connect nodes
+  errs() << "total number of functions: " << total_num_func << "\n";
+  // connect nodes through direct/indirect call edges
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
@@ -26,6 +33,10 @@ void pdg::PDGCallGraph::build(Module &M)
     {
       if (CallInst *ci = dyn_cast<CallInst>(&*inst_i))
       {
+        if (isa<DbgVariableIntrinsic>(ci))
+          continue;
+        if (ci->isInlineAsm())
+          continue;
         auto called_func = pdgutils::getCalledFunc(*ci);
         // direct calls
         if (called_func != nullptr)
@@ -47,11 +58,25 @@ void pdg::PDGCallGraph::build(Module &M)
       }
     }
   }
-
-  // check the calls from interface functions
-  setupBoundaryFuncs(M);
-  auto boundary_trans_funcs = computeBoundaryTransitiveClosure();
+  // the followings are specific for computing the functions that require 
+  // static analyses 
+  // 1. taint all the pointer type arguments passed in the interface function
+  for (auto func : _boundary_funcs)
+  {
+    _taint_funcs.insert(func);
+    // taint all pointer arguments
+    for (auto arg_iter = func->arg_begin(); arg_iter != func->arg_end(); arg_iter++)
+    {
+      _taint_vals.insert(&*arg_iter);
+    }
+    // taint global variables accessed in driver functions
+    computeTaintGlobals();
+  }
+  // propagate taints and record all tained funcs, these functions are needed in static analysis
+  computeTaintFuncs(M);
   errs() << "finish building call graph\n";
+  errs() << "tainted funcs: " << _taint_funcs.size() << "\n";
+  errs() << "global require analysis: " << _global_var_analysis.size() << "\n";
   _is_build = true;
 }
 
@@ -83,6 +108,7 @@ bool pdg::PDGCallGraph::isTypeEqual(Type &t1, Type &t2)
 {
   if (&t1 == &t2)
     return true;
+
   // need to compare name for sturct, due to llvm-link duplicate struct types
   if (!t1.isPointerTy() || !t2.isPointerTy())
     return false;
@@ -110,8 +136,10 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
       continue;
     if (isFuncSignatureMatch(ci, F))
     {
-      if (isExportedFunc(F))
+      // here we use some special hanlding.
+      // if (isExportedFunc(F))
         ind_call_cand.insert(&F);
+      // errs() << "ind call: " << ci << " | " << ci.getFunction()->getName() << "->" << F.getName() << "\n";
     }
   }
   return ind_call_cand;
@@ -230,12 +258,14 @@ std::vector<pdg::Node *> pdg::PDGCallGraph::computeTransitiveClosure(pdg::Node &
     ret.push_back(n);
     for (auto out_neighbor : n->getOutNeighbors())
     {
-      // prune warning funcs in kernel
       auto val = out_neighbor->getValue();
       if (Function *f = dyn_cast<Function>(val))
       {
+        // prune warning funcs in kernel
         if (isExcludeFunc(*f))
           continue;
+        // prune all functions that don't have data flow reachable from shared fields
+
       }
       node_queue.push(out_neighbor);
     }
@@ -255,6 +285,8 @@ void pdg::PDGCallGraph::setupExcludeFuncs()
   _exclude_func_names.insert("kasprintf");
   _exclude_func_names.insert("kvasprintf");
   _exclude_func_names.insert("copy_user_overflow");
+  _exclude_func_names.insert("rtnl_lock");
+  _exclude_func_names.insert("rtnl_unlock");
 }
 
 void pdg::PDGCallGraph::setupExportedFuncs()
@@ -264,6 +296,11 @@ void pdg::PDGCallGraph::setupExportedFuncs()
   {
     _exported_func_names.insert(line);
   }
+}
+
+void pdg::PDGCallGraph::setupDriverFuncs(Module &M)
+{
+  _driver_domain_funcs = pdgutils::readFuncsFromFile("driver_funcs", M);
 }
 
 bool pdg::PDGCallGraph::isExcludeFunc(Function &F)
@@ -308,53 +345,64 @@ void pdg::PDGCallGraph::setupBoundaryFuncs(Module &M)
   }
 }
 
-void pdg::PDGCallGraph::initializeCommonCallFuncs(Function &boundary_func, std::set<Function *> &common_func)
+// void pdg::PDGCallGraph::initializeCommonCallFuncs(Function &boundary_func, std::set<Function *> &common_func)
+// {
+//   auto func_node = getNode(boundary_func);
+//   assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
+//   auto trans_func_nodes = computeTransitiveClosure(*func_node);
+//   for (Node *func_node : trans_func_nodes)
+//   {
+//     if (Function *trans_func = dyn_cast<Function>(func_node->getValue()))
+//       common_func.insert(trans_func);
+//   }
+// }
+
+void pdg::PDGCallGraph::collectDriverAccessedGlobalVars(Function &F)
 {
-  auto func_node = getNode(boundary_func);
-  assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
-  auto trans_func_nodes = computeTransitiveClosure(*func_node);
-  for (Node *func_node : trans_func_nodes)
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
   {
-    if (Function *trans_func = dyn_cast<Function>(func_node->getValue()))
-      common_func.insert(trans_func);
-  }
-}
-
-std::set<Function *> pdg::PDGCallGraph::computeBoundaryTransitiveClosure()
-{
-  std::set<Function *> boundary_trans_funcs;
-  std::set<Function *> common_funcs;
-
-  initializeCommonCallFuncs(**_boundary_funcs.begin(), common_funcs);
-
-  for (auto boundary_func : _boundary_funcs)
-  {
-    if (isExcludeFunc(*boundary_func))
+    for (auto op : inst_iter->operand_values())
     {
-      errs() << "found exclude func " << boundary_func->getName() << "\n";
-      continue;
-    }
-    auto func_node = getNode(*boundary_func);
-    assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
-    auto trans_func_nodes = computeTransitiveClosure(*func_node);
-    errs() << "transitive nodes for " << boundary_func->getName() << " - " << trans_func_nodes.size() << "\n";
-    for (auto n : trans_func_nodes)
-    {
-      if (Function *trans_func = dyn_cast<Function>(n->getValue()))
+      if (GlobalVariable *gv = dyn_cast<GlobalVariable>(op))
       {
-        boundary_trans_funcs.insert(trans_func);
-        auto it = common_funcs.find(trans_func);
-        if (it != common_funcs.end())
-          common_funcs.erase(it);
+        _taint_vals.insert(gv);
+        // needed for generating projection for global variables
+        _global_var_analysis.insert(gv);
       }
     }
   }
-  for (auto common_func : common_funcs)
-  {
-    errs() << "common func: " << common_func->getName() << "\n";
-  }
-  return boundary_trans_funcs;
 }
+
+// void pdg::PDGCallGraph::computeBoundaryTransFuncs()
+// {
+//   // std::set<Function *> common_funcs;
+//   // initializeCommonCallFuncs(**_boundary_funcs.begin(), common_funcs);
+
+//   for (auto boundary_func : _boundary_funcs)
+//   {
+//     if (isExcludeFunc(*boundary_func))
+//     {
+//       errs() << "found exclude func " << boundary_func->getName() << "\n";
+//       continue;
+//     }
+//     auto func_node = getNode(*boundary_func);
+//     assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
+//     auto trans_func_nodes = computeTransitiveClosure(*func_node);
+//     errs() << "transitive nodes for " << boundary_func->getName() << " - " << trans_func_nodes.size() << "\n";
+//     for (auto n : trans_func_nodes)
+//     {
+//       if (Function *trans_func = dyn_cast<Function>(n->getValue()))
+//       {
+//         _boundary_trans_funcs.insert(trans_func);
+//         // auto it = common_funcs.find(trans_func);
+//         // if (it != common_funcs.end())
+//         //   common_funcs.erase(it);
+//         // collect global vars accessed in trans funcs
+//         // collectAccessedGlobalVars(*trans_func);
+//       }
+//     }
+//   }
+// }
 
 Function *pdg::PDGCallGraph::getModuleInitFunc(Module &M)
 {
@@ -367,4 +415,109 @@ Function *pdg::PDGCallGraph::getModuleInitFunc(Module &M)
       return &F;
   }
   return nullptr;
+}
+
+unsigned pdg::PDGCallGraph::evaluateTransClosureSize(Function &F)
+{
+  std::set<Function*> seen_funcs;
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
+  {
+    if (CallInst *ci = dyn_cast<CallInst>(&*inst_iter))
+    {
+      auto called_func = pdgutils::getCalledFunc(*ci);
+      if (seen_funcs.find(called_func) != seen_funcs.end())
+        continue;
+      seen_funcs.insert(called_func);
+    }
+  }
+  return seen_funcs.size();
+}
+
+void pdg::PDGCallGraph::computeTaintGlobals()
+{
+  for (auto driver_func : _driver_domain_funcs)
+  {
+    collectDriverAccessedGlobalVars(*driver_func);
+  }
+}
+
+void pdg::PDGCallGraph::computeTaintFuncs(Module &M)
+{
+  for (auto taint_val : _taint_vals)
+  {
+    std::queue<Value*> val_q;
+    std::set<Value*> seen_vals;
+    val_q.push(taint_val);
+    while (!val_q.empty())
+    {
+      Value *v = val_q.front();
+      val_q.pop();
+      // only consider pointer type value
+      if (!v->getType()->isPointerTy())
+        continue;
+      for (auto user : v->users())
+      {
+        if (seen_vals.find(user) != seen_vals.end())
+          continue;
+        seen_vals.insert(user);
+        if (isa<LoadInst>(user))
+          val_q.push(user);
+        else if (auto si = dyn_cast<StoreInst>(user))
+          val_q.push(si->getPointerOperand());
+        else if (isa<GetElementPtrInst>(user))
+          val_q.push(user);
+        else if (isa<BitCastInst>(user))
+          val_q.push(user);
+        // handle call instruction
+        else if (CallInst *ci = dyn_cast<CallInst>(user))
+        {
+          // determine the arg idx
+          unsigned arg_idx = 0;
+          std::vector<Value *> arg_list;
+          for (auto arg_iter = ci->arg_begin(); arg_iter != ci->arg_end(); arg_iter++)
+          {
+            arg_list.push_back(*arg_iter);
+          }
+          auto it = std::find(arg_list.begin(), arg_list.end(), v);
+          if (it == arg_list.end())
+            continue;
+          arg_idx = std::distance(arg_list.begin(), it);
+          // get the callsing function
+          Function *calling_func = ci->getFunction();
+          auto func_node = getNode(*calling_func);
+          assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
+          // obtain all the possible callee (direct/indirect) to process
+          auto callee = pdgutils::getCalledFunc(*ci);
+          // prune warning funcs in kernel
+          // case 1: direct call
+          if (callee != nullptr)
+          {
+            if (callee->isDeclaration() || callee->isVarArg())
+              continue;
+            if (isExcludeFunc(*callee))
+              continue;
+            // push corresponding argument to the queue for later processing
+            val_q.push(callee->getArg(arg_idx));
+            // record the tainted function
+            _taint_funcs.insert(callee);
+          }
+          else
+          {
+            auto ind_callees = getIndirectCallCandidates(*ci, M);
+            for (auto ind_callee : ind_callees)
+            {
+              if (ind_callee->isDeclaration() || ind_callee->isVarArg())
+                continue;
+              if (isExcludeFunc(*ind_callee))
+                continue;
+              // push corresponding argument to the queue for later processing
+              val_q.push(ind_callee->getArg(arg_idx));
+              // record the tained function
+              _taint_funcs.insert(ind_callee);
+            }
+          }
+        }
+      }
+    }
+  }
 }

@@ -23,7 +23,6 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
 {
   _module = &M;
   _PDG = &ProgramGraph::getInstance();
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
 
   // build program call graph. Used to reason about interprocedural
   // dependencies. 
@@ -34,13 +33,10 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
   if (!_PDG->isBuild())
   {
     _PDG->build(M);
-    _PDG->bindDITypeToNodes(M);
+    _PDG->bindDITypeToNodes();
   }
 
-  if (!ptaw.hasPTASetup())
-    ptaw.setupPTA(M);
   unsigned func_size = 0;
-
   // connect global tree with addr vars
   for (auto pair : _PDG->getGlobalVarTreeMap())
   {
@@ -48,26 +44,28 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
     connectGlobalTreeWithAddrVars(*tree);
   }
 
-  for (auto &F : M)
+  // for (auto &F : M)
+  for (auto F : call_g.getBoundaryTransFuncs())
   {
-    if (F.isDeclaration())
+    if (F->isDeclaration())
       continue;
-    connectIntraprocDependencies(F);
-    connectInterprocDependencies(F);
+    connectIntraprocDependencies(*F);
+    connectInterprocDependencies(*F);
     // this is a simplification from caller's formal tree to call site actual trees
-    connectFormalInTreeWithActualTree(F);
+    connectFormalInTreeWithActualTree(*F);
     func_size++;
     errs() << "func size: " << func_size << "\n";
   }
 
   // errs() << "connecting interproc addrvar\n";
-  for (auto &F : M)
+  // for (auto &F : M)
+  for (auto F : call_g.getBoundaryTransFuncs())
   {
-    if (F.isDeclaration())
+    if (F->isDeclaration())
       continue;
-    connectAddrVarsReachableFromInterprocFlow(F);
+    connectAddrVarsReachableFromInterprocFlow(*F);
     // connectInterprocDependencies(F);
-    connectFormalInTreeWithActualTree(F);
+    connectFormalInTreeWithActualTree(*F);
     // connectIntraprocDependencies(F);
   }
   errs() << "func size: " << func_size << "\n";
@@ -499,7 +497,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithActualTree(Function &F)
 void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &formal_in_tree)
 {
   TreeNode *root_node = formal_in_tree.getRootNode();
-  Function *func = root_node->getFunc();
+  // Function *func = root_node->getFunc();
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
 
