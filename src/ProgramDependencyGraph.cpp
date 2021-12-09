@@ -55,7 +55,6 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
     // this is a simplification from caller's formal tree to call site actual trees
     connectFormalInTreeWithActualTree(F);
     func_size++;
-    errs() << "func size: " << func_size << "\n";
   }
 
   // errs() << "connecting interproc addrvar\n";
@@ -213,6 +212,7 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
 
 void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
 {
+  auto &call_g = PDGCallGraph::getInstance();
   auto func_w = getFuncWrapper(F);
   auto call_insts = func_w->getCallInsts();
   for (auto call_inst : call_insts)
@@ -251,8 +251,25 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
           connectActualOutTreeWithAddrVars(*call_w->getRetActualOutTree(), *call_inst);
         }
       }
-      auto called_func_w = getFuncWrapper(*call_w->getCalledFunc());
-      connectCallerAndCallee(*call_w, *called_func_w);
+
+      // direct call
+      if (call_w->getCalledFunc() != nullptr)
+      {
+        auto called_func_w = getFuncWrapper(*call_w->getCalledFunc());
+        connectCallerAndCallee(*call_w, *called_func_w);
+      }
+      else
+      {
+        // indirect call
+        auto ind_called_funcs = call_g.getIndirectCallCandidates(*call_w->getCallInst(), *_module);
+        for (auto ind_called_func : ind_called_funcs)
+        {
+          if (ind_called_func->isDeclaration() || ind_called_func->isVarArg())
+            continue;
+          auto called_func_w = getFuncWrapper(*ind_called_func);
+          connectCallerAndCallee(*call_w, *called_func_w);
+        }
+      }
     }
   }
 }

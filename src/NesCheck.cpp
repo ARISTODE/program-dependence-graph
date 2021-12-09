@@ -29,6 +29,8 @@
 
 using namespace llvm;
 
+cl::opt<bool> printRawStats("raw-stats", cl::desc("print raw stats"), cl::value_desc("raw_stats"), cl::init(false));
+
 #define IS_DEBUGGING 1
 #define IS_NAIVE 0
 
@@ -508,7 +510,8 @@ namespace NesCheck
           errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
         if (!pdg::dbgutils::isArrayType(*tree_node.getDIType()))
         {
-          _ksplit_stats->increaseArrayNum();
+          // _ksplit_stats->increaseArrayNum();
+          // total array number is equal to handled array num + unhandled array num
           _ksplit_stats->increaseUnhandledArrayNum();
         }
         if (pdg::dbgutils::isStructPointerType(*tree_node.getDIType()))
@@ -520,7 +523,11 @@ namespace NesCheck
         if (!pdg::dbgutils::isVoidPointerType(*tree_node.getDIType()))
         {
           if (Instruction *i = dyn_cast<Instruction>(&ptr))
-            errs() << "Find wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << " - " << tree_node.getFunc()->getName() << "\n";
+          {
+            errs() << " ===========================================================================\n";
+            errs() << "Find non-void wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << " - " << tree_node.getFunc()->getName() << "\n";
+            errs() << " ===========================================================================\n";
+          }
           _ksplit_stats->increaseNonVoidWildPtrNum();
         }
         else
@@ -1402,11 +1409,16 @@ namespace NesCheck
       }
       classifyBoundaryPtrs();
       if (pdg::EnableAnalysisStats)
-        _ksplit_stats->printStats();
+      {
+        if (printRawStats)
+          _ksplit_stats->printStatsRaw();
+        else
+          _ksplit_stats->printStats();
+      }
       auto stop = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
       // dumpRecordedTypes();
-      printStats();
+      // printStats();
       errs() << "nescheck analysis takes: " << duration.count() << "\n";
       return changed;
     }

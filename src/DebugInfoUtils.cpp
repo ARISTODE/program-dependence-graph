@@ -318,7 +318,8 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   {
     auto base_type = getBaseDIType(dt);
     if (!base_type)
-      return "const nullptr";
+      // return "const nullptr";
+      return "const void";
     if (is_raw)
       return getSourceLevelTypeName(*base_type, is_raw);
     else

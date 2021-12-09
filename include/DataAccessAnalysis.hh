@@ -23,6 +23,8 @@ namespace pdg
     void inferDeallocAnno(llvm::Value &deallocator);
     void computeAllocSizeAnnos(llvm::Module &M);
     void computeDeallocAnnos(llvm::Module &M);
+    void computeCollocatedAllocsite(llvm::Module &M);
+    void checkCollocatedAllocsite(llvm::Value &alloc_site);
     void computeExportedFuncsPtrNameMap();
     void computeDataAccessForTree(Tree *tree, bool is_ret=false);
     void computeDataAccessForGlobalTree(Tree *tree);

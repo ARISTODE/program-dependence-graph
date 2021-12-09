@@ -231,7 +231,8 @@ std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicR
   cs_begin_iter++;
   if (cs_begin_iter == inst_end(f))
     return ret;
-
+  // search for call inst, inspect all the instructions in the 
+  // callee  
   while (cs_begin_iter != cs_end_iter)
   {
     if (CallInst *ci = dyn_cast<CallInst>(&*cs_begin_iter))

@@ -52,6 +52,7 @@ namespace pdg
     void increaseTotalUnionNum() { _total_union_num++; }
     void increaseTotalUnionPtrNum() { _total_union_ptr_num++; }
     void increaseSharedUnionNum() { _shared_union_num++; }
+    void increaseSharedTaggedUnionNum() { _shared_tagged_union_num++; }
     void increaseSharedUnionPtrNum() { _shared_union_ptr_num++; }
     void increaseTotalCS() { _total_CS++; }
     void increaseSharedCS() { _shared_CS++; }
@@ -71,6 +72,7 @@ namespace pdg
     void increaseSharedContainerof() { _shared_containerof++; }
     void increaseTotalIORemap() { _total_ioremap++; }
     void increaseSharedIORemap() { _shared_ioremap++; }
+    void increaseSharedSentinelArray() { _shared_sentinel_array++; }
     void collectTotalPointerStats(llvm::DIType &dt);
     void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string func_name);
     void collectInferredStringStats(std::set<std::string> &annotations);
@@ -108,6 +110,7 @@ namespace pdg
     unsigned _total_union_num = 0;
     unsigned _total_union_ptr_num = 0;
     unsigned _shared_union_num = 0;
+    unsigned _shared_tagged_union_num = 0;
     unsigned _shared_union_ptr_num = 0;
     unsigned _ptr_arith_num = 0;
     unsigned _ptr_gep_arith_daa = 0;
@@ -132,6 +135,7 @@ namespace pdg
     unsigned _shared_containerof = 0;
     unsigned _total_ioremap = 0;
     unsigned _shared_ioremap = 0;
+    unsigned _shared_sentinel_array = 0;
   };
 }
 

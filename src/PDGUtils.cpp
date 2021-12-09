@@ -32,7 +32,7 @@ uint64_t pdg::pdgutils::getGEPOffsetInBits(Module& M, StructType &struct_type, G
   auto const struct_layout = data_layout.getStructLayout(&struct_type);
   if (gep_offset >= struct_type.getNumElements())
   {
-    errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
+    // errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
     return INT_MIN;
   }
   uint64_t field_bit_offset = struct_layout->getElementOffsetInBits(gep_offset);
@@ -406,6 +406,7 @@ bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
   Type *ty = gv.getType();
   if (auto t = dyn_cast<PointerType>(ty))
     ty = t->getPointerElementType();
+  // first check if this is an array type
   if (ArrayType *arr_ty = dyn_cast<ArrayType>(ty))
   {
     if (!arr_ty->getElementType()->isAggregateType())
@@ -426,7 +427,6 @@ bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
     }
     // check if the last element is zero value
     auto last_ele = initializer->getAggregateElement(arr_len - 1);
-
     if (non_zero_prev && last_ele->isZeroValue())
       return true;
   }

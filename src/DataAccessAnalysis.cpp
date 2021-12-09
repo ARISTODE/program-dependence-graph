@@ -1,4 +1,4 @@
-#include "DataAccessAnalysis.hh"
+#include "DataAccessAnalysis.hh";
 
 using namespace llvm;
 
@@ -45,7 +45,8 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     // computeInterProcDataAccess(F);
   }
 
-  computeAllocSizeAnnos(M);
+  computeCollocatedAllocsite(M);
+  // computeAllocSizeAnnos(M);
   // computeDeallocAnnos(M);
 
   _idl_file << "module kernel {\n";
@@ -279,6 +280,27 @@ void pdg::DataAccessAnalysis::computeDeallocAnnos(Module &M)
   for (auto deallocator : deallocators)
   {
     inferDeallocAnno(*deallocator);
+  }
+}
+
+void pdg::DataAccessAnalysis::computeCollocatedAllocsite(Module &M)
+{
+  auto allocators = _PDG->getAllocators();
+  for (auto allocator : allocators)
+  {
+    checkCollocatedAllocsite(*allocator);
+  }
+}
+
+void pdg::DataAccessAnalysis::checkCollocatedAllocsite(Value &alloc_site)
+{
+  // first identify cast instruction
+  for (auto user : alloc_site.users())
+  {
+    if (auto bi = dyn_cast<BitCastInst>(user))
+    {
+      //TODO: we need to somehow issue warnings for users
+    }
   }
 }
 
@@ -600,10 +622,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
 
     // check for access tags, if none, no need to put this field in projection
-    bool is_global_func_op_struct = (_SDA->isGlobalOpStruct(field_lowest_di_type_name));
     bool is_func_ptr_type = dbgutils::isFuncPointerType(*field_di_type);
     if (child_node->getAccessTags().size() == 0 && !is_func_ptr_type)
       continue;
+
+    bool is_global_func_op_struct = (_SDA->isGlobalOpStruct(field_lowest_di_type_name));
 
     if (EnableAnalysisStats && !_generating_idl_for_global) // collect stats
     {
@@ -629,6 +652,8 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     // at this point, the field is accessed and shared
     if (EnableAnalysisStats && !_generating_idl_for_global)
     {
+      if (is_sentinel_field)
+        _ksplit_stats->increaseSharedSentinelArray();
       // this field is shared, collect shared pointer stats
       _ksplit_stats->collectSharedPointerStats(*field_di_type, field_id, child_node->getFunc()->getName().str());
       // check for pointer arithmetic on shared fields
@@ -638,7 +663,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       if (!is_func_ptr_type)
         _ksplit_stats->increaseFieldsSharedData();
       if (dbgutils::isUnionType(*field_di_type))
+      {
+        if (!field_var_name.empty())
+          _ksplit_stats->increaseSharedTaggedUnionNum();
         _ksplit_stats->increaseSharedUnionNum();
+      }
       // count array
       if (dbgutils::isArrayType(*field_di_type))
         _ksplit_stats->increaseArrayNum();
@@ -851,6 +880,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     {
       _ksplit_stats->increaseTotalUnionNum();
       _ksplit_stats->increaseSharedUnionNum();
+      _ksplit_stats->increaseSharedTaggedUnionNum();
     }
     // collect array
     if (dbgutils::isArrayType(*root_node_di_type))

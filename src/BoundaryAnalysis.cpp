@@ -110,8 +110,8 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type, true);
     auto gv_name = global_var.getName().str();
     gv_di_type_name = pdgutils::stripVersionTag(gv_di_type_name);
-    if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
-      continue;
+    // if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
+    //   continue;
     driver_global_struct_types << gv_di_type_name << "\n";
     const auto &typeArrRef = dyn_cast<DICompositeType>(gv_lowest_di_type)->getElements();
     Type *global_type = global_var.getType();
@@ -130,6 +130,8 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
       {
         // if the field is a function pointer, directly print it to map
         std::string field_type_name = struct_element->getName().str();
+        // if a field is a user of sentinel array (hold the content of sentinel array), then we need to record it 
+        // and synchronize this field with special syntax in IDL generation
         if (pdgutils::isUserOfSentinelTypeVal(*struct_element))
           _sentinel_fields.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
 
