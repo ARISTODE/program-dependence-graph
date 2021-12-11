@@ -47,6 +47,15 @@ namespace pdg
       std::string getDeallocStr() { return _dealloc_str; }
       void dump() override;
 
+    // used for collecting ksplit stats
+    public:
+      bool is_shared = false;
+      bool is_ioremap = false;
+      bool is_user = false;
+      bool is_sentinel = false;
+      bool is_string = false;
+      std::set<std::string> annotations;
+
     private:
       Tree *_tree = nullptr;
       TreeNode *_parent_node = nullptr;
@@ -57,6 +66,7 @@ namespace pdg
       std::set<AccessTag> _acc_tag_set;
       bool _is_accessed_in_atomic_region = false;
       bool _can_opt_out = false;
+      // FIXME: outdated
       std::string _alloc_str;
       std::string _dealloc_str;
   };

@@ -40,7 +40,7 @@ namespace pdg
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
     void inferAllocStackForKernelToDriverCalls();
     std::string inferAllocStackAnnotation(TreeNode &tree_node);
-    void inferUserAnnotation(TreeNode &tree_node, std::string &anno_str);
+    void inferUserAnnotation(TreeNode &tree_node, std::set<std::string> &annotations);
     void inferMayWithin(TreeNode &tree_node, std::set<std::string> &anno_str);
     bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
     bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);

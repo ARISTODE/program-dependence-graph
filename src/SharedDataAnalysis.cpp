@@ -85,9 +85,9 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
 
   if (EnableAnalysisStats)
   {
-    auto &ksplit = KSplitStats::getInstance();
-    ksplit.increaseKernelToDriverCallNum(exported_funcs.size());
-    ksplit.increaseDriverToKernelCallNum(imported_funcs.size());
+    auto &ksplit_stats = KSplitStats::getInstance();
+    ksplit_stats._kernel_to_driver_func_call += exported_funcs.size();
+    ksplit_stats._driver_to_kernel_func_call += imported_funcs.size();
   }
 
   _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
@@ -432,8 +432,8 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       DIType *node_di_type = current_tree_node->getDIType();
       if (node_di_type == nullptr)
         continue;
-      if (pdgutils::isVoidPointerHasMultipleCasts(*current_tree_node))
-        ksplit_stats.increaseUnhandledVoidPtrSDNum();
+      // if (pdgutils::isVoidPointerHasMultipleCasts(*current_tree_node))
+      //   ksplit_stats.increaseUnhandledVoidPtrSDNum();
 
       if (isStructFieldNode(*current_tree_node))
       {

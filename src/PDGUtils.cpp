@@ -503,7 +503,7 @@ bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)
 
 bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
 {
-  auto &ksplit_stats = KSplitStats::getInstance();
+  // auto &ksplit_stats = KSplitStats::getInstance();
   auto field_id = pdgutils::computeTreeNodeID(tree_node);
 
   // check if a field is
@@ -517,19 +517,20 @@ bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
       for (auto user : gep->users())
       {
         if (isa<GetElementPtrInst>(user))
-        {
-          if (is_shared_data)
-          {
-            ksplit_stats.increasePtrGEPArithSDNum();
-            // errs() << "SD find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
-          }
-          else
-          {
-            ksplit_stats.increasePtrGEPArithDaaNum();
-            // errs() << "DAA find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
-          }
           return true;
-        }
+        // {
+        //   if (is_shared_data)
+        //   {
+        //     ksplit_stats.increasePtrGEPArithSDNum();
+        //     // errs() << "SD find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
+        //   }
+        //   else
+        //   {
+        //     ksplit_stats.increasePtrGEPArithDaaNum();
+        //     // errs() << "DAA find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
+        //   }
+        //   return true;
+        // }
       }
     }
 
@@ -538,16 +539,16 @@ bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
     {
       if (auto var_user = dyn_cast<PtrToIntInst>(user))
       {
-        if (is_shared_data)
-        {
-          errs() << "SD find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
-          ksplit_stats.increasePtrtoIntArithSDNum();
-        }
-        else
-        {
-          errs() << "DAA find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
-          ksplit_stats.increasePtrtoIntArithDaaNum();
-        }
+        // if (is_shared_data)
+        // {
+        //   errs() << "SD find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
+        //   ksplit_stats.increasePtrtoIntArithSDNum();
+        // }
+        // else
+        // {
+        //   errs() << "DAA find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
+        //   ksplit_stats.increasePtrtoIntArithDaaNum();
+        // }
         return true;
       }
     }

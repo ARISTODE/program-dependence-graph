@@ -182,12 +182,15 @@ void pdg::AtomicRegionAnalysis::computeCriticalSections(Module &M)
     {
       for (auto cs : cs_in_func)
       {
-        _ksplit_stats->increaseTotalCS();
+        // _ksplit_stats->increaseTotalCS();
+        _ksplit_stats->_total_CS += 1;
         auto cs_lock_inst = cast<CallInst>(cs.first);
         if (isRcuLockInst(*cs_lock_inst))
-          _ksplit_stats->increaseTotalRCU();
+          _ksplit_stats->_total_rcu += 1;
+          // _ksplit_stats->increaseTotalRCU();
         if (isSeqLockInst(*cs_lock_inst))
-          _ksplit_stats->increaseTotalSeqlock();
+          _ksplit_stats->_total_seqlock += 1;
+          // _ksplit_stats->increaseTotalSeqlock();
       }
     }
   }
@@ -205,7 +208,8 @@ void pdg::AtomicRegionAnalysis::computeAtomicOperations(Module &M)
       {
         _atomic_operations.insert(&*inst_iter);
         if (EnableAnalysisStats)
-          _ksplit_stats->increaseTotalAtomicOps();
+          _ksplit_stats->_total_atomic_op += 1;
+          // _ksplit_stats->increaseTotalAtomicOps();
       }
     }
   }
@@ -358,7 +362,8 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       {
         if (isLockInst(*inst))
         {
-          _ksplit_stats->increaseTotalNestLock();
+          // _ksplit_stats->increaseTotalNestLock();
+          _ksplit_stats->_total_nest_lock += 1;
           has_nested_lock = true;
         }
       }
@@ -421,14 +426,18 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       if (cs_warning)
       {
         _warning_cs_count++;
-        _ksplit_stats->increaseSharedCS();
+        // _ksplit_stats->increaseSharedCS();
+        _ksplit_stats->_shared_CS += 1;
         if (isRcuLockInst(*cs_pair.first))
-          _ksplit_stats->increaseSharedRCU();
+          _ksplit_stats->_shared_rcu += 1;
+          // _ksplit_stats->increaseSharedRCU();
         if (isSeqLockInst(*cs_pair.first))
-          _ksplit_stats->increaseSharedSeqlock();
+          _ksplit_stats->_shared_seqlock += 1;
+          // _ksplit_stats->increaseSharedSeqlock();
         if (has_nested_lock)
         {
-          _ksplit_stats->increaseSharedNestLock();
+          _ksplit_stats->_shared_nest_lock += 1;
+          // _ksplit_stats->increaseSharedNestLock();
           errs() << "nested lock: " << lock_inst->getFunction()->getName()  << "\n";
         }
       }
@@ -505,7 +514,8 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           }
 
           if (EnableAnalysisStats)
-            _ksplit_stats->increaseSharedAtomicOps();
+            _ksplit_stats->_shared_atomic_op += 1;
+            // _ksplit_stats->increaseSharedAtomicOps();
         }
         break;
       }
@@ -646,7 +656,8 @@ bool pdg::AtomicRegionAnalysis::isAtomicOperation(Instruction &i)
     {
       auto asm_str = ia->getAsmString();
       if (isAtomicFenceString(asm_str))
-        _ksplit_stats->increaseTotalBarrier();
+        _ksplit_stats->_total_barrier += 1;
+        // _ksplit_stats->increaseTotalBarrier();
       if (isAtomicAsmString(asm_str))
         return true;
     }
