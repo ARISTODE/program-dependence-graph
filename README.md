@@ -2,21 +2,24 @@
 
 ## Introduction
 
-This project is a key component of our PtrSplit and Program-mandering works. It aims at building a modular inter-procedural program dependence graph (PDG) for practical use. Our program dependence graph is field senstive, context-insensitive and flow-insensitive. For more details, welcome to read our CCS'17 paper about PtrSplit: \[[http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf\]](http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf%5D) If you find this tool useful, please cite the PtrSplit paper in your publication. Here's the bibtex entry:
+This project is a key component of our PtrSplit and Program-mandering works. It aims at building a modular inter-procedural program dependence graph (PDG) for practical use. Our program dependence graph is field senstive, context-insensitive and flow-insensitive. For more details, welcome to read our CCS'17 paper about PtrSplit: \[[http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf\]](http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf%5D) If you find this tool useful, please cite the PtrSplit and Program Mandering papers in your publication. Here's the bibtex entries:
 
 @inproceedings{LiuTJ17Ptrsplit,
-
-author = {Shen Liu and Gang Tan and Trent Jaeger},
-
-title = {{PtrSplit}: Supporting General Pointers in Automatic Program Partitioning},
-
-booktitle = {24th ACM Conference on Computer and Communications Security ({CCS})},
-
-pages = {2359--2371},
-
-year = {2017}
-
+  author = {Shen Liu and Gang Tan and Trent Jaeger},
+  title = {{PtrSplit}: Supporting General Pointers in Automatic Program Partitioning},
+  booktitle = {24th ACM Conference on Computer and Communications Security ({CCS})},
+  pages = {2359--2371},
+  year = {2017}
 }
+
+@inproceedings{liu2019program,
+  title={Program-mandering: Quantitative privilege separation},
+  author={Liu, Shen and Zeng, Dongrui and Huang, Yongzhe and Capobianco, Frank and McCamant, Stephen and Jaeger, Trent and Tan, Gang},
+  booktitle={Proceedings of the 2019 ACM SIGSAC Conference on Computer and Communications Security},
+  pages={1023--1040},
+  year={2019}
+}
+
 
 We have upgraded the implementation to LLVM 12.0.0. Currently, we only support building PDGs for C programs.
 
