@@ -1,6 +1,7 @@
 #ifndef DATADEPENDENCYGRAPH_H_
 #define DATADEPENDENCYGRAPH_H_
 #include "Graph.hh"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 
