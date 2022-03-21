@@ -91,8 +91,8 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
       }
     }
   }
-
   uint64_t di_type_bit_offset = dt.getOffsetInBits();
+  
   if (gep_bit_offset == di_type_bit_offset)
     return true;
   return false;

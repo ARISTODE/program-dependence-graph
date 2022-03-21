@@ -44,7 +44,7 @@ namespace pdg
     void inferMayWithin(TreeNode &tree_node, std::set<std::string> &anno_str);
     bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
     bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);
-    bool containerHasSharedFieldsAccessed(llvm::BitCastInst &bci);
+    bool containerHasSharedFieldsAccessed(llvm::BitCastInst &bci, std::string struct_type_name);
     bool isExportedFunc(llvm::Function &F);
     std::string computeAllocCallerAnnotation(TreeNode &tree_node);
     std::string computeAllocCalleeAnnotation(TreeNode &tree_node);

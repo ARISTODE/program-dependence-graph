@@ -384,19 +384,23 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &tree_node)
 
 bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
 {
-  auto addr_vars = tree_node.getAddrVars();
-  for (auto addr_var : addr_vars)
+  std::set<EdgeType> edge_types = {EdgeType::PARAMETER_IN, EdgeType::DATA_ALIAS};
+  auto reach_nodes = _PDG->findNodesReachedByEdges(tree_node, edge_types);
+  for (auto node : reach_nodes)
   {
-    for (auto user : addr_var->users())
+    if (node->getValue() != nullptr)
     {
-      if (CallInst *ci = dyn_cast<CallInst>(user))
+      for (auto user : node->getValue()->users())
       {
-        auto called_func = pdgutils::getCalledFunc(*ci);
-        if (called_func == nullptr)
-          continue;
-        std::string called_func_name = called_func->getName().str();
-        if (_string_op_names.find(called_func_name) != _string_op_names.end())
-          return true;
+        if (CallInst *ci = dyn_cast<CallInst>(user))
+        {
+          auto called_func = pdgutils::getCalledFunc(*ci);
+          if (called_func == nullptr)
+            continue;
+          std::string called_func_name = called_func->getName().str();
+          if (_string_op_names.find(called_func_name) != _string_op_names.end())
+            return true;
+        }
       }
     }
   }
@@ -448,8 +452,11 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
           if (isFieldUsedInStringOps(*current_tree_node))
             _string_field_id.insert(field_id);
           // check whether a field is used in pointer arithmetic
-          if (pdgutils::hasPtrArith(*current_tree_node, true))
-            errs() << "find ptr arith in sd: " << field_id << "\n";
+          if (DEBUG)
+          {
+            if (pdgutils::hasPtrArith(*current_tree_node, true))
+              errs() << "find ptr arith in sd: " << field_id << "\n";
+          }
         }
         // here, we also check if a field is used as a string in any string manipulation functions
       }

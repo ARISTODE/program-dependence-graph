@@ -462,7 +462,7 @@ namespace NesCheck
             // if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
             //   continue;
             // if (front->getAccessTags().size() == 0 && !front->isRootNode())
-            if (front->getAccessTags().size() == 0)
+            if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
             // check reachable address variables
             auto reachable_nodes = _PDG->findNodesReachedByEdge(*front, pdg::EdgeType::PARAMETER_IN);
@@ -476,11 +476,14 @@ namespace NesCheck
               if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
               {
                 // TODO: check possible conflict here
-                // ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
+                ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
                 _ksplit_stats->collectDataStats(*front, PtrTypeMap[node_val]);
                 break;
               }
             }
+            // speical handling for seq pointers
+            if (front->is_sentinel)
+              _ksplit_stats->collectDataStats(*front, "SEQ");
           }
         }
       }

@@ -23,6 +23,7 @@ namespace pdg
     bool isArrayType(llvm::DIType &dt);
     bool isAllocableObjType(llvm::DIType &dt);
     bool isCharPointer(llvm::DIType &dt);
+    bool isRecursiveType(llvm::DIType &dt);
     llvm::DIType *getLowestDIType(llvm::DIType &dt);
     llvm::DIType *getBaseDIType(llvm::DIType &dt);
     llvm::DIType *stripAttributes(llvm::DIType &dt);

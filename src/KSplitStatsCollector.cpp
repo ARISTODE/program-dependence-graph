@@ -15,9 +15,16 @@ void pdg::KSplitStats::printDataStats()
   _stats_file << "num fields field access analysis: " << _fields_field_analysis << "\n";
   _stats_file << "num fields shared_analysis: " << _fields_shared_analysis << "\n";
   _stats_file << "num fields removed by boundary opt: " << (_fields_shared_analysis - _fields_removed_boundary_opt) << "\n";
+  
+  _stats_file << "======================================================\n";
+  _stats_file << "\t Private/Shared CS: " << (_total_CS - _shared_CS) << " / " << _shared_CS << "\n";
+  _stats_file << "\t RCU: " << _shared_rcu << "\n";
+  _stats_file << "\t seqlock: " << _shared_seqlock << "\n";
+  _stats_file << "\t Private/Shared Atomic Operation: " << (_total_atomic_op - _shared_atomic_op) << " / " << _shared_atomic_op << "\n";
+  _stats_file << "\t Container_of: " << _total_containerof << " / " << _shared_containerof << "\n";
+
   // table 1.c
   _stats_file << "=============== Data Classification ================\n";
-  _stats_file << "private / shared pointers: ";
     // table 1.d
     _stats_file << "\t =============== Pointers Classification ================\n";
     // unsigned total_shared_ptr = _safe_ptr_num + _shared_void_ptr_num + _unhandled_void_ptr_num + _string_num + _array_num + _unhandled_array_num + _non_void_wild_ptr_num + _func_ptr_num;
@@ -29,14 +36,17 @@ void pdg::KSplitStats::printDataStats()
     _stats_file << "\t dyn size array num: " << _dyn_sized_arr_num << "\n"; // the ones we cannot infer size
       _stats_file << "\t\t dyn_sentinel num: " << _dyn_sized_sentinel_num << "\n";
         _stats_file << "\t\t\t dyn_string num: " << _dyn_sized_string_num << "\n";
-    _stats_file << "\t single cast shared void ptr num: " << _single_cast_shared_void_ptr_num << "\n";
-    _stats_file << "\t multi-cast shared void ptr num (unhandled): " << _multi_cast_shared_void_ptr_num << "\n";
-    _stats_file << "\t non void wild ptr num: " << _non_void_wild_ptr_num << "\n";
+      
+    _stats_file << "\t dyn ptr: " << _dyn_ptr_num << "\n";
+    _stats_file << "\t\t single cast shared void ptr num: " << _single_cast_shared_void_ptr_num << "\n";
+    _stats_file << "\t\t multi-cast shared void ptr num (unhandled): " << _multi_cast_shared_void_ptr_num << "\n";
+    _stats_file << "\t\t non void wild ptr num: " << _non_void_wild_ptr_num << "\n";
+    _stats_file << "\t unknown ptr num: " << _unknown_ptr_num << "\n";
     // _stats_file << "\t void wild ptr num: " << _void_wild_ptr_num << "\n";
 
   _stats_file << "======================================================\n";
   // _stats_file << "private / shared primitive types: " << (_total_primitive_num - _shared_primitive_num) << " / " << _shared_primitive_num << "\n";
-  _stats_file << "primitive types: " << _primitive_fields << "\n";
+  _stats_file << "\t primitive types: " << _primitive_fields + _shared_other << "\n";
   // _stats_file << "\t private / shared bit field: " << (_total_bitfield_num - _shared_bitfield_num) << " / " << _shared_bitfield_num << "\n";
   _stats_file << "\t shared bit field: " << _shared_bitfield << "\n";
 
@@ -47,18 +57,16 @@ void pdg::KSplitStats::printDataStats()
   _stats_file << "\t shared struct: " << _shared_struct_num << "\n";
   _stats_file << "\t\t recursive struct: " << _recursive_struct_num << "\n";
   _stats_file << "\t shared union: " << _shared_union_num << "\n";
+  _stats_file << "\t\t shared tagged union: " << _shared_tagged_union_num << "\n";
+  _stats_file << "\t\t shared anonymou union: " << _shared_anonymous_union_num << "\n";
   // _stats_file << "\t private / shared sized arrays: " << (_total_sized_arr_num - _shared_sized_arr_num) << " / " << _shared_sized_arr_num << "\n";
   _stats_file << "\t sized array num: " << _sized_arr_num << "\n";
     _stats_file << "\t\t sized_sentinel num: " << _sized_sentinel_num << "\n";
       _stats_file << "\t\t\t sized_string num: " << _sized_string_num << "\n";
-  
-  _stats_file << "======================================================\n";
-  _stats_file << "\t Private/Shared CS: " << (_total_CS - _shared_CS) << " / " << _shared_CS << "\n";
-  _stats_file << "\t RCU: " << _shared_rcu << "\n";
-  _stats_file << "\t seqlock: " << _shared_seqlock << "\n";
-  _stats_file << "\t Private/Shared Atomic Operation: " << (_total_atomic_op - _shared_atomic_op) << " / " << _shared_atomic_op << "\n";
 
-  _stats_file << "\t Unknown: " << _shared_other << "\n";
+  // _stats_file << "\t Unknown: " << _shared_other << "\n";
+  _stats_file << "======================================================\n";
+
   _stats_file.close();
 }
 
@@ -176,71 +184,98 @@ void pdg::KSplitStats::collectDataStats(TreeNode& tree_node, std::string neschec
   if (!dt)
     return;
   // first strip member tag
+  std::string field_name = dbgutils::getSourceLevelVariableName(*dt);
+  bool is_bitfield = false;
+  // need to extract bit field info here because this info will be lost if we strip the tag
+  if (dt->isBitField())
+    is_bitfield = true;
   dt = dbgutils::stripMemberTag(*dt);
   dt = dbgutils::stripAttributes(*dt);
-  if (tree_node.getAccessTags().size() > 0)
-    _fields_field_analysis ++;
+  if (tree_node.getAccessTags().size() == 0 && !tree_node.isRootNode())
+    return;
+  _fields_field_analysis++;
   if (!tree_node.is_shared)
     return;
   _fields_shared_analysis++;
 
   // pointers, basic types, struct, union, array
-  if (dbgutils::isPointerType(*dt))
+  if (is_bitfield)
   {
-    _total_ptr_num += 1;
+    _shared_bitfield++;
+  }
+  else if (dbgutils::isPointerType(*dt))
+  {
+    _total_ptr_num++;
     collectSharedPointerStats(tree_node, nescheck_ptr_type);
   }
   else if (isa<DIBasicType>(dt))
   {
-    _primitive_fields += 1;
-    if (dt->isBitField())
-      _shared_bitfield += 1;
+    _primitive_fields++;
   }
   else if (dbgutils::isStructType(*dt))
   {
-    _shared_struct_num += 1;
-    if (dbgutils::isRecursiveTy(*dt))
-      _recursive_struct_num += 1;
+    _shared_struct_num++;
+    if (dbgutils::isRecursiveType(*dt))
+      _recursive_struct_num++;
   }
   else if (dbgutils::isArrayType(*dt))
-    _sized_arr_num += 1;
+  {
+    _sized_arr_num++;
+  }
   else if (dbgutils::isUnionType(*dt))
-    _shared_union_num += 1;
+  {
+    _shared_union_num++;
+    if (!field_name.empty())
+      _shared_tagged_union_num++;
+    else
+      _shared_anonymous_union_num++;
+  }
   else
   {
-    _shared_other += 1; // This should be 0, otherwise, we need to look at this node
+    _shared_other++; // This should be 0, otherwise, we need to look at this node
     errs() << "unclassified field type: " << tree_node.getTree()->getFunc()->getName() << " - " << dbgutils::getSourceLevelTypeName(*dt) << "\n";
   }
 }
 
-void pdg::KSplitStats::collectSharedPointerStats(TreeNode& node, std::string nescheck_ptr_type)
+void pdg::KSplitStats::collectSharedPointerStats(TreeNode &node, std::string nescheck_ptr_type)
 {
-  auto annotations = node.annotations;
   DIType *dt = node.getDIType();
   if (nescheck_ptr_type == "SAFE")
   {
+    _safe_ptr_num++;
     // chekc if this is speical memory
     // ioremap
-    bool has_ioremap_anno = (annotations.find("[ioremap(caller)]") != annotations.end());
-    if (has_ioremap_anno)
-      _shared_ioremap_num += 1;
+    if (node.is_ioremap)
+      _shared_ioremap_num++;
     // user
-    bool has_user_anno = (annotations.find("[user]") != annotations.end());
-    if (has_user_anno)
-      _shared_user_num += 1;
+    if (node.is_user)
+      _shared_user_num++;
     // func pointer
     if (dbgutils::isFuncPointerType(*dt))
-      _func_ptr_num += 1;
+      _func_ptr_num++;
     if (dbgutils::isVoidPointerType(*dt))
-      _no_cast_void_pointer += 1;
-    _safe_ptr_num += 1;
+      _no_cast_void_pointer++;
+    // nescheck may fail to classify a string is seq because of library calls
+    if (node.is_sentinel)
+    {
+      _dyn_sized_arr_num++;
+      _safe_ptr_num--;
+      _dyn_sized_sentinel_num++;
+    }
+    else if (node.is_string)
+    {
+      _dyn_sized_arr_num++;
+      _safe_ptr_num--;
+      _dyn_sized_sentinel_num++;
+      _dyn_sized_string_num++;
+    }
   }
   else if (nescheck_ptr_type == "SEQ")
   {
     // must be an array because structs are eliminated
-    _dyn_sized_arr_num += 1;
+    _dyn_sized_arr_num++;
     if (node.is_sentinel)
-      _dyn_sized_sentinel_num += 1;
+      _dyn_sized_sentinel_num++;
     else if (node.is_string)
     {
       _dyn_sized_sentinel_num++;
@@ -249,21 +284,26 @@ void pdg::KSplitStats::collectSharedPointerStats(TreeNode& node, std::string nes
   }
   else if (nescheck_ptr_type == "DYN")
   {
-    _dyn_ptr_num += 1;
+    _dyn_ptr_num++;
     if (dbgutils::isVoidPointerType(*dt))
     {
       if (pdgutils::isVoidPointerHasMultipleCasts(node))
-        _multi_cast_shared_void_ptr_num += 1;
+      {
+        Function* func = node.getTree()->getFunc();
+        if (func != nullptr)
+          errs() << "find multiple cast void ptr: " << func->getName() << "\n";
+        _multi_cast_shared_void_ptr_num++;
+      }
       else
-        _single_cast_shared_void_ptr_num += 1;
+        _single_cast_shared_void_ptr_num++;
     }
     else
     {
-      _non_void_wild_ptr_num += 1;
+      _non_void_wild_ptr_num++;
     }
   }
   else if (nescheck_ptr_type == "UNKNOWN")
-    _unknown_ptr_num += 1;
+    _unknown_ptr_num++;
 }
 
 // void pdg::KSplitStats::collectSharedPointerStats(DIType &dt, std::string var_name, std::string func_name)

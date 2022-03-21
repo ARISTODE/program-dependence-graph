@@ -505,12 +505,12 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           if (DEBUG)
           {
             printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
-            auto dst_func_node = _call_graph->getNode(*atomic_op->getFunction());
-            for (auto boundary_f : _SDA->getBoundaryFuncs())
-            {
-              auto boundary_func_node = _call_graph->getNode(*boundary_f);
-              _call_graph->printPaths(*boundary_func_node, *dst_func_node);
-            }
+            // auto dst_func_node = _call_graph->getNode(*atomic_op->getFunction());
+            // for (auto boundary_f : _SDA->getBoundaryFuncs())
+            // {
+            //   auto boundary_func_node = _call_graph->getNode(*boundary_f);
+            //   _call_graph->printPaths(*boundary_func_node, *dst_func_node);
+            // }
           }
 
           if (EnableAnalysisStats)

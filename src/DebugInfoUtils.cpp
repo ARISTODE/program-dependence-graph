@@ -141,6 +141,27 @@ bool pdg::dbgutils::isArrayType(DIType &dt)
   return false;
 }
 
+bool pdg::dbgutils::isRecursiveType(DIType &dt)
+{
+  if (!isStructType(dt))
+    return false;
+
+  std::string struct_name = getSourceLevelTypeName(dt, true);
+  // check child fields
+  auto di_node_arr = dyn_cast<DICompositeType>(&dt)->getElements();
+  for (unsigned i = 0; i < di_node_arr.size(); ++i)
+  {
+    DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
+    DIType *field_lowest_di_type = getLowestDIType(*field_di_type);
+    if (!field_lowest_di_type)
+      continue;
+    std::string field_type_name = getSourceLevelTypeName(*field_lowest_di_type, true);
+    if (field_type_name == struct_name)
+      return true;
+  }
+  return false;
+}
+
 bool pdg::dbgutils::isAllocableObjType(DIType &dt)
 {
   return (isArrayType(dt) || isCompositePointerType(dt) || isCompositeType(dt));

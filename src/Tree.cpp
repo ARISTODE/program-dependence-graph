@@ -37,7 +37,7 @@ int pdg::TreeNode::expandNode()
   dt = dbgutils::stripAttributes(*dt);
 
   // iterate through all the child nodes, build a tree node for each of them.
-  if (!dbgutils::isPointerType(*dt) && !dbgutils::isStructType(*dt))
+  if (!dbgutils::isPointerType(*dt) && !dbgutils::isProjectableType(*dt))
     return 0;
 
   if (dbgutils::isPointerType(*dt))
@@ -50,7 +50,7 @@ int pdg::TreeNode::expandNode()
     return 1;
   }
   // TODO: should change to aggregate type later
-  if (dbgutils::isStructType(*dt))
+  if (dbgutils::isProjectableType(*dt))
   {
     auto di_node_arr = dyn_cast<DICompositeType>(dt)->getElements();
     for (unsigned i = 0; i < di_node_arr.size(); i++)
