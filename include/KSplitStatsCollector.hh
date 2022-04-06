@@ -74,6 +74,10 @@ namespace pdg
     // void increaseSharedIORemap() { _shared_ioremap_num++; }
     // void increaseSharedUser() { _shared_user_num++; }
     // void increaseSharedSentinelArray() { _shared_sentinel_array++; }
+    // void increaseControlDataFieldNum() { _control_data_field_num++; }
+    // void increaseReadDataFieldNum() { _read_data_field++; }
+    // void increaseWrittenDataFieldNum() { _written_data_field++; }
+    // void increaseParamNum() { _param_num++; }
     void collectTotalPointerStats(llvm::DIType &dt);
     // void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string func_name);
     void collectDataStats(TreeNode &tree_node, std::string nescheck_ptr_type);
@@ -104,6 +108,7 @@ namespace pdg
     unsigned _shared_ptr_num = 0;
     // safe pointers (singleton)
     unsigned _safe_ptr_num = 0;
+    unsigned _void_ptr_num = 0;
     unsigned _no_cast_void_pointer = 0;
     unsigned _func_ptr_num = 0;
     unsigned _shared_ioremap_num = 0;
@@ -160,6 +165,34 @@ namespace pdg
     unsigned _shared_containerof = 0;
     unsigned _shared_sentinel_array = 0;
     unsigned _shared_other = 0;
+
+    // classify shared data passed from driver to kernel
+    unsigned _union_read = 0;
+    unsigned _union_write = 0;
+    unsigned _union_rw = 0;
+    unsigned _primitive_read = 0;
+    unsigned _primitive_write = 0;
+    unsigned _primitive_rw = 0;
+    unsigned _struct_read = 0;
+    unsigned _struct_write = 0;
+    unsigned _struct_rw = 0;
+    unsigned _other_read = 0;
+    unsigned _other_write = 0;
+    unsigned _other_rw = 0;
+
+    // pointer shared data passed from driver to kernel
+    unsigned _singleton_read = 0;
+    unsigned _singleton_write = 0;
+    unsigned _singleton_rw = 0;
+    unsigned _seq_read = 0;
+    unsigned _seq_write = 0;
+    unsigned _seq_rw = 0;
+    unsigned _wild_read = 0;
+    unsigned _wild_write = 0;
+    unsigned _wild_rw = 0;
+    unsigned _unknown_read = 0;
+    unsigned _unknown_write = 0;
+    unsigned _unknown_rw = 0;
 
     // outdated
     unsigned _unhandled_array_num = 0; // for some dyn size arr, we could try infer it's size

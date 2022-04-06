@@ -49,6 +49,7 @@ namespace pdg
     std::string rtrim(std::string str);
     std::string trimStr(std::string str);
     bool isFileExist(std::string file_name);
+    bool isSkbNode(TreeNode& tree_node);
   } // namespace pdgutils
 } // namespace pdg
 #endif

@@ -42,6 +42,11 @@ bool pdg::dbgutils::isPointerType(DIType &dt)
   return (d->getTag() == dwarf::DW_TAG_pointer_type);
 }
 
+bool pdg::dbgutils::isPrimitiveType(DIType &dt)
+{
+  return isa<DIBasicType>(&dt);
+}
+
 bool pdg::dbgutils::isCompositeType(DIType &dt)
 {
   return (isStructType(dt) || isArrayType(dt) || isUnionType(dt));

@@ -97,6 +97,10 @@ namespace NesCheck
     std::set<Value *> WildPtrs;
     std::set<Value *> UnknownPtrs;
     std::set<pdg::Node *> ProcessedNodes;
+    unsigned skb_singleton = 0;
+    unsigned skb_array = 0;
+    unsigned skb_wild = 0;
+    unsigned skb_unknown = 0;
     std::map<Value*, std::string> PtrTypeMap;
     pdg::AtomicRegionAnalysis *_ARA;
     pdg::DataAccessAnalysis *_DDA;
@@ -407,13 +411,119 @@ namespace NesCheck
       return true;
     }
 
-    void classifyBoundaryPtrs()
+    /*
+    for pointer type data, we classify into multiple categories  
+    singleton, seq pointer, and wild pointer  
+    then, for each of these casers, we further check whether the pointer is read/write in the kernel domain.
+    TODO: we should also consider the updates on the data which is passed from driver to kernel. This updates 
+    could tell stories about whether a data controlled by the driver (updated) could affect kernel data.
+    */
+    void classifyPtrSharedData(pdg::TreeNode &tree_node, std::string classified_ptr_type)
+    {
+      auto di_type = tree_node.getDIType();
+      auto access_tags = tree_node.getAccessTags();
+      auto tag_size = access_tags.size();
+      if (tag_size == 1)
+      {
+        // only read
+        if (access_tags.find(pdg::AccessTag::DATA_READ) != access_tags.end())
+        {
+          if (classified_ptr_type == "SAFE")
+            _ksplit_stats->_singleton_read++;
+          else if (classified_ptr_type == "SEQ")
+            _ksplit_stats->_seq_read++;
+          else if (classified_ptr_type == "DYN")
+            _ksplit_stats->_wild_read++;
+          else 
+            _ksplit_stats->_unknown_read++;
+        }
+        else
+        {
+          // only write
+          if (classified_ptr_type == "SAFE")
+            _ksplit_stats->_singleton_write++;
+          else if (classified_ptr_type == "SEQ")
+            _ksplit_stats->_seq_write++;
+          else if (classified_ptr_type == "DYN")
+            _ksplit_stats->_wild_write++;
+          else
+            _ksplit_stats->_unknown_write++;
+        }
+      }
+      else if (tag_size == 2)
+      {
+        if (classified_ptr_type == "SAFE")
+          _ksplit_stats->_singleton_rw++;
+        else if (classified_ptr_type == "SEQ")
+          _ksplit_stats->_seq_rw++;
+        else if (classified_ptr_type == "DYN")
+          _ksplit_stats->_wild_rw++;
+        else
+          _ksplit_stats->_unknown_rw++;
+      }
+    }
+
+    void classifyNonPtrSharedData(pdg::TreeNode &tree_node)
+    {
+      auto di_type = tree_node.getDIType();
+      auto access_tags = tree_node.getAccessTags();
+      auto tag_size = access_tags.size();
+      // union
+      if (tag_size == 1)
+      {
+        if (access_tags.find(pdg::AccessTag::DATA_READ) != access_tags.end())
+        {
+          if (pdg::dbgutils::isUnionType(*di_type))
+            _ksplit_stats->_union_read++;
+          else if (pdg::dbgutils::isStructType(*di_type))
+            _ksplit_stats->_struct_read++;
+          else if (pdg::dbgutils::isPrimitiveType(*di_type))
+            _ksplit_stats->_primitive_read++;
+          else
+            _ksplit_stats->_other_read++;
+        }
+        else
+        {
+          if (pdg::dbgutils::isUnionType(*di_type))
+            _ksplit_stats->_union_write++;
+          else if (pdg::dbgutils::isStructType(*di_type))
+            _ksplit_stats->_struct_write++;
+          else if (pdg::dbgutils::isPrimitiveType(*di_type))
+            _ksplit_stats->_primitive_write++;
+          else
+            _ksplit_stats->_other_write++;
+        }
+      }
+      else if (tag_size == 2)
+      {
+          if (pdg::dbgutils::isUnionType(*di_type))
+            _ksplit_stats->_union_rw++;
+          else if (pdg::dbgutils::isStructType(*di_type))
+            _ksplit_stats->_struct_rw++;
+          else if (pdg::dbgutils::isPrimitiveType(*di_type))
+            _ksplit_stats->_primitive_rw++;
+          else
+            _ksplit_stats->_other_rw++;
+      }
+    }
+
+    /*
+    Take boundary functions that are called from driver to kernel as input. 
+    Then, for each data, collects all it's accesses in the kernel domain, uisng domain tag.
+    Classify data into pointer/non-pointer, then classify then further into read/write only and control data.
+    */
+    void classifyBoundaryData()
     {
       std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
-      for (auto func : _DDA->getSDA()->getBoundaryFuncs())
+      auto SDA = _DDA->getSDA();
+      for (auto func : SDA->getBoundaryFuncs())
       {
+        // only check boundary func called from kernel to driver
+        if (!SDA->isKernelFunc(*func))
+          continue;
+
         std::string func_name = func->getName().str();
-        Function* cur_func = func;
+        Function *cur_func = func;
         // need to handle specially becuase nescheck rewrite function signature
         if (func->isDeclaration())
         {
@@ -423,6 +533,7 @@ namespace NesCheck
             continue;
         }
         auto func_w = _PDG->getFuncWrapper(*func);
+        // iterate through all argument's root node
         std::vector<pdg::TreeNode *> root_nodes;
         for (auto arg : func_w->getArgList())
         {
@@ -442,6 +553,117 @@ namespace NesCheck
 
         for (auto root_node : root_nodes)
         {
+          std::queue<pdg::TreeNode *> queue;
+          queue.push(root_node);
+          while (!queue.empty())
+          {
+            auto front_node = queue.front();
+            queue.pop();
+            for (auto child_node : front_node->getChildNodes())
+            {
+              queue.push(child_node);
+            }
+            auto field_id = pdg::pdgutils::computeTreeNodeID(*front_node);
+            field_id = pdg::pdgutils::trimStr(field_id);
+            // check access condition
+            if (!front_node->getDIType())
+              continue;
+            if (front_node->getAccessTags().size() == 0 && !front_node->isRootNode())
+              continue;
+            // filter out shared data
+            if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front_node->isRootNode())
+              continue;
+            auto reachable_nodes = _PDG->findNodesReachedByEdge(*front_node, pdg::EdgeType::PARAMETER_IN);
+            bool only_accessed_in_kernel = true;
+            for (auto node : reachable_nodes)
+            {
+              if (!node->getValue())
+                continue;
+              if (auto inst = dyn_cast<Instruction>(node->getValue()))
+              {
+                auto func = inst->getFunction();
+                if (_DDA->getSDA()->isDriverFunc(*func))
+                {
+                  only_accessed_in_kernel = false;
+                  break;
+                }
+              }
+            }
+
+            // skip if the passed data is also accessed inside the driver
+            if (!only_accessed_in_kernel)
+              continue;
+
+            if (!pdg::dbgutils::isPointerType(*front_node->getDIType()))
+            {
+              errs() << "classify non ptr data\n";
+              classifyNonPtrSharedData(*front_node);
+            }
+            else
+            {
+              // check reachable address variables (interprecedural)
+              for (auto reachable_node : reachable_nodes)
+              {
+                auto node_val = reachable_node->getValue();
+                if (!node_val)
+                  continue;
+                // if (Instruction *ii = dyn_cast<Instruction>(node_val))
+                //   errs() << "find val node: " << field_id << " - " << *ii << " - " << ii->getFunction()->getName() << "\n";
+                if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
+                {
+                  auto classified_ptr_type = PtrTypeMap[node_val];
+                  _ksplit_stats->collectDataStats(*front_node, classified_ptr_type);
+                  errs() << "classify ptr data\n";
+                  classifyPtrSharedData(*front_node, classified_ptr_type);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // for each boundary funciton, analyze the pointers passed across, and classify the pointers
+    // according to nescheck's result.
+    void classifyBoundaryPtrs()
+    {
+      std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
+      for (auto func : _DDA->getSDA()->getBoundaryFuncs())
+      {
+        std::string func_name = func->getName().str();
+        Function* cur_func = func;
+        // need to handle specially becuase nescheck rewrite function signature
+        if (func->isDeclaration())
+        {
+          std::string nescheck_func_name = func_name + "_nesCheck";
+          cur_func = CurrentModule->getFunction(StringRef(nescheck_func_name));
+          if (cur_func->isDeclaration())
+            continue;
+        }
+        auto func_w = _PDG->getFuncWrapper(*func);
+
+        // process all the formal tree root node
+        std::vector<pdg::TreeNode *> root_nodes;
+        for (auto arg : func_w->getArgList())
+        {
+          auto arg_tree = func_w->getArgFormalInTree(*arg);
+          if (!arg_tree)
+            continue;
+          if (!arg_tree->getRootNode())
+            continue;
+          root_nodes.push_back(arg_tree->getRootNode());
+        }
+        // return type root nodes
+        auto ret_arg_tree = func_w->getRetFormalInTree();
+        if (!ret_arg_tree)
+          continue;
+        if (ret_arg_tree->getRootNode())
+          root_nodes.push_back(ret_arg_tree->getRootNode());
+
+        // start with the root node, then traverse fild nodes and classify each accordingly
+        for (auto root_node : root_nodes)
+        {
           std::queue<pdg::TreeNode*> queue;
           queue.push(root_node);
           while (!queue.empty())
@@ -459,12 +681,11 @@ namespace NesCheck
               continue;
             // if (!pdg::dbgutils::isPointerType(*front->getDIType()))
             //   continue;
-            // if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
-            //   continue;
-            // if (front->getAccessTags().size() == 0 && !front->isRootNode())
+            if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
+              continue;
             if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
-            // check reachable address variables
+            // check reachable address variables (interprecedural)
             auto reachable_nodes = _PDG->findNodesReachedByEdge(*front, pdg::EdgeType::PARAMETER_IN);
             for (auto n : reachable_nodes)
             {
@@ -476,8 +697,24 @@ namespace NesCheck
               if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
               {
                 // TODO: check possible conflict here
-                ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
-                _ksplit_stats->collectDataStats(*front, PtrTypeMap[node_val]);
+                // if (DEBUG)
+                //   ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
+                auto classified_ptr_type = PtrTypeMap[node_val];
+                _ksplit_stats->collectDataStats(*front, classified_ptr_type);
+                /*
+                // skb replated stats, renable if needed
+                if (front->isStructMember() && pdg::pdgutils::isSkbNode(*front))
+                {
+                  if (classified_ptr_type == "SAFE")
+                    skb_singleton++;
+                  else if (classified_ptr_type == "SEQ")
+                    skb_array++;
+                  else if (classified_ptr_type == "DYN")
+                    skb_wild++;
+                  else
+                    skb_unknown++;
+                }
+                */
                 break;
               }
             }
@@ -1412,7 +1649,16 @@ namespace NesCheck
         // analyze all functions and populate Instrumentation WorkList
         analyzeFunction(F);
       }
+      classifyBoundaryData();
       classifyBoundaryPtrs();
+      // print skb_buff stats      
+      errs() << "==== sk_buff ptr classification: ====" << "\n";
+      errs() << "total classified ptr: " << (skb_singleton + skb_array + skb_wild + skb_unknown) << "\n";
+      errs() << "singleton ptr: " << skb_singleton << "\n";
+      errs() << "seq ptr: " << skb_array << "\n";
+      errs() << "wild ptr: " << skb_wild << "\n";
+      errs() << "unknown ptr: " << skb_unknown << "\n";
+
       if (pdg::EnableAnalysisStats)
       {
         if (printRawStats)

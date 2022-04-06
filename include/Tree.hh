@@ -34,7 +34,7 @@ namespace pdg
       void addAccessTag(AccessTag acc_tag) { _acc_tag_set.insert(acc_tag); }
       std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
       bool isRootNode() {return _parent_node == nullptr;}
-      bool isStructMember() { return _node_di_type->getTag() == llvm::dwarf::DW_TAG_member; }
+      bool isStructMember();
       int numOfChild() { return _children.size(); }
       bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }

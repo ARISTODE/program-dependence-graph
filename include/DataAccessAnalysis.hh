@@ -50,7 +50,12 @@ namespace pdg
     std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
     std::string getExportedFuncPtrName(std::string func_name);
     std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
+    // logging related functions
     void printContainerOfStats();
+    void logSkbFieldStats(TreeNode &skb_root_node);
+    void logSkbNode(TreeNode &tree_node);
+    void countControlData(TreeNode &tree_node);
+    bool isUsedInBranchStat(Node &val_node);
     DomainTag computeFuncDomainTag(llvm::Function &F);
     KSplitStats *getKSplitStats() { return _ksplit_stats; }
     SharedDataAnalysis *getSDA() { return _SDA; }

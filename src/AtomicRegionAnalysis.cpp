@@ -34,6 +34,9 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   computeAtomicOperations(M);
   computeWarningCS();
   computeWarningAtomicOps();
+  errs() << "sk_buff atomic regions stats: \n";
+  errs() << "fields accessed in critical sections: " << num_fields_skb_cs << "\n";
+  errs() << "fields accessed in atomic operation: " << num_fields_skb_ao << "\n";
   // check whether shared states are updated outside of critical region
   // computeCodeRegions();
   // printCodeRegionsUpdateSharedStates(M);
@@ -68,7 +71,6 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
     _sync_stub_file << "\trpc shared_lock_begin_" << lock_call_name << "_" << current_func_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << read_proj_str.str();
     _sync_stub_file << "\t};\n";
-
     _sync_stub_file << "\trpc shared_lock_end_" << unlock_call_name << "_" << current_func_name << "( projection " << di_type_name << "* " << di_type_name << ") {\n";
     _sync_stub_file << write_proj_str.str();
     _sync_stub_file << "\t};\n";
@@ -187,10 +189,8 @@ void pdg::AtomicRegionAnalysis::computeCriticalSections(Module &M)
         auto cs_lock_inst = cast<CallInst>(cs.first);
         if (isRcuLockInst(*cs_lock_inst))
           _ksplit_stats->_total_rcu += 1;
-          // _ksplit_stats->increaseTotalRCU();
         if (isSeqLockInst(*cs_lock_inst))
           _ksplit_stats->_total_seqlock += 1;
-          // _ksplit_stats->increaseTotalSeqlock();
       }
     }
   }
@@ -362,7 +362,6 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       {
         if (isLockInst(*inst))
         {
-          // _ksplit_stats->increaseTotalNestLock();
           _ksplit_stats->_total_nest_lock += 1;
           has_nested_lock = true;
         }
@@ -415,6 +414,8 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         {
           TreeNode *formal_param_in_node = (TreeNode *)in_neighbor;
           formal_param_in_node->setAccessInAtomicRegion();
+          if (formal_param_in_node->isStructMember() && pdgutils::isSkbNode(*formal_param_in_node))
+            num_fields_skb_cs++;
           if (_sync_data_inst_tree_map.find(cs_pair.first) == _sync_data_inst_tree_map.end())
             _sync_data_inst_tree_map.insert(std::make_pair(cs_pair.first, formal_param_in_node->getTree()));
         }
@@ -429,15 +430,16 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         // _ksplit_stats->increaseSharedCS();
         _ksplit_stats->_shared_CS += 1;
         if (isRcuLockInst(*cs_pair.first))
+        {
           _ksplit_stats->_shared_rcu += 1;
-          // _ksplit_stats->increaseSharedRCU();
+        }
         if (isSeqLockInst(*cs_pair.first))
+        {
           _ksplit_stats->_shared_seqlock += 1;
-          // _ksplit_stats->increaseSharedSeqlock();
+        }
         if (has_nested_lock)
         {
           _ksplit_stats->_shared_nest_lock += 1;
-          // _ksplit_stats->increaseSharedNestLock();
           errs() << "nested lock: " << lock_inst->getFunction()->getName()  << "\n";
         }
       }
@@ -484,11 +486,20 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           continue;
         TreeNode *tree_node = static_cast<TreeNode *>(in_edge->getSrcNode());
         // only consider struct field access cases
-        if (!_SDA->isStructFieldNode(*tree_node))
+        if (!tree_node->isStructMember())
           continue;
         auto field_id = pdgutils::computeTreeNodeID(*tree_node);
         if (_SDA->isSharedFieldID(field_id))
+        {
           is_shared = true;
+          // log skb stats
+          if (pdgutils::isSkbNode(*tree_node))
+          {
+            tree_node->setAccessInAtomicRegion();
+            num_fields_skb_ao++;
+          }
+        }
+
         if (!tree_node->getDIType())
           continue;
       }
@@ -838,6 +849,7 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
   DIType *node_di_type = tree_node.getDIType();
   assert(node_di_type != nullptr && "cannot generate IDL for node with null DIType\n");
   std::string root_di_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
+  std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*node_di_type, true);
   DIType *node_lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
   if (!node_lowest_di_type || !dbgutils::isProjectableType(*node_lowest_di_type))
     return;
@@ -857,6 +869,9 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
 
     bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
     if (!_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField && !is_sentinel_field)
+      continue;
+    
+    if (!tree_node.isAccessedInAtomicRegion())
       continue;
 
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);

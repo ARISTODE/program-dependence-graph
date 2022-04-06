@@ -487,18 +487,6 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
     }
   }
 
-  // if the current node is union, consider all child are accessed
-  if (tree_node.getDIType() && dbgutils::isUnionType(*tree_node.getDIType()))
-  {
-    for (auto child_node : tree_node.getChildNodes())
-    {
-      for (auto acc_tag : tree_node.getAccessTags())
-      {
-        child_node->addAccessTag(acc_tag);
-      }
-    }
-  }
-
   // reconnecting address nodes found by inter procedural call
   for (auto child_node : tree_node.getChildNodes())
   {
@@ -594,6 +582,10 @@ Four cases:
 3. pointer to aggregate type
 4. aggregate type
 */
+/*
+This function takes a tree node as input, and then generate the IDL for this node.
+If a node is a struct or union, then the code would generate a projection for this struct, based on it's fields information
+*/
 void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_string_ostream &fields_projection_str, raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name, bool is_ret)
 {
   DIType *node_di_type = tree_node.getDIType();
@@ -604,20 +596,11 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
   if (!node_lowest_di_type || !dbgutils::isProjectableType(*node_lowest_di_type))
     return;
 
+  // start analyzing how sk_buff stats
   // if (root_di_type_name_raw == "sk_buff")
   // {
-  //   errs() << "skb fields: " << tree_node.getChildNodes().size() << "\n";
-  //   unsigned ptr_field_num = 0;
-  //   for (auto child_node : tree_node.getChildNodes())
-  //   {
-  //     auto child_di_type = child_node->getDIType();
-  //     if (dbgutils::isPointerType(*child_di_type))
-  //     {
-  //       ptr_field_num += 1;
-  //       errs() << "ptr field name: " << dbgutils::getSourceLevelVariableName(*child_di_type) << "\n";
-  //     }
-  //   }
-  //   errs() << "skb ptr fields: " << ptr_field_num << "\n";
+  //   // collect SKB_buff data for the interface functions that receive it as a parameter
+  //   logSkbFieldStats(tree_node);
   // }
 
   // generate idl for each field
@@ -646,7 +629,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
     // bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
     // skip private fields
-
+    // check shared fields, and special conditions
     if (SharedDataFlag 
         && !_SDA->isSharedFieldID(field_id) 
         && !is_func_ptr_type 
@@ -656,6 +639,12 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       continue;
     // collect shared field stat
     child_node->is_shared = true;
+    // countControlData(*child_node);
+    auto access_tags = child_node->getAccessTags();
+    // if (access_tags.size() == 1 && access_tags.find(AccessTag::DATA_READ) != access_tags.end())
+    //   _ksplit_stats->increaseReadDataFieldNum();
+    // if (access_tags.size() == 1 && access_tags.find(AccessTag::DATA_WRITE) != access_tags.end())
+    //   _ksplit_stats->increaseWrittenDataFieldNum();
     // _ksplit_stats->_fields_shared_analysis += 1;
     // at this point, the field is accessed and shared
     // if (EnableAnalysisStats && !_generating_idl_for_global)
@@ -686,14 +675,14 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     // }
 
     // opt out field
-    // if (EnableAnalysisStats && !_generating_idl_for_global)
-    // {
-    //   if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
-    //   {
-    //     _ksplit_stats->_fields_removed_boundary_opt += 1;
-    //     continue;
-    //   }
-    // }
+    if (EnableAnalysisStats && !_generating_idl_for_global)
+    {
+      if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
+      {
+        _ksplit_stats->_fields_removed_boundary_opt += 1;
+        continue;
+      }
+    }
 
     //  collect bit field stats
     auto bw = 0;
@@ -765,8 +754,16 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       std::string nested_struct_str;
       raw_string_ostream field_nested_struct_proj(nested_struct_str);
 
-      // handle nested struct or union
-      generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t", field_type_name, is_ret);
+      // handle nested struct
+      if (!dbgutils::isUnionType(*field_di_type))
+        generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, node_queue, indent_level + "\t", field_type_name, is_ret);
+      else
+      {
+        // TODO: need to better shows tagged/anonymous union
+        fields_projection_str << indent_level << "[anon_union]" << "\n";
+      }
+
+
       std::string projected_container_str = "struct";
       if (dbgutils::isUnionType(*field_di_type))
       {
@@ -819,6 +816,10 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     }
   }
 }
+
+
+
+
 
 void pdg::DataAccessAnalysis::generateIDLFromGlobalVarTree(GlobalVariable &gv, Tree *tree)
 {
@@ -886,9 +887,9 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
   // {
   //   auto root_type_name = dbgutils::getSourceLevelTypeName(*root_node_di_type, true);
     auto deep_copy_fields_num = dbgutils::computeDeepCopyFields(*root_node_di_type);
-  //   auto deep_copy_ptr_num = dbgutils::computeDeepCopyFields(*root_node_di_type, true);
+    auto deep_copy_ptr_num = dbgutils::computeDeepCopyFields(*root_node_di_type, true);
     _ksplit_stats->_fields_deep_copy += deep_copy_fields_num; // transitively count the number of field
-  //   // _ksplit_stats->_total_ptr_num += deep_copy_ptr_num; // transitively count the number of pointer field in this type
+    _ksplit_stats->_total_ptr_num += deep_copy_ptr_num; // transitively count the number of pointer field in this type
   //   _ksplit_stats->collectTotalPointerStats(*root_node_di_type); // total accessed pointer
   //   std::string var_name = dbgutils::getSourceLevelVariableName(*root_node->getDILocalVar());
   //   _ksplit_stats->collectSharedPointerStats(*root_node_di_type, var_name, root_node->getFunc()->getName().str()); // if root node is pointer, then it is shared
@@ -1094,6 +1095,8 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     if (!formal_in_tree)
       continue;
     TreeNode *root_node = formal_in_tree->getRootNode();
+    // countControlData(*root_node);
+    // _ksplit_stats->increaseParamNum();
     DIType *arg_di_type = root_node->getDIType();
     DIType *arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
     auto arg_name = dbgutils::getSourceLevelVariableName(*root_node->getDILocalVar());
@@ -1255,6 +1258,17 @@ void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &tree_node, std::set<
           tree_node.is_user = true;
         }
       }
+      // checking for bounds because this field is used in pointer arithmetic
+      if (LoadInst *li = dyn_cast<LoadInst>(val))
+      {
+        for (auto user : li->users())
+        {
+          if (isa<CastInst>(user))
+            annotations.insert("[bound_check]");
+        }
+      }
+      if (isa<CastInst>(val))
+        annotations.insert("[bound_check]");
     }
   }
 }
@@ -1264,14 +1278,21 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
   std::set<std::string> annotations;
   if (tree_node.isRootNode())
   {
-    if (tree_node.getDIType())
+    // infer string annotation
+    DIType *tree_dt = tree_node.getDIType();
+    if (tree_dt)
     {
-      if (_SDA->isFieldUsedInStringOps(tree_node) && dbgutils::isCharPointer(*tree_node.getDIType()))
+      // check if the node is directly used in some string operations
+      if (dbgutils::isCharPointer(*tree_dt))
       {
-        annotations.insert("[string]");
-        tree_node.is_string = true;
+        if (_SDA->isFieldUsedInStringOps(tree_node))
+        {
+          annotations.insert("[string]");
+          tree_node.is_string = true;
+        }
       }
     }
+    // infer unused attribute
     if (tree_node.getAccessTags().size() == 0)
     {
       bool is_used = false;
@@ -1497,16 +1518,59 @@ void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
   }
 }
 
-void pdg::DataAccessAnalysis::printContainerOfStats()
+void pdg::DataAccessAnalysis::logSkbFieldStats(TreeNode &skb_root_node)
 {
-  errs() << " ============== container of stats =============\n";
-  errs() << "num of container_of access shared states: " << _container_of_insts.size() << "\n";
-  for (auto i : _container_of_insts)
+  Function* current_func = skb_root_node.getFunc();
+  assert(current_func != nullptr && "cannot log skb without current function information\n");
+  errs() << "logging skb stats in function: " << current_func->getName() << "\n";
+  // log deep copy fields using debug info
+  DIType *dt = skb_root_node.getDIType();
+  unsigned num_deep_copy_fields = dbgutils::computeDeepCopyFields(*dt);
+  errs() << "skb deep copy fields: " << num_deep_copy_fields << "\n";
+  // Collect Filds related stats with bfs
+  std::queue<TreeNode *> node_queue;
+  // don't process the tree node, start with all the fields
+  unsigned accessed_fields = 0;
+  unsigned accessed_shared_fields = 0;
+  for (auto child_node : skb_root_node.getChildNodes())
   {
-    errs() << "container_of: " << i->getFunction()->getName() << " -- " << *i << "\n";
+    node_queue.push(child_node);
   }
-  errs() << " ===============================================\n";
+  while (!node_queue.empty())
+  {
+    TreeNode *current_node = node_queue.front();
+    node_queue.pop();
+    for (auto child_node : current_node->getChildNodes())
+    {
+      node_queue.push(child_node);
+    }
+    // accumulate stats for fields
+    if (current_node->isStructMember())
+    {
+      if (!current_node->getAccessTags().empty())
+      {
+        accessed_fields++; // accumulate accessed fields
+        auto field_id = pdgutils::computeTreeNodeID(*current_node);
+        if (_SDA->isSharedFieldID(field_id))
+          accessed_shared_fields++; // accumulate accessed shared fields
+      }
+    }
+  }
+  errs() << "skb accessed fields: " << accessed_fields << "\n";
+  errs() << "skb shared accessed fields: " << accessed_shared_fields << "\n";
 }
+
+
+// void pdg::DataAccessAnalysis::printContainerOfStats()
+// {
+//   errs() << " ============== container of stats =============\n";
+//   errs() << "num of container_of access shared states: " << _container_of_insts.size() << "\n";
+//   for (auto i : _container_of_insts)
+//   {
+//     errs() << "container_of: " << i->getFunction()->getName() << " -- " << *i << "\n";
+//   }
+//   errs() << " ===============================================\n";
+// }
 
 pdg::DomainTag pdg::DataAccessAnalysis::computeFuncDomainTag(Function &F)
 {
@@ -1524,6 +1588,55 @@ std::string pdg::DataAccessAnalysis::getExportedFuncPtrName(std::string func_nam
       return p.first;
   }
   return func_name;
+}
+
+// void pdg::DataAccessAnalysis::countControlData(TreeNode &tree_node)
+// {
+//   std::set<EdgeType> traverse_edge_types = {EdgeType::PARAMETER_IN, EdgeType::DATA_ALIAS};
+//   // 1. obtain all the address nodes
+//   auto reachable_node_set = _PDG->findNodesReachedByEdges(tree_node, traverse_edge_types);
+//   auto field_name = dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
+//   // errs() << field_name << " | control node size: " << reachable_node_set.size() << "\n";
+//   // 2. check if any address node is used within branch statement, if so, count this
+//   // as a control data field
+//   for (auto node : reachable_node_set)
+//   {
+//     // only address node need to be check
+//     if (!node->getValue())
+//       continue;
+
+//     if (isUsedInBranchStat(*node))
+//     {
+//       _ksplit_stats->increaseControlDataFieldNum();
+//       errs() << "find control data in " << node->getFunc()->getName() << "\n";
+//       break;
+//     }
+//   }
+// }
+
+bool pdg::DataAccessAnalysis::isUsedInBranchStat(Node &val_node)
+{
+  // check def-use edges to see if the value is used in any branchstatement
+  // normally this step loads value
+  auto def_use_neighbors = val_node.getOutNeighborsWithDepType(EdgeType::DATA_DEF_USE);
+  for (auto out_neighbor : def_use_neighbors)
+  {
+    if (!out_neighbor->getValue())
+      continue;
+    // if (!isa<LoadInst>(out_neighbor->getValue()))
+    //   continue;
+    // get neighbors that can be reached in two hops, then decide whther this value is directly used in branch
+    auto potential_branch_cand = out_neighbor->getOutNeighborsWithDepType(EdgeType::DATA_DEF_USE);
+    for (auto n : potential_branch_cand)
+    {
+      auto val = n->getValue();
+      if (!val)
+        continue;
+      if (isa<BranchInst>(val) || isa<BranchInst>(out_neighbor->getValue()))
+        return true;
+    }
+  }
+  return false;
 }
 
 static RegisterPass<pdg::DataAccessAnalysis>

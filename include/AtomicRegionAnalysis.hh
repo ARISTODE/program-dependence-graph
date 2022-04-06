@@ -69,6 +69,7 @@ namespace pdg
     bool isFuncNeedSyncStubGen(llvm::Function &F) { return _funcs_need_sync_stub_gen.find(&F) == _funcs_need_sync_stub_gen.end(); }
     bool isRcuLock(llvm::CallInst &lock_call_inst);
     std::set<llvm::DIType*> findAccessedSharedTypesinRcuRegion(std::set<llvm::Instruction*> insts_in_cs);
+    void logSkbAtomicRegionStats();
     llvm::Instruction *findRcuDereferenceInst(std::set<llvm::Instruction *> insts_in_cs);
     DataAccessAnalysis *getDAA() { return _DAA; }
 
@@ -93,6 +94,9 @@ namespace pdg
     std::map<llvm::Instruction *, Tree *> _sync_data_inst_tree_map;
     std::set<llvm::Instruction *> _insts_in_CS;
     std::ofstream _sync_stub_file;
+    // sk_buff counting
+    unsigned num_fields_skb_cs = 0;
+    unsigned num_fields_skb_ao = 0;
   };
 } // namespace pdg
 

@@ -50,6 +50,7 @@ void pdg::SharedDataAnalysis::setupStrOps()
   _string_op_names.insert("strcmp");
   _string_op_names.insert("strchr");
   _string_op_names.insert("strncmp");
+  _string_op_names.insert("strpbrk");
   _string_op_names.insert("kobject_set_name");
 }
 
@@ -141,6 +142,10 @@ std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
   return boundary_trans_funcs;
 }
 
+/*
+Basically, we can both driver side and kernel side code. Then 
+compute the intersaction of struct types used by both sides.
+*/
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()
 {
   std::set<std::string> driver_struct_type_names;
@@ -202,39 +207,41 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
         if (processed_struct_names.find(struct_type_name) != processed_struct_names.end())
           continue;
         processed_struct_names.insert(struct_type_name);
+        if (struct_type_name == "ixgbe_hw")
+          errs() << "ixgbe_hw found in kernel func: " << func->getName() << "\n";
         // check driver global type
-        bool is_driver_global_struct_type = (_driver_global_struct_types.find(struct_type_name) != _driver_global_struct_types.end());
-
-        if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end() || is_driver_global_struct_type)
+        // bool is_driver_global_struct_type = (_driver_global_struct_types.find(struct_type_name) != _driver_global_struct_types.end());
+        // if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end() || is_driver_global_struct_type)
+        if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end())
           _shared_struct_di_types.insert(lowest_di_type);
       }
     }
   }
 
-  for (auto f : _boundary_funcs)
-  {
-    if (f->isDeclaration())
-      continue;
-    auto fw = _PDG->getFuncWrapper(*f);
-    for (auto arg : fw->getArgList())
-    {
-      auto arg_di_type = fw->getArgDIType(*arg);
-      auto arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
-      if (arg_lowest_di_type != nullptr)
-      {
-        if (dbgutils::isStructType(*arg_lowest_di_type))
-          _shared_struct_di_types.insert(arg_lowest_di_type);
-      }
-    }
+  // for (auto f : _boundary_funcs)
+  // {
+  //   if (f->isDeclaration())
+  //     continue;
+  //   auto fw = _PDG->getFuncWrapper(*f);
+  //   for (auto arg : fw->getArgList())
+  //   {
+  //     auto arg_di_type = fw->getArgDIType(*arg);
+  //     auto arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
+  //     if (arg_lowest_di_type != nullptr)
+  //     {
+  //       if (dbgutils::isStructType(*arg_lowest_di_type))
+  //         _shared_struct_di_types.insert(arg_lowest_di_type);
+  //     }
+  //   }
 
-    auto ret_val_di_type = fw->getReturnValDIType();
-    auto ret_val_lowest_di_type = dbgutils::getLowestDIType(*ret_val_di_type);
-    if (ret_val_lowest_di_type != nullptr)
-    {
-      if (dbgutils::isStructType(*ret_val_lowest_di_type))
-        _shared_struct_di_types.insert(ret_val_lowest_di_type);
-    }
-  }
+  //   auto ret_val_di_type = fw->getReturnValDIType();
+  //   auto ret_val_lowest_di_type = dbgutils::getLowestDIType(*ret_val_di_type);
+  //   if (ret_val_lowest_di_type != nullptr)
+  //   {
+  //     if (dbgutils::isStructType(*ret_val_lowest_di_type))
+  //       _shared_struct_di_types.insert(ret_val_lowest_di_type);
+  //   }
+  // }
 }
 
 void pdg::SharedDataAnalysis::computeGlobalStructTypeNames()
@@ -398,6 +405,8 @@ bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
           if (called_func == nullptr)
             continue;
           std::string called_func_name = called_func->getName().str();
+          errs() << "string call func: " << ci->getFunction()->getName() << " - " << called_func_name << "\n";
+          called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
           if (_string_op_names.find(called_func_name) != _string_op_names.end())
             return true;
         }

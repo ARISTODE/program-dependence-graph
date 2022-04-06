@@ -571,3 +571,12 @@ bool pdg::pdgutils::isFileExist(std::string file_name)
   std::ifstream in_file(file_name);
   return in_file.good();
 }
+
+bool pdg::pdgutils::isSkbNode(TreeNode &tree_node)
+{
+  auto tree = tree_node.getTree();
+  auto root_node = tree->getRootNode();
+  auto root_node_dt = root_node->getDIType();
+  std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*root_node_dt, true);
+  return (root_di_type_name_raw == "sk_buff*"  || root_di_type_name_raw == "skb_buff");
+}

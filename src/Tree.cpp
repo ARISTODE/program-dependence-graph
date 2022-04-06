@@ -196,3 +196,10 @@ void pdg::Tree::addAccessForAllNodes(AccessTag acc_tag)
     }
   }
 }
+
+bool pdg::TreeNode::isStructMember()
+{
+  if (_node_di_type != nullptr)
+    return (_node_di_type->getTag() == llvm::dwarf::DW_TAG_member);
+  return false;
+}
