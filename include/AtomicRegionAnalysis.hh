@@ -25,6 +25,7 @@ namespace pdg
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     llvm::StringRef getPassName() const override { return "Atomic Region Analysis"; }
     bool runOnModule(llvm::Module &M) override;
+    void generateSyncStubsForAtomicRegions();
     CSMap &getCSMap() { return _critical_sections; }
     AtomicOpSet &getAtomicOpSet() {return _atomic_operations;}
     CSMap computeCSInFunc(llvm::Function &F);
@@ -56,7 +57,6 @@ namespace pdg
     void computeCodeRegions();
     // void printCodeRegionsUpdateSharedStates(llvm::Module &M);
     // void findNextCheckpoints(std::set<llvm::Instruction *> &checkpoints, llvm::Instruction &cur_inst);
-    std::set<llvm::Value*> computeBoundaryAliasPtrs(llvm::Value &v);
     bool hasBoundaryAliasNodes(llvm::Value &v);
     // sync stub generation
     void generateSyncStubForTree(Tree* tree, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str);

@@ -21,6 +21,19 @@ StructType *pdg::pdgutils::getStructTypeFromGEP(GetElementPtrInst &gep)
   return nullptr;
 }
 
+Function *pdg::pdgutils::getNescheckVersionFunc(Module &M, std::string func_name)
+{
+  Function* nescheck_func = M.getFunction(func_name);
+  if (nescheck_func == nullptr || nescheck_func->isDeclaration())
+  {
+    std::string nescheck_func_name = func_name + "_nesCheck";
+    nescheck_func = M.getFunction(nescheck_func_name);
+    if (nescheck_func == nullptr || nescheck_func->isDeclaration())
+      return nullptr;
+  }
+  return nescheck_func;
+}
+
 uint64_t pdg::pdgutils::getGEPOffsetInBits(Module& M, StructType &struct_type, GetElementPtrInst &gep)
 {
   // get the accessed struct member offset from the gep instruction
@@ -322,6 +335,20 @@ std::string pdg::pdgutils::stripFuncNameVersionNumber(std::string func_name)
   return func_name.substr(0, deli_pos);
 }
 
+std::string pdg::pdgutils::stripNescheckPostfix(std::string func_name)
+{
+  auto str_ref = StringRef(func_name);
+  auto pos = str_ref.find("_nesCheck");
+  if (pos != StringRef::npos)
+    return str_ref.substr(0, pos).str();
+  return func_name;
+}
+
+std::string pdg::pdgutils::getSourceFuncName(std::string func_name)
+{
+  return stripNescheckPostfix(stripFuncNameVersionNumber(func_name));
+}
+
 std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
 {
   std::string parent_type_name = "";
@@ -488,7 +515,7 @@ bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)
 {
   if (ConstantExpr *ce = dyn_cast<ConstantExpr>(&v))
   {
-    Instruction* i = ce->getAsInstruction();
+    Instruction *i = ce->getAsInstruction();
     for (auto op_iter = i->op_begin(); op_iter != i->op_end(); ++op_iter)
     {
       if (GlobalVariable *gv = dyn_cast<GlobalVariable>(*op_iter))
@@ -556,7 +583,7 @@ bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
   return false;
 }
 
-bool pdg::pdgutils::isStructPointerType(Type& ty)
+bool pdg::pdgutils::isStructPointerType(Type &ty)
 {
   if (!ty.isPointerTy())
     return false;
@@ -578,5 +605,5 @@ bool pdg::pdgutils::isSkbNode(TreeNode &tree_node)
   auto root_node = tree->getRootNode();
   auto root_node_dt = root_node->getDIType();
   std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*root_node_dt, true);
-  return (root_di_type_name_raw == "sk_buff*"  || root_di_type_name_raw == "skb_buff");
+  return (root_di_type_name_raw == "sk_buff*" || root_di_type_name_raw == "skb_buff");
 }

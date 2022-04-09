@@ -28,9 +28,10 @@ namespace pdg
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
     std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
     std::set<std::string> &getSentinelFields() { return _sentinel_fields; }
-    std::set<std::string> &getGlobalOpStructNames() { return _global_op_struct_names; }
+    std::set<std::string> &getGlobalOpStructNames() { return _driver_func_op_struct_names; }
+    std::set<std::string> &getSharedStructTypeNames() { return _shared_struct_type_names; }
     bool isSentinelField(std::string &s) { return _sentinel_fields.find(s) != _sentinel_fields.end(); }
-    bool isGlobalOpStruct(std::string &s) { return _global_op_struct_names.find(s) != _global_op_struct_names.end(); }
+    bool isGlobalOpStruct(std::string &s) { return _driver_func_op_struct_names.find(s) != _driver_func_op_struct_names.end(); }
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     std::set<llvm::Function *> computeBoundaryTransitiveClosure();
     void computeSharedStructDITypes();
@@ -51,7 +52,7 @@ namespace pdg
     std::set<std::string> getGlobalStructDITypeNames() { return _global_struct_di_type_names; }
     void dumpSharedFieldID();
     void readSentinelFields();
-    void readGlobalOpStructNames();
+    void readGlobalFuncOpStructNames();
     llvm::Function *getModuleInitFunc(llvm::Module &M);
     ProgramGraph *getPDG() { return _PDG; }
     // some side tests
@@ -74,9 +75,9 @@ namespace pdg
     std::set<std::string> _string_op_names;
     std::set<std::string> _global_struct_di_type_names;
     std::set<std::string> _shared_struct_type_names;
+    std::set<std::string> _driver_func_op_struct_names;
     std::set<std::string> _driver_global_struct_types;
     std::set<std::string> _sentinel_fields;
-    std::set<std::string> _global_op_struct_names;
   };
 } // namespace pdg
 #endif

@@ -2,7 +2,6 @@
 #define PDGUTILS_H_
 #include "LLVMEssentials.hh"
 #include "Tree.hh"
-// #include "KSplitStatsCollector.hh"
 #include <vector>
 #include <set>
 #include <unordered_set>
@@ -32,6 +31,7 @@ namespace pdg
     bool hasPtrArith(TreeNode &tree_node, bool is_shared_data=false);
     bool isStructPointerType(llvm::Type &type);
     llvm::Instruction* getNextInst(llvm::Instruction &i);
+    llvm::Function* getNescheckVersionFunc(llvm::Module& M, std::string func_name);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);
@@ -42,6 +42,8 @@ namespace pdg
     void printTreeNodesLabel(Node* n, llvm::raw_string_ostream &OS, std::string tree_node_type_str);
     llvm::Value *getLShrOnGep(llvm::GetElementPtrInst &gep);
     std::string stripFuncNameVersionNumber(std::string func_name);
+    std::string stripNescheckPostfix(std::string func_name);
+    std::string getSourceFuncName(std::string func_name);
     std::string computeTreeNodeID(TreeNode &tree_node);
     std::string computeFieldID(llvm::DIType &parent_dt, llvm::DIType &field_dt);
     std::string stripVersionTag(std::string str);

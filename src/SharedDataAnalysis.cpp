@@ -18,7 +18,8 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // read driver/kernel domian funcs
   setupStrOps();
   readSentinelFields();
-  readGlobalOpStructNames();
+  // insert driver global ops shared struct type
+  readGlobalFuncOpStructNames();
   setupDriverFuncs(M);
   setupKernelFuncs(M);
   // get boundary functions
@@ -74,8 +75,16 @@ void pdg::SharedDataAnalysis::setupKernelFuncs(Module &M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
-    if (_driver_domain_funcs.find(&F) == _driver_domain_funcs.end())
-      _kernel_domain_funcs.insert(&F);
+    // a special case is that driver function has module number concatenated, e.g., ixgbe_write_reg.5
+    // neet to exclude such functions
+    std::string func_name = F.getName().str();
+    // ixgbe_write_reg.5 -> ixgbe_write_reg
+    func_name = pdgutils::stripFuncNameVersionNumber(func_name);
+    auto func = M.getFunction(StringRef(func_name));
+    if (func == nullptr)
+      continue;
+    if (_driver_domain_funcs.find(func) == _driver_domain_funcs.end())
+      _kernel_domain_funcs.insert(func);
   }
 }
 
@@ -207,17 +216,16 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
         if (processed_struct_names.find(struct_type_name) != processed_struct_names.end())
           continue;
         processed_struct_names.insert(struct_type_name);
-        if (struct_type_name == "ixgbe_hw")
-          errs() << "ixgbe_hw found in kernel func: " << func->getName() << "\n";
-        // check driver global type
-        // bool is_driver_global_struct_type = (_driver_global_struct_types.find(struct_type_name) != _driver_global_struct_types.end());
-        // if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end() || is_driver_global_struct_type)
+        // check if driver side has the same di type, if so, add the type as shared type accessed by both driver and kernel
         if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end())
           _shared_struct_di_types.insert(lowest_di_type);
       }
     }
   }
 
+  // for parameters passed across isolation boundary, if it's a struct type, then we need to consider this type as
+  // shared data type. However, this steps seems unecessary, because the above step should include all the shared data types
+  // computed in this step.
   // for (auto f : _boundary_funcs)
   // {
   //   if (f->isDeclaration())
@@ -405,7 +413,6 @@ bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
           if (called_func == nullptr)
             continue;
           std::string called_func_name = called_func->getName().str();
-          errs() << "string call func: " << ci->getFunction()->getName() << " - " << called_func_name << "\n";
           called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
           if (_string_op_names.find(called_func_name) != _string_op_names.end())
             return true;
@@ -428,7 +435,6 @@ bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string 
 
 void pdg::SharedDataAnalysis::computeSharedFieldID()
 {
-  auto &ksplit_stats = KSplitStats::getInstance();
   for (auto dt_tree_pair : _global_struct_di_type_map)
   {
     // auto di_type_name = dbgutils::getSourceLevelTypeName(*dt_tree_pair.first);
@@ -445,8 +451,6 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       DIType *node_di_type = current_tree_node->getDIType();
       if (node_di_type == nullptr)
         continue;
-      // if (pdgutils::isVoidPointerHasMultipleCasts(*current_tree_node))
-      //   ksplit_stats.increaseUnhandledVoidPtrSDNum();
 
       if (isStructFieldNode(*current_tree_node))
       {
@@ -521,12 +525,13 @@ void pdg::SharedDataAnalysis::readSentinelFields()
   }
 }
 
-void pdg::SharedDataAnalysis::readGlobalOpStructNames()
+void pdg::SharedDataAnalysis::readGlobalFuncOpStructNames()
 {
   std::ifstream ReadFile("global_op_struct_names");
   for (std::string line; std::getline(ReadFile, line);)
   {
-    _global_op_struct_names.insert(line);
+    _driver_func_op_struct_names.insert(line);
+    _shared_struct_type_names.insert(line);
   }
 }
 

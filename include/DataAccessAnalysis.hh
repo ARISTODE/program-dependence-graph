@@ -13,6 +13,8 @@ namespace pdg
     static char ID;
     DataAccessAnalysis() : llvm::ModulePass(ID){};
     bool runOnModule(llvm::Module &M) override;
+    void generateSyncStubsForBoundaryFunctions(llvm::Module &M);
+    void generateSyncStubsForGlobalVars();
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
     std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
@@ -50,6 +52,7 @@ namespace pdg
     std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
     std::string getExportedFuncPtrName(std::string func_name);
     std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
+    FunctionWrapper* getNescheckFuncWrapper(llvm::Function &F); // F's signature is rewrittern by nescheck
     // logging related functions
     void printContainerOfStats();
     void logSkbFieldStats(TreeNode &skb_root_node);

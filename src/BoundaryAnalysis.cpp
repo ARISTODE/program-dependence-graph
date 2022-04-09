@@ -135,6 +135,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
         if (pdgutils::isUserOfSentinelTypeVal(*struct_element))
           _sentinel_fields.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
 
+        // extract all the function pointer name exported by the driver
         if (!field_type_name.empty())
         {
           std::string field_source_name = dbgutils::getSourceLevelVariableName(*struct_field_di_type);

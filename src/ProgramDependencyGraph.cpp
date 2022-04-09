@@ -23,8 +23,8 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
 {
   _module = &M;
   _PDG = &ProgramGraph::getInstance();
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
 
+  PTAWrapper &ptaw = PTAWrapper::getInstance();
   PDGCallGraph &call_g = PDGCallGraph::getInstance();
   if (!call_g.isBuild())
     call_g.build(M);

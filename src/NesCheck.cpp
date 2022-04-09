@@ -97,10 +97,6 @@ namespace NesCheck
     std::set<Value *> WildPtrs;
     std::set<Value *> UnknownPtrs;
     std::set<pdg::Node *> ProcessedNodes;
-    unsigned skb_singleton = 0;
-    unsigned skb_array = 0;
-    unsigned skb_wild = 0;
-    unsigned skb_unknown = 0;
     std::map<Value*, std::string> PtrTypeMap;
     pdg::AtomicRegionAnalysis *_ARA;
     pdg::DataAccessAnalysis *_DDA;
@@ -700,21 +696,9 @@ namespace NesCheck
                 // if (DEBUG)
                 //   ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
                 auto classified_ptr_type = PtrTypeMap[node_val];
+                // mark the node as seq pointer, these nodes use array syntax while genereating IDL
+                front->setSeqPtr();
                 _ksplit_stats->collectDataStats(*front, classified_ptr_type);
-                /*
-                // skb replated stats, renable if needed
-                if (front->isStructMember() && pdg::pdgutils::isSkbNode(*front))
-                {
-                  if (classified_ptr_type == "SAFE")
-                    skb_singleton++;
-                  else if (classified_ptr_type == "SEQ")
-                    skb_array++;
-                  else if (classified_ptr_type == "DYN")
-                    skb_wild++;
-                  else
-                    skb_unknown++;
-                }
-                */
                 break;
               }
             }
@@ -1649,15 +1633,12 @@ namespace NesCheck
         // analyze all functions and populate Instrumentation WorkList
         analyzeFunction(F);
       }
-      classifyBoundaryData();
+      // classifyBoundaryData();
       classifyBoundaryPtrs();
-      // print skb_buff stats      
-      errs() << "==== sk_buff ptr classification: ====" << "\n";
-      errs() << "total classified ptr: " << (skb_singleton + skb_array + skb_wild + skb_unknown) << "\n";
-      errs() << "singleton ptr: " << skb_singleton << "\n";
-      errs() << "seq ptr: " << skb_array << "\n";
-      errs() << "wild ptr: " << skb_wild << "\n";
-      errs() << "unknown ptr: " << skb_unknown << "\n";
+      // after classification, generate IDL for boundary interface, global var and atomic operations
+      _DDA->generateSyncStubsForBoundaryFunctions(M);
+      _DDA->generateSyncStubsForGlobalVars();
+      _ARA->generateSyncStubsForAtomicRegions();
 
       if (pdg::EnableAnalysisStats)
       {
