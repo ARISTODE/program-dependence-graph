@@ -31,6 +31,7 @@ namespace pdg
     llvm::DIType *stripMemberTag(llvm::DIType &dt);
     llvm::DIType *getGlobalVarDIType(llvm::GlobalVariable &gv);
     llvm::DIType *getFuncRetDIType(llvm::Function &F);
+    std::string getArrayTypeStr(llvm::DIType &dt);
     std::string getSourceLevelVariableName(llvm::DINode &dt);
     std::string getSourceLevelTypeName(llvm::DIType &dt, bool is_raw=false);
     std::string getSourceLevelTypeNameWithNoQualifer(llvm::DIType &dt);

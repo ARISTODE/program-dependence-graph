@@ -428,6 +428,20 @@ std::string pdg::pdgutils::trimStr(std::string s)
   return ltrim(rtrim(s));
 }
 
+std::string pdg::pdgutils::constructAnnoStr(std::set<std::string> &annotations)
+{
+  std::string anno_str = "";
+  for (auto anno_iter = annotations.begin(); anno_iter != annotations.end(); ++anno_iter)
+  {
+    anno_str += *anno_iter;
+    if (std::next(anno_iter) != annotations.end())
+      anno_str += ",";
+  }
+  if (!anno_str.empty())
+    anno_str = "[" + anno_str + "]";
+  return anno_str;
+}
+
 bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
 {
   Type *ty = gv.getType();

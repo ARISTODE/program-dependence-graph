@@ -75,6 +75,7 @@ namespace pdg
     std::set<std::string> _seen_func_ops;
     std::string _ops_struct_proj_str;
     std::map<std::string, std::string> _exported_funcs_ptr_name_map;
+    std::set<std::string> _exist_func_defs;
     std::map<std::string, std::set<std::string>> _global_ops_fields_map;
     std::set<llvm::Instruction *> _container_of_insts;
     KSplitStats *_ksplit_stats;

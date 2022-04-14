@@ -315,30 +315,7 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   }
   case dwarf::DW_TAG_array_type:
   {
-    DICompositeType *dct = cast<DICompositeType>(&dt);
-    auto elements = dct->getElements();
-    if (elements.size() == 1)
-    {
-      auto element_dt = getLowestDIType(*dct);
-      if (element_dt != nullptr)
-      {
-        auto total_size = dct->getSizeInBits();
-        auto element_size = element_dt->getSizeInBits();
-        auto element_type_name = getSourceLevelTypeName(*element_dt, is_raw);
-        if (total_size != 0 && element_size != 0)
-        {
-          auto element_count = total_size / element_size;
-          std::string arr_field_str = "array< " + element_type_name + ", " + std::to_string(element_count) + ">";
-          return arr_field_str;
-        }
-        else if (total_size == 0)
-        {
-          std::string arr_field_str = "array<" + element_type_name + ", 0>";
-          return arr_field_str;
-        }
-      }
-    }
-    return "array";
+    return getArrayTypeStr(dt);
   }
   case dwarf::DW_TAG_const_type:
   {
@@ -386,6 +363,39 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   return "";
 }
 
+std::string pdg::dbgutils::getArrayTypeStr(DIType& dt)
+{
+  DICompositeType *dct = cast<DICompositeType>(&dt);
+  auto elements = dct->getElements();
+  if (elements.size() == 1)
+  {
+    auto element_dt = getLowestDIType(*dct);
+    if (element_dt != nullptr)
+    {
+      auto total_size = dct->getSizeInBits();
+      auto element_size = element_dt->getSizeInBits();
+      auto element_type_name = getSourceLevelTypeName(*element_dt, true);
+      if (isStructPointerType(*element_dt))
+        element_type_name = "projection " + element_type_name + "*";
+      else if (isStructType(*element_dt))
+        element_type_name = "projection " + element_type_name;
+
+      if (total_size != 0 && element_size != 0)
+      {
+        auto element_count = total_size / element_size;
+        std::string arr_field_str = "array< " + element_type_name + ", " + std::to_string(element_count) + ">";
+        return arr_field_str;
+      }
+      else if (total_size == 0)
+      {
+        std::string arr_field_str = "array<" + element_type_name + ", 0>";
+        return arr_field_str;
+      }
+    }
+  }
+  return "array";
+}
+
 // compute di type for value
 DIType *pdg::dbgutils::getGlobalVarDIType(GlobalVariable &gv)
 {
@@ -412,6 +422,7 @@ DIType *pdg::dbgutils::getFuncRetDIType(Function &F)
     {
       auto *sub_routine = subprogram->getType();
       const auto &type_ref = sub_routine->getTypeArray();
+      // if return value is contain, type_ref is 1 element larger than F arg size.
       if (F.arg_size() >= type_ref.size())
         break;
       // const auto &ArgTypeRef = TypeRef[0];

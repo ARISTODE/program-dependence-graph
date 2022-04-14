@@ -50,6 +50,7 @@ namespace pdg
     std::string ltrim(std::string str);
     std::string rtrim(std::string str);
     std::string trimStr(std::string str);
+    std::string constructAnnoStr(std::set<std::string> &annotations);
     bool isFileExist(std::string file_name);
     bool isSkbNode(TreeNode& tree_node);
   } // namespace pdgutils

@@ -73,67 +73,95 @@ void pdg::KSplitStats::printDataStats()
   _stats_file << "String: " << _dyn_sized_string_num << "/0" << "\n";
   _stats_file << "Void: " << (_void_ptr_num - _multi_cast_shared_void_ptr_num) << "/" << _multi_cast_shared_void_ptr_num << "\n";
   _stats_file << "non-void wild ptr: " << "0/" << _non_void_wild_ptr_num << "\n";
-
-
   _stats_file << "======================================================\n";
 
-  _stats_file << "read only data: \n";
-  _stats_file << "\t ptr type: \n";
-  _stats_file << "\t\t singleton: " << _singleton_read << "\n";
-  _stats_file << "\t\t seq: " << _seq_read << "\n";
-  _stats_file << "\t\t wild: " << _wild_read << "\n";
-  _stats_file << "\t\t unknow: " << _unknown_read << "\n";
-  _stats_file << "\t non-ptr type: \n";
-  _stats_file << "\t\t primitive: " << _primitive_read << "\n";
-  _stats_file << "\t\t struct: " << _struct_read << "\n";
-  _stats_file << "\t\t union: " << _union_read << "\n";
-  _stats_file << "\t\t other: " << _other_read << "\n";
-  _stats_file << "write only data: \n";
-  _stats_file << "\t ptr type: \n";
-  _stats_file << "\t\t singleton: " << _singleton_write << "\n";
-  _stats_file << "\t\t seq: " << _seq_write << "\n";
-  _stats_file << "\t\t wild: " << _wild_write << "\n";
-  _stats_file << "\t\t unknow: " << _unknown_write << "\n";
-  _stats_file << "\t non-ptr type: \n";
-  _stats_file << "\t\t primitive: " << _primitive_write << "\n";
-  _stats_file << "\t\t struct: " << _struct_write << "\n";
-  _stats_file << "\t\t union: " << _union_write << "\n";
-  _stats_file << "\t\t other: " << _other_write << "\n";
-  _stats_file << "read/write data: \n";
-  _stats_file << "\t ptr type: \n";
-  _stats_file << "\t\t singleton: " << _singleton_rw << "\n";
-  _stats_file << "\t\t seq: " << _seq_rw << "\n";
-  _stats_file << "\t\t wild: " << _wild_rw << "\n";
-  _stats_file << "\t\t unknow: " << _unknown_rw << "\n";
-  _stats_file << "\t non-ptr type: \n";
-  _stats_file << "\t\t primitive: " << _primitive_rw << "\n";
-  _stats_file << "\t\t struct: " << _struct_rw << "\n";
-  _stats_file << "\t\t union: " << _union_rw << "\n";
-  _stats_file << "\t\t other: " << _other_rw << "\n";
+  // _stats_file << "read only data: \n";
+  // _stats_file << "\t ptr type: \n";
+  // _stats_file << "\t\t singleton: " << _singleton_read << "\n";
+  // _stats_file << "\t\t seq: " << _seq_read << "\n";
+  // _stats_file << "\t\t wild: " << _wild_read << "\n";
+  // _stats_file << "\t\t unknow: " << _unknown_read << "\n";
+  // _stats_file << "\t non-ptr type: \n";
+  // _stats_file << "\t\t primitive: " << _primitive_read << "\n";
+  // _stats_file << "\t\t struct: " << _struct_read << "\n";
+  // _stats_file << "\t\t union: " << _union_read << "\n";
+  // _stats_file << "\t\t other: " << _other_read << "\n";
+  // _stats_file << "write only data: \n";
+  // _stats_file << "\t ptr type: \n";
+  // _stats_file << "\t\t singleton: " << _singleton_write << "\n";
+  // _stats_file << "\t\t seq: " << _seq_write << "\n";
+  // _stats_file << "\t\t wild: " << _wild_write << "\n";
+  // _stats_file << "\t\t unknow: " << _unknown_write << "\n";
+  // _stats_file << "\t non-ptr type: \n";
+  // _stats_file << "\t\t primitive: " << _primitive_write << "\n";
+  // _stats_file << "\t\t struct: " << _struct_write << "\n";
+  // _stats_file << "\t\t union: " << _union_write << "\n";
+  // _stats_file << "\t\t other: " << _other_write << "\n";
+  // _stats_file << "read/write data: \n";
+  // _stats_file << "\t ptr type: \n";
+  // _stats_file << "\t\t singleton: " << _singleton_rw << "\n";
+  // _stats_file << "\t\t seq: " << _seq_rw << "\n";
+  // _stats_file << "\t\t wild: " << _wild_rw << "\n";
+  // _stats_file << "\t\t unknow: " << _unknown_rw << "\n";
+  // _stats_file << "\t non-ptr type: \n";
+  // _stats_file << "\t\t primitive: " << _primitive_rw << "\n";
+  // _stats_file << "\t\t struct: " << _struct_rw << "\n";
+  // _stats_file << "\t\t union: " << _union_rw << "\n";
+  // _stats_file << "\t\t other: " << _other_rw << "\n";
 
   _stats_file.close();
 }
 
+// void pdg::KSplitStats::printStatsRaw()
+// {
+//   _stats_file.open("ksplit_stats");
+//   _stats_file << _driver_to_kernel_func_call << "/" << _kernel_to_driver_func_call << "\n";
+//   _stats_file << _total_func_size << "/0" << "\n";
+//   _stats_file << _fields_deep_copy  << "/" << _fields_shared_analysis << "\n";
+//   // shared data analysis impact
+//   _stats_file << _total_ptr_num << "/" << _shared_ptr_num  << "\n";
+//   _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num  << "\n";
+//   _stats_file << (_total_CS - _shared_CS) << "/" << _shared_CS  << "\n";
+//   _stats_file << (_total_rcu - _shared_rcu) << "/" << _shared_rcu  << "\n";
+//   _stats_file << (_total_seqlock - _shared_seqlock) << "/" << _shared_seqlock  << "\n";
+//   _stats_file << (_total_atomic_op - _shared_atomic_op) << "/" << _shared_atomic_op  << "\n";
+//   _stats_file << (_total_containerof - _shared_containerof) << "/" << _shared_containerof << "\n";
+//   // pointer stats
+//   _stats_file << (_safe_ptr_num + _unknown_ptr_num) << "/0\n";
+//   _stats_file << ((_dyn_sized_arr_num - _dyn_sized_string_num) + _sized_arr_num) << "/" << _sized_arr_num << "\n";
+//   _stats_file << _dyn_sized_string_num << "/0\n";
+//   _stats_file << (_void_ptr_num - _multi_cast_shared_void_ptr_num) << "/" << _multi_cast_shared_void_ptr_num << "\n";
+//   _stats_file <<  "0/" << _non_void_wild_ptr_num << "\n";
+//   _stats_file.close() ;
+// }
+
 void pdg::KSplitStats::printStatsRaw()
 {
   _stats_file.open("ksplit_stats");
-  _stats_file << _driver_to_kernel_func_call << "/" << _kernel_to_driver_func_call << "\n";
+  // 1.a
+  _stats_file << _driver_to_kernel_func_call << "\n";
+  _stats_file << _kernel_to_driver_func_call << "\n";
   _stats_file << _total_func_size << "/0" << "\n";
-  _stats_file << _fields_deep_copy  << "/" << _fields_shared_analysis << "\n";
-  // shared data analysis impact
-  _stats_file << _total_ptr_num << "/" << _shared_ptr_num  << "\n";
-  _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num  << "\n";
-  _stats_file << (_total_CS - _shared_CS) << "/" << _shared_CS  << "\n";
-  _stats_file << (_total_rcu - _shared_rcu) << "/" << _shared_rcu  << "\n";
-  _stats_file << (_total_seqlock - _shared_seqlock) << "/" << _shared_seqlock  << "\n";
-  _stats_file << (_total_atomic_op - _shared_atomic_op) << "/" << _shared_atomic_op  << "\n";
-  _stats_file << (_total_containerof - _shared_containerof) << "/" << _shared_containerof << "\n";
-  // pointer stats
-  _stats_file << (_safe_ptr_num + _unknown_ptr_num) << "/0\n";
+  // 1.b
+  _stats_file << _fields_deep_copy << "\n";
+  _stats_file << _fields_field_analysis << "\n";
+  _stats_file << _fields_shared_analysis << "\n";
+  _stats_file << (_fields_shared_analysis - _fields_removed_boundary_opt) << "\n";
+  // 1.c
+  _stats_file <<  _total_ptr_num << "/" << _shared_ptr_num << "\n";
+  _stats_file << (_total_union_num - _shared_union_num) << " / " << _shared_union_num << "\n";
+  _stats_file << (_total_CS - _shared_CS) << " / " << _shared_CS << "\n";
+  _stats_file << _total_rcu << "/" << _shared_rcu << "\n";
+  _stats_file << _total_seqlock << "/" << _shared_seqlock << "\n";
+  _stats_file << (_total_atomic_op - _shared_atomic_op) << " / " << _shared_atomic_op << "\n";
+  _stats_file << _total_containerof << " / " << _shared_containerof << "\n";
+  // 1.d
+  _stats_file << (_safe_ptr_num + _unknown_ptr_num) << "/0" << "\n";
   _stats_file << ((_dyn_sized_arr_num - _dyn_sized_string_num) + _sized_arr_num) << "/" << _sized_arr_num << "\n";
-  _stats_file << _dyn_sized_string_num << "/0\n";
+  _stats_file << _dyn_sized_string_num << "/0" << "\n";
   _stats_file << (_void_ptr_num - _multi_cast_shared_void_ptr_num) << "/" << _multi_cast_shared_void_ptr_num << "\n";
-  _stats_file <<  "0/" << _non_void_wild_ptr_num << "\n";
+  _stats_file << "0/" << _non_void_wild_ptr_num << "\n";
+
   _stats_file.close() ;
 }
 
@@ -162,7 +190,6 @@ void pdg::KSplitStats::collectDataStats(TreeNode& tree_node, std::string neschec
   if (!tree_node.is_shared)
     return;
   _fields_shared_analysis++;
-
   // pointers, basic types, struct, union, array
   if (is_bitfield)
   {

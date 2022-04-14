@@ -592,7 +592,6 @@ namespace NesCheck
 
             if (!pdg::dbgutils::isPointerType(*front_node->getDIType()))
             {
-              errs() << "classify non ptr data\n";
               classifyNonPtrSharedData(*front_node);
             }
             else
@@ -609,7 +608,6 @@ namespace NesCheck
                 {
                   auto classified_ptr_type = PtrTypeMap[node_val];
                   _ksplit_stats->collectDataStats(*front_node, classified_ptr_type);
-                  errs() << "classify ptr data\n";
                   classifyPtrSharedData(*front_node, classified_ptr_type);
                   break;
                 }
@@ -624,7 +622,6 @@ namespace NesCheck
     // according to nescheck's result.
     void classifyBoundaryPtrs()
     {
-      std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
       for (auto func : _DDA->getSDA()->getBoundaryFuncs())
       {
         std::string func_name = func->getName().str();
@@ -638,7 +635,6 @@ namespace NesCheck
             continue;
         }
         auto func_w = _PDG->getFuncWrapper(*func);
-
         // process all the formal tree root node
         std::vector<pdg::TreeNode *> root_nodes;
         for (auto arg : func_w->getArgList())
@@ -677,12 +673,18 @@ namespace NesCheck
               continue;
             // if (!pdg::dbgutils::isPointerType(*front->getDIType()))
             //   continue;
-            if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
-              continue;
             if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
+            // if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
+            //   continue;
+            // if (!pdg::dbgutils::isPointerType(*front->getDIType()))
+            // {
+            //   _ksplit_stats->collectDataStats(*front, "");
+            //   continue;
+            // }
             // check reachable address variables (interprecedural)
-            auto reachable_nodes = _PDG->findNodesReachedByEdge(*front, pdg::EdgeType::PARAMETER_IN);
+            std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN, pdg::EdgeType::DATA_ALIAS};
+            auto reachable_nodes = _PDG->findNodesReachedByEdges(*front, edge_types);
             for (auto n : reachable_nodes)
             {
               auto node_val = n->getValue();
@@ -697,14 +699,17 @@ namespace NesCheck
                 //   ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
                 auto classified_ptr_type = PtrTypeMap[node_val];
                 // mark the node as seq pointer, these nodes use array syntax while genereating IDL
-                front->setSeqPtr();
                 _ksplit_stats->collectDataStats(*front, classified_ptr_type);
+                if (classified_ptr_type == "SEQ")
+                  front->setSeqPtr();
                 break;
               }
             }
             // speical handling for seq pointers
             if (front->is_sentinel)
-              _ksplit_stats->collectDataStats(*front, "SEQ");
+            {
+              front->setSeqPtr();
+            }
           }
         }
       }
@@ -1633,12 +1638,15 @@ namespace NesCheck
         // analyze all functions and populate Instrumentation WorkList
         analyzeFunction(F);
       }
+
       // classifyBoundaryData();
       classifyBoundaryPtrs();
       // after classification, generate IDL for boundary interface, global var and atomic operations
       _DDA->generateSyncStubsForBoundaryFunctions(M);
       _DDA->generateSyncStubsForGlobalVars();
       _ARA->generateSyncStubsForAtomicRegions();
+      classifyBoundaryPtrs();
+
 
       if (pdg::EnableAnalysisStats)
       {
@@ -1646,7 +1654,6 @@ namespace NesCheck
           _ksplit_stats->printStatsRaw();
         else
           _ksplit_stats->printDataStats();
-          // _ksplit_stats->printStats();
       }
       auto stop = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
