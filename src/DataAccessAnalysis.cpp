@@ -431,13 +431,8 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   }
 
   // consider exported function pointers are all accessed
-  if (tree_node.getDIType() != nullptr && (dbgutils::isFuncPointerType(*tree_node.getDIType())))
-  {
-    _ksplit_stats->_shared_ptr_num++;
-    _ksplit_stats->_safe_ptr_num++;
-    _ksplit_stats->_func_ptr_num++;
-    _ksplit_stats->_fields_field_analysis++;
-    _ksplit_stats->_fields_shared_analysis++;
+  // if (tree_node.getDIType() != nullptr && (dbgutils::isFuncPointerType(*tree_node.getDIType())))
+  // {
   //   std::string func_ptr_rpc_ref = parent_node_type_name + "_" + field_var_name;
   //   if (_exported_funcs_ptr_name_map.find(func_ptr_rpc_ref) != _exported_funcs_ptr_name_map.end())
   //   {
@@ -449,7 +444,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   //       parent_node = parent_node->getParentNode();
   //     }
   //   }
-  }
+  // }
 
   // intra proc access tags
   auto addr_vars = tree_node.getAddrVars();
