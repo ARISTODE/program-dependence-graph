@@ -24,6 +24,7 @@ namespace pdg
     void dumpToFiles();
     void dumpToFile(std::string file_name, std::vector<std::string> &names);
     bool isBlackListFunc(std::string func_name) { return _black_list_func_names.find(func_name) != _black_list_func_names.end(); }
+    void sanitizeIxgbeGlobalOps();
 
   private:
     std::set<std::string> _black_list_func_names;

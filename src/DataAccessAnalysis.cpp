@@ -64,9 +64,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
 
   errs() << "Finish analyzing data access info.";
 
-  // if (EnableAnalysisStats)
-  //   _ksplit_stats->printDataStats();
-
   return false;
 }
 
@@ -85,9 +82,6 @@ void pdg::DataAccessAnalysis::generateSyncStubsForBoundaryFunctions(Module &M)
     Function* nescheck_func = pdgutils::getNescheckVersionFunc(M, func_name);
     if (nescheck_func == nullptr || nescheck_func->isDeclaration())
       continue;
-    // Function* func = M.getFunction(StringRef(func_name));
-    // if (func == nullptr || func->isDeclaration())
-    //   continue;
     generateIDLForFunc(*nescheck_func);
   }
 
@@ -95,9 +89,6 @@ void pdg::DataAccessAnalysis::generateSyncStubsForBoundaryFunctions(Module &M)
   // EnableAnalysisStats = false;
   for (auto F : _kernel_funcs_regsitered_with_indirect_ptr)
   {
-    // Function* nescheck_func = pdgutils::getNescheckVersionFunc(M, F->getName().str());
-    // if (nescheck_func == nullptr || nescheck_func->isDeclaration())
-    //   continue;
     if (F == nullptr || F->isDeclaration())
       continue;
     generateIDLForFunc(*F, true);
@@ -442,17 +433,22 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   // consider exported function pointers are all accessed
   if (tree_node.getDIType() != nullptr && (dbgutils::isFuncPointerType(*tree_node.getDIType())))
   {
-    std::string func_ptr_rpc_ref = parent_node_type_name + "_" + field_var_name;
-    if (_exported_funcs_ptr_name_map.find(func_ptr_rpc_ref) != _exported_funcs_ptr_name_map.end())
-    {
-      tree_node.addAccessTag(AccessTag::DATA_READ);
-      auto parent_node = tree_node.getParentNode();
-      while (parent_node != nullptr)
-      {
-        parent_node->addAccessTag(AccessTag::DATA_READ);
-        parent_node = parent_node->getParentNode();
-      }
-    }
+    _ksplit_stats->_shared_ptr_num++;
+    _ksplit_stats->_safe_ptr_num++;
+    _ksplit_stats->_func_ptr_num++;
+    _ksplit_stats->_fields_field_analysis++;
+    _ksplit_stats->_fields_shared_analysis++;
+  //   std::string func_ptr_rpc_ref = parent_node_type_name + "_" + field_var_name;
+  //   if (_exported_funcs_ptr_name_map.find(func_ptr_rpc_ref) != _exported_funcs_ptr_name_map.end())
+  //   {
+  //     tree_node.addAccessTag(AccessTag::DATA_READ);
+  //     auto parent_node = tree_node.getParentNode();
+  //     while (parent_node != nullptr)
+  //     {
+  //       parent_node->addAccessTag(AccessTag::DATA_READ);
+  //       parent_node = parent_node->getParentNode();
+  //     }
+  //   }
   }
 
   // intra proc access tags
@@ -672,11 +668,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     //  collect bit field stats
     auto bw = 0;
     if (field_di_type->isBitField())
-    {
       bw = field_di_type->getSizeInBits();
-      // if (EnableAnalysisStats && !_generating_idl_for_global)
-      //   _ksplit_stats->increaseSharedBitfield();
-    }
 
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     field_di_type = dbgutils::stripAttributes(*field_di_type);
@@ -814,13 +806,13 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
           if (field_var_name.empty())
           {
             fields_projection_str 
-            << indent_level 
-            << "{\n" << nested_fields_proj.str() 
-            << indent_level 
-            << "}\n";
+            << indent_level << "{\n" 
+            << nested_fields_proj.str() 
+            << indent_level << "}\n";
           }
           else
           {
+            // named union/struct, generate a separate projection
             field_type_name = field_var_name;
             fields_projection_str << indent_level << "projection " << field_type_name << " " << field_var_name << ";\n";
             nested_struct_proj_str
@@ -861,7 +853,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       if (primitive_type_map.find(field_type_name) != primitive_type_map.end())
         field_type_name = primitive_type_map[field_type_name];
       std::string anno_str = pdgutils::constructAnnoStr(annotations);
-      fields_projection_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name << ((bw > 0) ? (" : " + to_string(bw)) : "") << ";\n";
+      fields_projection_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name << ((bw > 0) ? (" : " + to_string(bw)) : "") << ";\n"; // consider bitfield handling
     }
   }
 }
@@ -1005,9 +997,6 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
       if (proj_var_name.empty())
         proj_var_name = proj_type_name;
 
-      // concat ret preifx for return values
-      if (is_ret)
-        proj_type_name = "ret_" + proj_type_name;
 
       // parent_struct name
       std::string parent_struct_type_name = "";
@@ -1025,6 +1014,11 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
       if (is_global)
         global_keyword_prefix = "global ";
 
+      // concat ret preifx for return values
+      std::string ret_prefix = "";
+      if (is_ret)
+        ret_prefix = "ret_";
+
       output_file << "\t"
                   << global_keyword_prefix
                   << "projection < "
@@ -1032,6 +1026,7 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
                   << " "
                   << proj_type_name
                   << " > "
+                  << ret_prefix
                   << parent_struct_type_name
                   << proj_type_name
                   << " {\n"
@@ -1080,7 +1075,6 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
       ret_type_str = primitive_type_map[ret_type_str];
     if (dbgutils::isStructPointerType(*func_ret_di_type) || dbgutils::isStructType(*func_ret_di_type))
       ret_type_str = "projection ret_" + ret_type_str;
-
     auto ret_tree_formal_in_root_node = fw->getRetFormalInTree()->getRootNode();
     if (ret_tree_formal_in_root_node != nullptr)
     {
@@ -1111,10 +1105,9 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
   assert(_exist_func_defs.find(called_func_name) == _exist_func_defs.end() && "duplicate func definition!\n");
   _exist_func_defs.insert(called_func_name);
   // handle exported func called from kernel to driver. Switch name and rpc prefix
-  if (!_SDA->isKernelFunc(F))
+  if (!_SDA->isKernelFunc(called_func_name))
   {
     rpc_prefix = "rpc_ptr";
-    // std::string called_func_ptr_name = getExportedFuncPtrName(called_func_name);
   }
   // indirect call from kernel  to driver
   if (_driver_exported_func_symbols.find(called_func_name) != _driver_exported_func_symbols.end())
@@ -1141,30 +1134,27 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     std::string arg_lowest_type_name = "";
     if (arg_lowest_di_type != nullptr)
       arg_lowest_type_name = dbgutils::getSourceLevelTypeName(*arg_lowest_di_type, true);
-
     if (dbgutils::isStructPointerType(*arg_di_type) || dbgutils::isUnionPointerType(*arg_di_type))
     {
-      std::string ptr_postfix = "";
-      while (!arg_type_name.empty() && arg_type_name.back() == '*')
-      {
-        ptr_postfix += "*";
-        arg_type_name.pop_back();
-      }
-
       if (_SDA->isGlobalOpStruct(arg_lowest_type_name))
       {
-        arg_type_name = std::string("projection ") + std::string("_global_") + arg_lowest_type_name + ptr_postfix;
+        arg_type_name = std::string("projection ") + std::string("_global_") + arg_lowest_type_name;
       }
       else
       {
-        arg_type_name = "projection " + arg_type_name + ptr_postfix;
+        arg_type_name = "projection " + arg_type_name;
       }
     }
     else if (dbgutils::isFuncPointerType(*arg_di_type))
     {
       arg_type_name = "rpc_ptr";
-      arg_name = arg_name + " " + arg_name;
+      if (_exported_funcs_ptr_name_map.find(arg_name) != _exported_funcs_ptr_name_map.end())
+        arg_type_name = arg_type_name + " " + _exported_funcs_ptr_name_map[arg_name];
+      else
+        arg_type_name = arg_type_name + " " + arg_name;
+      // auto pointed_funcs = getPointedFuncAtArgIdx(F, i);
       // TODO: for function pointer that are not defined by global structs, we need to handle differently.
+      // need to reason about call sites to construct the function definition
     }
 
     auto annotations = inferTreeNodeAnnotations(*root_node);
@@ -1181,7 +1171,14 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
     if (primitive_type_map.find(arg_type_name) != primitive_type_map.end())
       arg_type_name = primitive_type_map[arg_type_name];
 
-    rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + arg_name;
+    // rearrange the location for pointer symbol *
+    std::string ptr_postfix = "";
+    while (!arg_type_name.empty() && arg_type_name.back() == '*')
+    {
+      ptr_postfix += "*";
+      arg_type_name.pop_back();
+    }
+    rpc_str = rpc_str + arg_type_name + " " + anno_str + " " + ptr_postfix + arg_name;
 
     if (i != arg_list.size() - 1)
       rpc_str += ", ";
@@ -1224,7 +1221,6 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool processing_ex
   auto ret_arg_tree = fw->getRetFormalInTree();
   if (fw->getReturnValDIType() != nullptr)
   {
-    errs() << "generating ret tree for " << F.getName() << "\n";
     generateIDLFromArgTree(ret_arg_tree, _idl_file, true, false);
   }
   // generate projection for each argument
@@ -1313,7 +1309,7 @@ void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &tree_node, std::set<
                   if (ConstantInt *ci = dyn_cast<ConstantInt>(si->getValueOperand()))
                   {
                     unsigned bytes_size = ci->getZExtValue();
-                    user_anno = user_anno + "<" + std::to_string(bytes_size) + ">";
+                    user_anno = user_anno + "<{{" + std::to_string(bytes_size) + "}}>";
                   }
                 }
               }
@@ -1400,6 +1396,26 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
     }
   }
   return annotations;
+}
+
+/*
+if an argument is a funciton pointer, check the call sites of the function
+and return all the possible functions pointed by the argument
+*/
+std::set<Function *> pdg::DataAccessAnalysis::getPointedFuncAtArgIdx(Function &F, unsigned arg_idx)
+{
+  std::set<Function *> ret;
+  for (auto user : F.users())
+  {
+    if (CallInst *ci = dyn_cast<CallInst>(user))
+    {
+      auto func_ptr_arg = ci->getArgOperand(arg_idx);
+      assert(func_ptr_arg != nullptr && "cannot get pointed func at arg idx!\n");
+      if (Function* f = dyn_cast<Function>(func_ptr_arg))
+        ret.insert(f);
+    }
+  }
+  return ret;
 }
 
 bool pdg::DataAccessAnalysis::globalVarHasAccessInDriver(GlobalVariable &gv)

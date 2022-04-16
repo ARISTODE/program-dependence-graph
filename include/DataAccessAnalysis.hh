@@ -40,7 +40,7 @@ namespace pdg
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
     std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
-    void inferAllocStackForKernelToDriverCalls();
+    // void inferAllocStackForKernelToDriverCalls();
     std::string inferAllocStackAnnotation(TreeNode &tree_node);
     void inferUserAnnotation(TreeNode &tree_node, std::set<std::string> &annotations);
     void inferMayWithin(TreeNode &tree_node, std::set<std::string> &anno_str);
@@ -53,6 +53,7 @@ namespace pdg
     std::string getExportedFuncPtrName(std::string func_name);
     std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
     FunctionWrapper* getNescheckFuncWrapper(llvm::Function &F); // F's signature is rewrittern by nescheck
+    std::set<llvm::Function *> getPointedFuncAtArgIdx(llvm::Function &F, unsigned arg_idx);
     // logging related functions
     void printContainerOfStats();
     void logSkbFieldStats(TreeNode &skb_root_node);

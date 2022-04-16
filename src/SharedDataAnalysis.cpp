@@ -32,8 +32,6 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   buildTreesForSharedStructDIType(M);
   // generate shared field id
   computeSharedFieldID();
-  _shared_field_id.insert("struct inodei_rdev");
-  _shared_field_id.insert("struct inodedevt");
   // dumpSharedFieldID();
   // computeSharedGlobalVars();
   if (!pdgutils::isFileExist("shared_struct_types"))
@@ -84,7 +82,10 @@ void pdg::SharedDataAnalysis::setupKernelFuncs(Module &M)
     if (func == nullptr)
       continue;
     if (_driver_domain_funcs.find(func) == _driver_domain_funcs.end())
+    {
       _kernel_domain_funcs.insert(func);
+      _kernel_domain_func_names.insert(func->getName().str());
+    }
   }
 }
 
@@ -150,7 +151,6 @@ std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
   }
   return boundary_trans_funcs;
 }
-
 /*
 Basically, we can both driver side and kernel side code. Then 
 compute the intersaction of struct types used by both sides.
@@ -480,6 +480,8 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       }
     }
   }
+  _shared_field_id.insert("struct inodei_rdev");
+  _shared_field_id.insert("struct inodedevt");
 }
 
 void pdg::SharedDataAnalysis::computeSharedGlobalVars()

@@ -11,6 +11,12 @@ void pdg::BoundaryAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
   AU.setPreservesAll();
 }
 
+std::set<std::string> remove_ops = {
+    "ixgbe_eeprom_operations",
+    "ixgbe_mac_operations",
+    "ixgbe_mbx_operations",
+    "ixgbe_phy_opeations"};
+
 bool pdg::BoundaryAnalysis::runOnModule(Module &M)
 {
   setupBlackListFuncNames();
@@ -113,6 +119,9 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     // if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
     //   continue;
     driver_global_struct_types << gv_di_type_name << "\n";
+    if (remove_ops.find(gv_di_type_name) != remove_ops.end())
+      continue;
+
     const auto &typeArrRef = dyn_cast<DICompositeType>(gv_lowest_di_type)->getElements();
     Type *global_type = global_var.getType();
     if (auto t = dyn_cast<PointerType>(global_type))

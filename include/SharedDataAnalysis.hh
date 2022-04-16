@@ -23,7 +23,8 @@ namespace pdg
     std::set<llvm::Function *> &getDriverFuncs() { return _driver_domain_funcs; }
     bool isDriverFunc(llvm::Function &F) { return (_driver_domain_funcs.find(&F) != _driver_domain_funcs.end()); }
     std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
-    bool isKernelFunc(llvm::Function &F) { return (_kernel_domain_funcs.find(&F) != _kernel_domain_funcs.end()); }
+    // bool isKernelFunc(llvm::Function &F) { return (_kernel_domain_funcs.find(&F) != _kernel_domain_funcs.end()); }
+    bool isKernelFunc(std::string func_name) { return (_kernel_domain_func_names.find(func_name) != _kernel_domain_func_names.end()); }
     void setupBoundaryFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
     std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
@@ -34,6 +35,7 @@ namespace pdg
     bool isGlobalOpStruct(std::string &s) { return _driver_func_op_struct_names.find(s) != _driver_func_op_struct_names.end(); }
     std::set<llvm::Function *> readFuncsFromFile(std::string file_name, llvm::Module &M);
     std::set<llvm::Function *> computeBoundaryTransitiveClosure();
+    bool isBoundaryFuncName(std::string &func_name) { return _boundary_func_names.find(func_name) != _boundary_func_names.end(); }
     void computeSharedStructDITypes();
     void computeGlobalStructTypeNames();
     void buildTreesForSharedStructDIType(llvm::Module &M);
@@ -67,6 +69,7 @@ namespace pdg
     std::set<llvm::DIType *> _shared_struct_di_types;
     std::set<llvm::Function *> _driver_domain_funcs;
     std::set<llvm::Function *> _kernel_domain_funcs;
+    std::set<std::string> _kernel_domain_func_names;
     std::set<llvm::Function *> _boundary_funcs;
     std::set<std::string> _boundary_func_names;
     std::map<llvm::DIType *, Tree *> _global_struct_di_type_map;

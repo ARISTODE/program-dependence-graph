@@ -122,7 +122,10 @@ bool pdg::dbgutils::isFuncPointerType(DIType &dt)
 
 bool pdg::dbgutils::isProjectableType(DIType &dt)
 {
-  return (isStructType(dt) || isUnionType(dt));
+  DIType *di = stripMemberTag(*stripAttributes(dt));
+  if (di == nullptr)
+    return false;
+  return (isStructType(*di) || isUnionType(*di));
 }
 
 bool pdg::dbgutils::isVoidPointerType(DIType &dt)

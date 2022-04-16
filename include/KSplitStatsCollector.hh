@@ -85,7 +85,8 @@ namespace pdg
     void collectInferredStringStats(std::set<std::string> &annotations);
     void printStats();
     void printDataStats();
-    void printStatsRaw();
+    void printTable1Raw();
+    void printTable2Raw();
 
   public:
     std::ofstream _stats_file;

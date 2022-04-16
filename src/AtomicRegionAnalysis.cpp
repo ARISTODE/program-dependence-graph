@@ -38,6 +38,7 @@ void pdg::AtomicRegionAnalysis::generateSyncStubsForAtomicRegions()
 {
   _sync_stub_file.open("kernel.idl", std::ios_base::app);
   _sync_stub_file << "// Atomic Regions Sync Stubs\n";
+  // for critical sections
   for (auto tree_pair : _sync_data_inst_tree_map)
   {
     Tree *tree = tree_pair.second;
@@ -70,6 +71,17 @@ void pdg::AtomicRegionAnalysis::generateSyncStubsForAtomicRegions()
     _sync_stub_file << "\t};\n";
   }
   // _sync_stub_file << "}\n";
+
+  // atomic operations
+  for (auto atomic_op : _warning_shared_atomic_ops)
+  {
+    /*
+    1. generate lock/unlock
+    2. generate 
+    */
+
+  }
+
   _sync_stub_file.close();
 }
 
@@ -282,7 +294,6 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
     // identify shared rcu lock
     if (isRcuLock(*lock_call_inst))
     {
-      errs() << "find rcu lock: " << cur_func->getName() << "\n";
       // find rcu_dereference call
       auto rcu_dereference_inst = findRcuDereferenceInst(insts_in_cs);
       if (!rcu_dereference_inst)
@@ -290,7 +301,6 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       // if rcu_dereference is found
       auto dereferenced_object = rcu_dereference_inst->getOperand(0);
       assert(dereferenced_object != nullptr && "cannot find rcu shared lock on null object! \n");
-      errs() << "rcu dereference obj: " << *dereferenced_object << "\n";
       auto object_node = _SDA->getPDG()->getNode(*dereferenced_object);
       if (object_node != nullptr)
       {
@@ -429,7 +439,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         if (has_nested_lock)
         {
           _ksplit_stats->_shared_nest_lock += 1;
-          errs() << "nested lock: " << lock_inst->getFunction()->getName() << "\n";
+          // errs() << "nested lock: " << lock_inst->getFunction()->getName() << "\n";
         }
       }
     }
@@ -461,6 +471,8 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
     // else
     // {
     // scenerio 2: check if the accessed var is a shared data
+    std::string parent_struct_type_name;
+    std::string modified_field_name;
     bool is_shared = false;
     auto alias_nodes = val_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
     auto in_alias = val_node->getInNeighborsWithDepType(EdgeType::DATA_ALIAS);
@@ -469,6 +481,7 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
     for (auto alias_node : alias_nodes)
     {
       // errs() << "atomic warn: " << atomic_op->getFunction()->getName() << " - " << *alias_node->getValue() << "\n";
+      // check in edges and see if it is addr variable
       for (auto in_edge : alias_node->getInEdgeSet())
       {
         if (in_edge->getEdgeType() != EdgeType::VAL_DEP)
@@ -479,35 +492,41 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           continue;
         auto field_id = pdgutils::computeTreeNodeID(*tree_node);
         if (_SDA->isSharedFieldID(field_id))
+        {
           is_shared = true;
-
-        if (!tree_node->getDIType())
-          continue;
+          break;
+        }
       }
 
       if (is_shared)
       {
         auto func_name = atomic_op->getFunction()->getName().str();
         func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-        if (_processed_func_names.find(func_name) == _processed_func_names.end())
+        // if (_processed_func_names.find(func_name) == _processed_func_names.end())
+        // {
+        //   _processed_func_names.insert(func_name);
+        _warning_atomic_op_count++;
+
+        if (DEBUG)
         {
-          _processed_func_names.insert(func_name);
-          _warning_atomic_op_count++;
+          printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
+          // auto dst_func_node = _call_graph->getNode(*atomic_op->getFunction());
+          // for (auto boundary_f : _SDA->getBoundaryFuncs())
+          // {
+          //   auto boundary_func_node = _call_graph->getNode(*boundary_f);
+          //   _call_graph->printPaths(*boundary_func_node, *dst_func_node);
+          // }
+        }
 
-          if (DEBUG)
+        if (EnableAnalysisStats)
+        {
+          _ksplit_stats->_shared_atomic_op += 1;
+          errs() << "shared atomic op: " << atomic_op->getFunction()->getName() << " - " << *atomic_op << "\n";
+          for (auto name : modified_names)
           {
-            printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
-            // auto dst_func_node = _call_graph->getNode(*atomic_op->getFunction());
-            // for (auto boundary_f : _SDA->getBoundaryFuncs())
-            // {
-            //   auto boundary_func_node = _call_graph->getNode(*boundary_f);
-            //   _call_graph->printPaths(*boundary_func_node, *dst_func_node);
-            // }
+            errs() << "\t op name: " << name << "\n";
           }
-
-          if (EnableAnalysisStats)
-            _ksplit_stats->_shared_atomic_op += 1;
-          // _ksplit_stats->increaseSharedAtomicOps();
+          _warning_shared_atomic_ops.insert(atomic_op);
         }
         break;
       }
@@ -526,7 +545,7 @@ void pdg::AtomicRegionAnalysis::computeModifedNames(pdg::Node &node, std::set<st
   {
     for (auto in_edge : alias_node->getInEdgeSet())
     {
-      if (in_edge->getEdgeType() == EdgeType::VAL_DEP)
+      if (in_edge->getEdgeType() == EdgeType::VAL_DEP) // check if connected with shared filed
       {
         TreeNode *tree_node = static_cast<TreeNode *>(in_edge->getSrcNode());
         if (!tree_node->getDIType())
