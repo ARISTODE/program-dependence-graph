@@ -34,14 +34,14 @@ pdg::Node *pdg::GenericGraph::getNode(Value &v)
 // DFS search
 bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
 {
-  // TODO: prune by call graph rechability, improve traverse efficiency
   if (canReach(src, dst, {}))
     return true;
   return false;
 }
 
-bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> include_edge_types)
+bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> &exclude_edge_types)
 {
+  // self-reachability
   if (&src == &dst)
     return true;
 
@@ -63,7 +63,7 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeTy
     for (auto out_edge : current_node->getOutEdgeSet())
     {
       // exclude path
-      if (include_edge_types.find(out_edge->getEdgeType()) == include_edge_types.end())
+      if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
         continue;
       node_queue.push(out_edge->getDstNode());
     }
