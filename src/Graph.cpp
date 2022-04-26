@@ -34,7 +34,8 @@ pdg::Node *pdg::GenericGraph::getNode(Value &v)
 // DFS search
 bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
 {
-  if (canReach(src, dst, {}))
+  std::set<EdgeType> edge_types;
+  if (canReach(src, dst, edge_types))
     return true;
   return false;
 }
