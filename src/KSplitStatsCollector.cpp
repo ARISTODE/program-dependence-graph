@@ -144,9 +144,12 @@ void pdg::KSplitStats::printTable1Raw()
 void pdg::KSplitStats::printTable2Raw()
 {
   _stats_file.open("table2");
-  _stats_file << _driver_to_kernel_func_call << "/" << _kernel_to_driver_func_call << "\n";
+  _stats_file << _driver_to_kernel_func_call << "\n";
+  _stats_file << _kernel_to_driver_func_call << "\n";
   _stats_file << _total_func_size << "/0" << "\n";
-  _stats_file << _fields_deep_copy  << "/" << _fields_shared_analysis << "\n";
+
+  // XXX: Not needed for table2
+  //_stats_file << _fields_deep_copy  << "/" << _fields_shared_analysis << "\n";
   // shared data analysis impact
   _stats_file << _total_ptr_num << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
   _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num  << "\n";
