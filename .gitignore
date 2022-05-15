@@ -30,3 +30,8 @@ Temporary Items
 # Java
 *.class
 /build
+
+# vim tmp files
+*~
+*.swp
+*.swo

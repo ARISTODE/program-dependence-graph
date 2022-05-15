@@ -1,111 +1,55 @@
-# PDG Document
+# KSplit
 
 ## Introduction
+This repository contains the key static analyses implementations for the KSplit project. KSplit is a driver isolation framework that helps developers to 
+isolate driver with automatic supports. The main static analyses in KSplit are described below. Note that the analyses need to run aspect to the listed order.
 
-This project is a key component of our PtrSplit and Program-mandering works. It aims at building a modular inter-procedural program dependence graph (PDG) for practical use. Our program dependence graph is field senstive, context-insensitive and flow-insensitive. For more details, welcome to read our CCS'17 paper about PtrSplit: \[[http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf\]](http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf%5D) If you find this tool useful, please cite the PtrSplit paper in your publication. Here's the bibtex entry:
+1. Boundary analysis -> computes the boundary between kernel and the isolated driver using common driver-kernel communication idiom.
+2. Shared fields analysis -> computes the shared struct fields that are accessed on both driver and kernel sides. This set of fields are used in later analyses to eliminate the private fields required synchronization and improve communication performance.
+3. Field access analysis -> computes the struct fields that are accessed through references passed across islation boundary. 
+4. Concurrency data synchronization analysis -> computes all the atomic regions, e.g, critical sections and atomic operations, and the shared data accessed in these regions. 
+5. Nescheck analysis -> classify the pointers passed across isolation boundary into three categories: singleton, seq, wild. These classes are used in the IDL generation to correctly generate marshaling requirement for the pointers.
+6. IDL generation -> takes information computed in steps 3, 4 and 5, and generate the final IDL that will be used to compile the communication code.
 
-@inproceedings{LiuTJ17Ptrsplit,
-
-author = {Shen Liu and Gang Tan and Trent Jaeger},
-
-title = {{PtrSplit}: Supporting General Pointers in Automatic Program Partitioning},
-
-booktitle = {24th ACM Conference on Computer and Communications Security ({CCS})},
-
-pages = {2359--2371},
-
-year = {2017}
-
-}
-
-We have upgraded the implementation to LLVM 12.0.0. Currently, we only support building PDGs for C programs.
-
-A PDG example looks like this (the blue part corresponds to the parameter tree):
+This picture below shows the overrall workflow:
+- [  ] Add workflow diagram
 
 
 ## Getting Started
+To replicate all KSplit experiments, please refer to our artifact page: https://github.com/mars-research/ksplit-artifacts
+
+To experiment with the KSplit static analyses part, follow the instructions below.
+
+Step 1: Build PDG
+```bash
+# build pdg
+# Clone pdg repos
+git clone https://github.com/ARISTODE/program-dependence-graph.git pdg --recursive --branch dev_ksplit
+# build SVF, the key component of reasoning pointer alias in PDG
+pushd ./pdg/SVF
+mkdir -p build && cd build;
+cmake .. && make -j $(nproc)
+popd
+# build PDG
+mkdir -p build && cd build;
+cmake .. && make -j $(nproc)
 ```
-mkdir build
-cd build
-cmake ..
-make
-opt -load libpdg.so -dot-pdg < test.bc
-```
+
+Step 2: 
+Run different passes to obtain results from different stages. See [#available-passes] for more details.
+
 
 ### Available Passes
 
 **\-pdg:** generate the program dependence graph (inter-procedural)
 
-**\-cdg:** generate the control dependence graph (intra-procedural)
+**\-output-boundary-info:** generate fields that desribe the isolation boundary
 
-**\-ddg:** generate the data dependence graph (intra-procedural)
+**\-shared-data:** compute shared struct fields
 
-**\-dot-\*:** for visualization. (dot)
+**\-daa:** comopute data accessed through references passed in cross-domain function calls
 
-For those large software, generating a visualizable PDG is not easy. Graphviz often fails to generate the .dot file for a program with more than 1000 lines of C code. Fortunately, we rarely need such a large .dot file but only do kinds of analyses on the PDG, which is always in memory.
+**\-atomic-region:** comopute atomic regions
 
+**\-nescheck*:** run nescheck on pointers passed across isolation boundary
 
-
-## Use Guide
-
-We can use the current PDG as a required pass through following steps:
-
-### Compile PDG
-
-1. download PDG repo: git clone https://github.com/ARISTODE/program-dependence-graph.git
-2. cd program-dependence-graph
-3. make
-
-### Use PDG as a required Pass
-Using cmake, add 
-```
-include_directories(program_dependence_graph/include)
-add_subdirectory(program_dependence_graph)
-```
-
-Then, add 
-```
-AU.addRequired<ProgramDependencyGraph>();
-```
-in your pass's **getAnalysisUsage** method (legacy pass manager).
-
-### Useful APIs
-
-**Query the reachability of two nodes:**
-
-```
-ProgramGraph *g = getAnalysis<ProgramDependencyGraph>()->getPDG();
-
-Value* src;
-Value* dst;
-
-pdg::Node* src_node = g->getNode(*src);
-pdg::Node* dst_node = g->getNode(*dst);
-
-if (g->canReach(src_node, dst_node)) 
-{
-  // do something...
-}
-
-```
-
-
-**Traverse the PDG with path constrains**
-This method is useful to traverse the graph through certain edge types. In the example, we put the edge types we want to exclude in the set **exclude_edges**. Then, pass that as an argument to the **canReach** function.
-
-```
-ProgramGraph *g = getAnalysis<ProgramDependencyGraph>()->getPDG();
-
-Value* src;
-Value* dst;
-
-pdg::Node* src_node = g->getNode(*src);
-pdg::Node* dst_node = g->getNode(*dst);
-
-std::set<pdg::EdgeType> exclude_edges;
-
-if (g->canReach(src_node, dst_node, exclude_edges)) 
-{
-  // do something...
-}
-```
