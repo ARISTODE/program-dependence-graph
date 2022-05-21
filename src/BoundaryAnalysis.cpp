@@ -119,8 +119,8 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     // if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
     //   continue;
     driver_global_struct_types << gv_di_type_name << "\n";
-    if (remove_ops.find(gv_di_type_name) != remove_ops.end())
-      continue;
+    // if (remove_ops.find(gv_di_type_name) != remove_ops.end())
+    //   continue;
 
     const auto &typeArrRef = dyn_cast<DICompositeType>(gv_lowest_di_type)->getElements();
     Type *global_type = global_var.getType();
