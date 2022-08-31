@@ -477,6 +477,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   auto parameter_in_nodes = _PDG->findNodesReachedByEdges(tree_node, edge_types);
   for (auto n : parameter_in_nodes)
   {
+    // TODO: check if node is accessed in library function with summary
+
+    // compute r/w to the node
     if (n->getValue() != nullptr)
     {
       if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
@@ -645,6 +648,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     */
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && child_node->is_sentinel && field_type_name == "union")
       continue;
+
     // collect shared field stat
     child_node->is_shared = true;
     // countControlData(*child_node);

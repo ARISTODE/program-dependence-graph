@@ -100,7 +100,7 @@ namespace NesCheck
     std::map<Value*, std::string> PtrTypeMap;
     pdg::AtomicRegionAnalysis *_ARA;
     pdg::DataAccessAnalysis *_DDA;
-    pdg::ProgramGraph* _PDG;
+    pdg::ProgramGraph *_PDG;
     std::set<std::string> BoundaryFuncNames;
     pdg::KSplitStats *_ksplit_stats;
 
@@ -637,6 +637,14 @@ namespace NesCheck
         auto func_w = _PDG->getFuncWrapper(*func);
         // process all the formal tree root node
         std::vector<pdg::TreeNode *> root_nodes;
+
+        // create an entry for driver API fields and ptr fields access
+        if (_DDA->getSDA()->isDriverFunc(*func))
+        {
+          _ksplit_stats->_drv_api_acc_map.insert(std::make_pair(func, std::make_tuple(0, 0, 0)));
+          _ksplit_stats->_drv_api_ptr_acc_map.insert(std::make_pair(func, std::make_tuple(0, 0, 0)));
+        }
+
         for (auto arg : func_w->getArgList())
         {
           auto arg_tree = func_w->getArgFormalInTree(*arg);
@@ -653,6 +661,7 @@ namespace NesCheck
         if (ret_arg_tree->getRootNode())
           root_nodes.push_back(ret_arg_tree->getRootNode());
 
+        bool is_driver_func = _DDA->getSDA()->isDriverFunc(*func);
         // start with the root node, then traverse fild nodes and classify each accordingly
         for (auto root_node : root_nodes)
         {
@@ -695,7 +704,7 @@ namespace NesCheck
                 auto classified_ptr_type = PtrTypeMap[node_val];
                 // mark the node as seq pointer, these nodes use array syntax while genereating IDL
                 if (accumulate_stats)
-                  _ksplit_stats->collectDataStats(*front, classified_ptr_type);
+                  _ksplit_stats->collectDataStats(*front, classified_ptr_type, is_driver_func, func);
 
                 if (classified_ptr_type == "SEQ" && pdg::dbgutils::isPointerType(*front->getDIType()))
                   front->setSeqPtr();
@@ -1649,7 +1658,10 @@ namespace NesCheck
           _ksplit_stats->printTable2Raw();
         }
         else
+        {
+          _ksplit_stats->printDrvAPIStats();
           _ksplit_stats->printDataStats();
+        }
       }
       auto stop = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);

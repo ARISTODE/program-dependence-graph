@@ -3,9 +3,10 @@
 #include "LLVMEssentials.hh"
 #include "DebugInfoUtils.hh"
 #include "Tree.hh"
-#include <set>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
+#include <tuple>
 
 namespace pdg
 {
@@ -22,74 +23,21 @@ namespace pdg
       static KSplitStats ks{};
       return ks;
     }
-    // void increaseKernelToDriverCallNum(unsigned num) { _kernel_to_driver_func_call = (num == 0 ? _kernel_to_driver_func_call + 1 : _kernel_to_driver_func_call + num) ; }
-    // void increaseDriverToKernelCallNum(unsigned num) { _driver_to_kernel_func_call = (num == 0 ? _driver_to_kernel_func_call + 1 : _driver_to_kernel_func_call + num) ; }
-    // void increaseTotalFuncSize(unsigned num) { _total_func_size = (num == 0 ? _total_func_size + 1 : _total_func_size + num); }
-    // void increaseTotalPtrNum(unsigned num = 0) { _total_ptr_num = (num == 0 ? _total_ptr_num + 1 : _total_ptr_num + num); }
-    // void increaseSharedPtrNum() { _shared_ptr_num++; }
-    // void increaseSafePtrNum() { _safe_ptr_num++; }
-    // void increaseTotalVoidPtrNum() { _void_ptr_num++; }
-    // void increaseSharedVoidPtrNum() { _shared_void_ptr_num++; }
-    // void increasePtrArithNum() { _ptr_arith_num++; }
-    // void increasePtrGEPArithSDNum() { _ptr_gep_arith_sd++; }
-    // void increasePtrtoIntArithSDNum() { _ptr_ptrtoint_arith_sd++; }
-    // void increasePtrGEPArithDaaNum() { _ptr_gep_arith_daa++; }
-    // void increasePtrtoIntArithDaaNum() { _ptr_ptrtoint_arith_daa++; }
-    // void increaseUnhandledVoidPtrNum() { _unhandled_void_ptr_num++; }
-    // void increaseUnhandledVoidPtrSDNum() { _unhandled_void_ptr_sd_num++; }
-    // void increaseStringNum() { _string_num++; }
-    // void increaseInferredStringNum() { _inferred_string_num++; }
-    // void increaseArrayNum() { _array_num++; }
-    // void increaseUnhandledArrayNum() { _unhandled_array_num++; }
-    // void increaseStructArrayNum() { _struct_array_num++; }
-    // void increaseFuncPtrNum() { _func_ptr_num++; }
-    // void increaseNonVoidWildPtrNum() { _non_void_wild_ptr_num++; }
-    // void increaseVoidWildPtrNum() { _void_wild_ptr_num++; }
-    // void increaseUnknownPtrNum() { _unknown_ptr_num++; }
-    // void increaseFieldsDeepCopy(unsigned num = 0) { _fields_deep_copy = (num == 0 ? _fields_deep_copy + 1 : _fields_deep_copy + num); }
-    // void increaseFieldsFieldAccess() { _fields_field_analysis++; }
-    // void increaseFieldsSharedData() { _fields_shared_analysis++; }
-    // void increaseFieldsBoundaryOpt() { _fields_removed_boundary_opt++; }
-    // void increaseTotalUnionNum() { _total_union_num++; }
-    // void increaseTotalUnionPtrNum() { _total_union_ptr_num++; }
-    // void increaseSharedUnionNum() { _shared_union_num++; }
-    // void increaseSharedTaggedUnionNum() { _shared_tagged_union_num++; }
-    // void increaseSharedUnionPtrNum() { _shared_union_ptr_num++; }
-    // void increaseTotalCS() { _total_CS++; }
-    // void increaseSharedCS() { _shared_CS++; }
-    // void increaseTotalAtomicOps() { _total_atomic_op++; }
-    // void increaseSharedAtomicOps() { _shared_atomic_op++; }
-    // void increaseTotalRCU() { _total_rcu++; }
-    // void increaseSharedRCU() { _shared_rcu++; }
-    // void increaseTotalSeqlock() { _total_seqlock++; }
-    // void increaseSharedSeqlock() { _shared_seqlock++; }
-    // void increaseTotalNestLock() { _total_nest_lock++; }
-    // void increaseSharedNestLock() { _shared_nest_lock++; }
-    // void increaseTotalBarrier() { _total_barrier++; }
-    // void increaseSharedBarrier() { _shared_barrier++; }
-    // void increaseTotalBitfield() { _total_bitfield++; }
-    // void increaseSharedBitfield() { _shared_bitfield++; }
-    // void increaseTotalContainerof() { _total_containerof++; }
-    // void increaseSharedContainerof() { _shared_containerof++; }
-    // void increaseSharedIORemap() { _shared_ioremap_num++; }
-    // void increaseSharedUser() { _shared_user_num++; }
-    // void increaseSharedSentinelArray() { _shared_sentinel_array++; }
-    // void increaseControlDataFieldNum() { _control_data_field_num++; }
-    // void increaseReadDataFieldNum() { _read_data_field++; }
-    // void increaseWrittenDataFieldNum() { _written_data_field++; }
-    // void increaseParamNum() { _param_num++; }
     void collectTotalPointerStats(llvm::DIType &dt);
     // void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string func_name);
-    void collectDataStats(TreeNode &tree_node, std::string nescheck_ptr_type);
+    void collectDataStats(TreeNode &tree_node, std::string nescheck_ptr_type, bool is_driver_func=false, llvm::Function* func = nullptr);
     void collectSharedPointerStats(TreeNode &tree_node, std::string nescheck_ptr_type);
     void collectInferredStringStats(std::set<std::string> &annotations);
     void printStats();
     void printDataStats();
     void printTable1Raw();
     void printTable2Raw();
+    void printDrvAPIStats();
 
   public:
     std::ofstream _stats_file;
+    std::unordered_map<llvm::Function*, std::tuple<unsigned, unsigned, unsigned>> _drv_api_acc_map;
+    std::unordered_map<llvm::Function*, std::tuple<unsigned, unsigned, unsigned>> _drv_api_ptr_acc_map;
     // 1.a complexity
     unsigned _driver_to_kernel_func_call = 0;
     unsigned _kernel_to_driver_func_call = 0;
@@ -139,8 +87,6 @@ namespace pdg
     unsigned _sized_sentinel_num = 0;
     unsigned _sized_string_num = 0;
     unsigned _sized_array_collocated_num = 0;
-
-    // shared / private stats
 
     // atomic region
     unsigned _total_CS = 0;
@@ -194,6 +140,14 @@ namespace pdg
     unsigned _unknown_read = 0;
     unsigned _unknown_write = 0;
     unsigned _unknown_rw = 0;
+
+    // driver specific data
+    unsigned _driver_read_fields = 0;
+    unsigned _driver_write_fields = 0;
+    unsigned _driver_access_fields = 0;
+    unsigned _driver_read_ptr_fields = 0;
+    unsigned _driver_write_ptr_fields = 0;
+    unsigned _driver_access_ptr_fields = 0;
 
     // outdated
     unsigned _unhandled_array_num = 0; // for some dyn size arr, we could try infer it's size

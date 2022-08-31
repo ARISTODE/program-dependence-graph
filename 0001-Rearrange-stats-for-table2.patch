@@ -1,0 +1,27 @@
+From d7216db88c02cff335098fa59b69625f4d0f249f Mon Sep 17 00:00:00 2001
+From: Vikram Narayanan <vikram186@gmail.com>
+Date: Tue, 10 May 2022 03:20:03 -0600
+Subject: [PATCH] Rearrange stats for table2
+
+---
+ src/KSplitStatsCollector.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/KSplitStatsCollector.cpp b/src/KSplitStatsCollector.cpp
+index 9889041..86b60cd 100644
+--- a/src/KSplitStatsCollector.cpp
++++ b/src/KSplitStatsCollector.cpp
+@@ -154,9 +154,9 @@ void pdg::KSplitStats::printTable2Raw()
+   _stats_file << _total_ptr_num << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
+   _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num  << "\n";
+   _stats_file << (_total_CS - _shared_CS) << "/" << _shared_CS  << "\n";
++  _stats_file << (_total_atomic_op - _shared_atomic_op) << "/" << _shared_atomic_op  << "\n";
+   _stats_file << (_total_rcu - _shared_rcu) << "/" << _shared_rcu  << "\n";
+   _stats_file << (_total_seqlock - _shared_seqlock) << "/" << _shared_seqlock  << "\n";
+-  _stats_file << (_total_atomic_op - _shared_atomic_op) << "/" << _shared_atomic_op  << "\n";
+   _stats_file << (_total_containerof - _shared_containerof) << "/" << _shared_containerof << "\n";
+   // pointer stats
+   _stats_file << (_safe_ptr_num + _unknown_ptr_num) << "/0\n";
+-- 
+2.36.0
+

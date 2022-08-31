@@ -48,6 +48,7 @@ namespace pdg
     bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);
     bool containerHasSharedFieldsAccessed(llvm::BitCastInst &bci, std::string struct_type_name);
     bool isExportedFunc(llvm::Function &F);
+    bool passedToLibrary(Node& paramNode); // TODO: finish implementing the function summary
     std::string computeAllocCallerAnnotation(TreeNode &tree_node);
     std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
     std::string getExportedFuncPtrName(std::string func_name);
