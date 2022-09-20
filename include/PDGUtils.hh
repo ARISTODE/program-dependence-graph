@@ -24,6 +24,7 @@ namespace pdg
     bool hasWriteAccess(llvm::Value &v);
     bool isStaticFuncVar(llvm::GlobalVariable &gv, llvm::Module &M);
     bool isStaticGlobalVar(llvm::GlobalVariable &gv);
+    bool isPrecedeInst(llvm::Instruction &i1, llvm::Instruction &i2, llvm::Function &F);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionBeforeInst(llvm::Instruction &i);
     std::set<llvm::Instruction *> getInstructionAfterInst(llvm::Instruction &i);

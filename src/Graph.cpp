@@ -1,4 +1,7 @@
 #include "Graph.hh"
+#include "PDGEdge.hh"
+#include "PDGEnums.hh"
+#include "llvm/IR/Instructions.h"
 
 using namespace llvm;
 
@@ -129,7 +132,19 @@ void pdg::ProgramGraph::build(Module &M)
         node_type = GraphNodeType::INST_FUNCALL;
       if (isa<BranchInst>(&*inst_iter))
         node_type = GraphNodeType::INST_BR;
+
       Node *n = new Node(*inst_iter, node_type);
+
+      // handle values used inside instructions, e.g., tmp gep inst...
+      if (isa<StoreInst>(&*inst_iter)) {
+        for (auto operand : inst_iter->operand_values()) {
+          if (!isa<Instruction>(operand)) {
+            Node *val_node = new Node(*operand, GraphNodeType::VAR_OTHER);
+            addNode(*val_node);
+          }
+        }
+      }
+
       _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
       addNode(*n);
@@ -362,6 +377,20 @@ void pdg::ProgramGraph::buildGlobalAnnotationNodes(Module &M)
         }
         n->addNeighbor(*global_anno_node, EdgeType::ANNO_GLOBAL);
       }
+    }
+  }
+}
+
+void pdg::ProgramGraph::dumpDataDepGraph(Function &F) {
+  for (auto iter1 = inst_begin(F); iter1 != inst_end(F); iter1++) {
+    for (auto iter2 = inst_begin(F); iter2 != inst_end(F); iter2++) {
+      if (&*iter1 == &*iter2)
+        continue;
+      Node* n1 = getNode(*iter1);
+      Node* n2 = getNode(*iter2);
+      assert((n1 && n2) && "cannot process null node");
+      if (canReach(*n1, *n2))
+        errs() << *iter1  << " - " << *iter2 << "\n";
     }
   }
 }

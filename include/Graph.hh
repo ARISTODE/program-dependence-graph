@@ -85,6 +85,7 @@ namespace pdg
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
     bool isAnnotationCallInst(llvm::Instruction &inst);
     void buildGlobalAnnotationNodes(llvm::Module &M);
+    void dumpDataDepGraph(llvm::Function &F);
 
   private:
     FuncWrapperMap _func_wrapper_map;

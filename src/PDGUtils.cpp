@@ -390,3 +390,17 @@ std::string& pdg::pdgutils::rtrim(std::string& s, const char* t)
     s.erase(s.find_last_not_of(t) + 1);
     return s;
 }
+
+
+// check if i1 is precede of i2
+bool pdg::pdgutils::isPrecedeInst(Instruction &i1, Instruction &i2, Function& F) 
+{
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++) {
+    auto &curInst = *inst_iter;
+    if (&curInst == &i1)
+      return true;
+    if (&curInst == &i2)
+      return false;
+  }
+  return false;
+}

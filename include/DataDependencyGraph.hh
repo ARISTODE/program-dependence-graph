@@ -17,6 +17,7 @@ namespace pdg
     bool runOnModule(llvm::Module &M) override;
     void addDefUseEdges(llvm::Instruction &inst);
     void addRAWEdges(llvm::Instruction &inst);
+    void addRAWEdgesUnderapproximate(llvm::Instruction &inst);
     void addAliasEdges(llvm::Instruction &inst);
     llvm::AliasResult queryAliasUnderApproximate(llvm::Value &v1, llvm::Value &v2);
 
