@@ -222,9 +222,9 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F) {
       for (auto arg : call_w->getArgList()) {
         Tree *actual_in_tree = call_w->getArgActualInTree(*arg);
         if (!actual_in_tree) {
-          // errs() << "[WARNING]: empty actual tree for callsite " <<
-          // *call_inst << "\n";
-          return;
+           errs() << "[WARNING]: empty actual tree for callsite " <<
+           *call_inst << " in func " << F.getName() << "\n";
+            continue;
         }
         Tree *actual_out_tree = call_w->getArgActualOutTree(*arg);
         call_site_node->addNeighbor(*actual_in_tree->getRootNode(),

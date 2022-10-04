@@ -98,6 +98,10 @@ void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst) {
     // obtain load address
     auto loadAddr = li->getPointerOperand();
     auto addrNode = g.getNode(*loadAddr);
+    if (addrNode == nullptr) {
+        errs() << "empty addr node load inst " << *loadAddr << " in func " << curFunc->getName().str() << "\n";
+        return;
+    }
     auto aliasNodes =
         addrNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
     aliasNodes.insert(addrNode);
