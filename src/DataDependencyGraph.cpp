@@ -26,6 +26,8 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
     {
       addDefUseEdges(*inst_iter);
       addAliasEdges(*inst_iter);
+      addRAWEdges(*inst_iter);
+      // some RAW could be missing due to the unsound alias analysis, need to swap the alias analysis used by the memory dependency analysis to obtain more precise results.
       addRAWEdgesUnderapproximate(*inst_iter);
     }
   }
