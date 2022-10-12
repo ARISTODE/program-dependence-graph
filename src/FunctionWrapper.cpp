@@ -174,3 +174,15 @@ std::set<Value *> pdg::FunctionWrapper::computeAddrVarDerivedFromArg(Argument &a
   }
   return ret;
 }
+
+int pdg::FunctionWrapper::getArgIdxByFormalInTree(pdg::Tree *tree)
+{
+  int idx = 0;
+  for (auto iter : _arg_formal_in_tree_map)
+  {
+    if (iter.second == tree)
+      return idx;
+    idx++;
+  }
+  return -1;
+}

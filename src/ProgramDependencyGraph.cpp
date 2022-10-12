@@ -134,7 +134,6 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   // don't expand field sensitive connection if not specified
   if (!FieldSensitive)
     return;
-
   // step 2: connect actual in -> formal in, formal out -> actual out
   auto actual_arg_list = cw.getArgList();
   auto formal_arg_list = fw.getArgList();
@@ -147,12 +146,16 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     // step 2: connect actual in -> formal in
     auto actual_in_tree = cw.getArgActualInTree(*actual_arg);
     auto formal_in_tree = fw.getArgFormalInTree(*formal_arg);
+    if (!actual_in_tree || !formal_in_tree)
+      continue;
     _PDG->addTreeNodesToGraph(*actual_in_tree);
     connectInTrees(actual_in_tree, formal_in_tree, EdgeType::PARAMETER_IN);
 
     // step 3: connect actual out -> formal out
     auto actual_out_tree = cw.getArgActualOutTree(*actual_arg);
     auto formal_out_tree = fw.getArgFormalOutTree(*formal_arg);
+    if (!actual_out_tree || !formal_out_tree)
+      continue;
     _PDG->addTreeNodesToGraph(*actual_out_tree);
     connectOutTrees(formal_out_tree, actual_out_tree, EdgeType::PARAMETER_OUT);
   }
@@ -164,6 +167,8 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     Tree *ret_formal_out_tree = fw.getRetFormalOutTree();
     Tree *ret_actual_in_tree = cw.getRetActualInTree();
     Tree *ret_actual_out_tree = cw.getRetActualOutTree();
+    if (!ret_formal_in_tree || !ret_formal_out_tree || !ret_actual_in_tree || !ret_actual_out_tree)
+      return;
     connectInTrees(ret_actual_in_tree, ret_formal_in_tree, EdgeType::PARAMETER_IN);
     connectInTrees(ret_actual_out_tree, ret_formal_out_tree, EdgeType::PARAMETER_OUT);
   }
@@ -220,10 +225,11 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
     if (_PDG->hasCallWrapper(*call_inst))
     {
       auto call_w = getCallWrapper(*call_inst);
-      if (!call_w)
-        continue;
       auto call_site_node = _PDG->getNode(*call_inst);
-      if (!call_site_node)
+      if (!call_w || !call_site_node)
+        continue;
+
+      if (call_w->getCalledFunc() && call_w->getCalledFunc()->isVarArg()) 
         continue;
 
       if (FieldSensitive)
@@ -233,8 +239,8 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
           Tree *actual_in_tree = call_w->getArgActualInTree(*arg);
           if (!actual_in_tree)
           {
-            // errs() << "[WARNING]: empty actual tree for callsite " << *call_inst << "\n";
-            return;
+            // errs() << "[WARNING]: empty actual tree for callsite " << *call_inst << " in func " << F.getName() << "\n";
+            continue;
           }
           Tree *actual_out_tree = call_w->getArgActualOutTree(*arg);
           call_site_node->addNeighbor(*actual_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
@@ -409,6 +415,9 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actual_i
   std::set<Instruction *> insts_before_ci = pdgutils::getInstructionBeforeInst(ci);
   std::queue<TreeNode *> node_queue;
   node_queue.push(root_node);
+  // TODO: test for ixgbe probe
+  bool ixgbeProbeFlag = (ci.getFunction()->getName() == "ixgbe_probe");
+
   while (!node_queue.empty())
   {
     TreeNode *current_node = node_queue.front();
@@ -425,6 +434,7 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actual_i
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
       auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+      // connect addr var node with parameter_in node
       addr_var_node->addNeighbor(*current_node, EdgeType::PARAMETER_IN);
       for (auto alias_node : alias_nodes)
       {

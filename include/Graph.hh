@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <map>
 #include <set>
+#include <unordered_set>
 
 namespace pdg
 {
@@ -85,7 +86,7 @@ namespace pdg
     llvm::DIType *computeNodeDIType(Node &n);
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
-    std::set<llvm::Value *> &getAllocators() { return _allocators; }
+    std::unordered_set<llvm::Value *> &getAllocators() { return _allocators; }
     std::set<llvm::Value *> &getDeallocators() { return _deallocators; }
     
   private:
@@ -93,7 +94,7 @@ namespace pdg
     CallWrapperMap _call_wrapper_map;
     GlobalVarTreeMap _global_var_tree_map;
     NodeDIMap _node_di_type_map;
-    std::set<llvm::Value *> _allocators;
+    std::unordered_set<llvm::Value *> _allocators;
     std::set<llvm::Value *> _deallocators;
   };
 } // namespace pdg

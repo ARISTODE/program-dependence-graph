@@ -6,6 +6,7 @@ void pdg::PDGCallGraph::build(Module &M)
 {
   setupExcludeFuncs();
   setupExportedFuncs();
+  setupDriverFuncs();
 
   for (auto &F : M)
   {
@@ -36,10 +37,11 @@ void pdg::PDGCallGraph::build(Module &M)
         }
         else
         {
+          // indirect calls
           auto ind_call_candidates = getIndirectCallCandidates(*ci, M);
           for (auto ind_call_can : ind_call_candidates)
           {
-            Node* callee_node = getNode(*ind_call_can);
+            Node *callee_node = getNode(*ind_call_can);
             if (callee_node != nullptr)
               caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
           }
@@ -47,7 +49,7 @@ void pdg::PDGCallGraph::build(Module &M)
       }
     }
   }
-  
+
   _is_build = true;
 }
 
@@ -64,7 +66,7 @@ bool pdg::PDGCallGraph::isFuncSignatureMatch(CallInst &ci, llvm::Function &f)
   auto formal_ret_type = f.getReturnType();
   if (!isTypeEqual(*actual_ret_type, *formal_ret_type))
     return false;
-  
+
   for (unsigned i = 0; i < actual_arg_list_size; i++)
   {
     auto actual_arg = ci.getOperand(i);
@@ -75,7 +77,7 @@ bool pdg::PDGCallGraph::isFuncSignatureMatch(CallInst &ci, llvm::Function &f)
   return true;
 }
 
-bool pdg::PDGCallGraph::isTypeEqual(Type& t1, Type &t2)
+bool pdg::PDGCallGraph::isTypeEqual(Type &t1, Type &t2)
 {
   if (&t1 == &t2)
     return true;
@@ -88,7 +90,7 @@ bool pdg::PDGCallGraph::isTypeEqual(Type& t1, Type &t2)
 
   if (!t1_pointed_ty->isStructTy() || !t2_pointed_ty->isStructTy())
     return false;
-  
+
   auto t1_name = pdgutils::stripVersionTag(t1_pointed_ty->getStructName().str());
   auto t2_name = pdgutils::stripVersionTag(t2_pointed_ty->getStructName().str());
 
@@ -104,6 +106,9 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
   {
     if (F.isDeclaration() || F.empty())
       continue;
+    // process indirect calls from kernel to the target driver
+    if (!isDriverFunc(F))
+      continue;
     if (isFuncSignatureMatch(ci, F))
     {
       if (isExportedFunc(F))
@@ -115,27 +120,27 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
 
 bool pdg::PDGCallGraph::canReach(Node &src, Node &sink)
 {
-    std::queue<Node*> node_queue;
-    std::unordered_set<Node *> seen_node;
-    node_queue.push(&src);
-    while (!node_queue.empty())
-    {
-      Node* n = node_queue.front();
-      if (n == nullptr)
-        continue;
-      node_queue.pop();
-      if (n == &sink)
-        return true;
-      if (seen_node.find(n) != seen_node.end())
-        continue;
-      seen_node.insert(n);
+  std::queue<Node *> node_queue;
+  std::unordered_set<Node *> seen_node;
+  node_queue.push(&src);
+  while (!node_queue.empty())
+  {
+    Node *n = node_queue.front();
+    if (n == nullptr)
+      continue;
+    node_queue.pop();
+    if (n == &sink)
+      return true;
+    if (seen_node.find(n) != seen_node.end())
+      continue;
+    seen_node.insert(n);
 
-      for (auto out_neighbor : n->getOutNeighbors())
-      {
-        node_queue.push(out_neighbor);
-      }
+    for (auto out_neighbor : n->getOutNeighbors())
+    {
+      node_queue.push(out_neighbor);
     }
-    return false;
+  }
+  return false;
 }
 
 void pdg::PDGCallGraph::dump()
@@ -167,11 +172,11 @@ void pdg::PDGCallGraph::printPaths(Node &src, Node &sink)
       errs() << (*iter)->getName();
       if (std::next(iter, 1) != path.end())
         errs() << " -> ";
-      else 
+      else
         errs() << "\n\b";
     }
     errs() << "********************************************\n";
-    count ++;
+    count++;
   }
 }
 
@@ -190,8 +195,8 @@ void pdg::PDGCallGraph::computePathsHelper(PathVecs &path_vecs, Node &src, Node 
     return;
   assert(isa<Function>(src.getValue()) && "cannot process non function node (compute path, src)\n");
   assert(isa<Function>(sink.getValue()) && "cannot process non function node (compute path, sink)\n");
-  Function* src_func = cast<Function>(src.getValue());
-  Function* sink_func = cast<Function>(sink.getValue());
+  Function *src_func = cast<Function>(src.getValue());
+  Function *sink_func = cast<Function>(sink.getValue());
   if (visited_funcs.find(src_func) != visited_funcs.end())
     return;
   visited_funcs.insert(src_func);
@@ -214,7 +219,7 @@ std::vector<pdg::Node *> pdg::PDGCallGraph::computeTransitiveClosure(pdg::Node &
 {
   std::queue<Node *> node_queue;
   std::unordered_set<Node *> seen_node;
-  std::vector<Node*> ret;
+  std::vector<Node *> ret;
   node_queue.push(&src);
   while (!node_queue.empty())
   {
@@ -262,6 +267,15 @@ void pdg::PDGCallGraph::setupExportedFuncs()
   }
 }
 
+void pdg::PDGCallGraph::setupDriverFuncs()
+{
+  std::ifstream ReadFile("driver_funcs");
+  for (std::string line; std::getline(ReadFile, line);)
+  {
+    _driver_func_names.insert(line);
+  }
+}
+
 bool pdg::PDGCallGraph::isExcludeFunc(Function &F)
 {
   auto func_name = F.getName().str();
@@ -274,4 +288,11 @@ bool pdg::PDGCallGraph::isExportedFunc(Function &F)
   auto func_name = F.getName().str();
   func_name = pdgutils::stripFuncNameVersionNumber(func_name);
   return (_exported_func_names.find(func_name) != _exported_func_names.end());
+}
+
+bool pdg::PDGCallGraph::isDriverFunc(Function &F)
+{
+  auto func_name = F.getName().str();
+  func_name = pdgutils::stripFuncNameVersionNumber(func_name);
+  return (_driver_func_names.find(func_name) != _driver_func_names.end());
 }

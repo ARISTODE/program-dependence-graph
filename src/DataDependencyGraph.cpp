@@ -156,6 +156,24 @@ AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Valu
     if (gep->getPointerOperand() == &v2 && gep->hasAllZeroIndices())
       return MustAlias;
   }
+
+  // for others instructions, check if v2 can be loaded form the same address
+  if (Instruction *i = dyn_cast<Instruction>(&v1))
+  {
+    for (auto user : i->users())
+    {
+      if (StoreInst *si = dyn_cast<StoreInst>(user))
+      {
+        auto storeAddr = si->getPointerOperand();
+        for (auto storeAddrUser : storeAddr->users())
+        {
+          if (storeAddrUser == &v2)
+            return MustAlias;
+        }
+      }
+    }
+  }
+
   return NoAlias;
 }
 

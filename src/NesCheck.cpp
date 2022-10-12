@@ -618,6 +618,40 @@ namespace NesCheck
     //   }
     // }
 
+    // this function resolve a parameter's type based on it's reachable address nodes
+    std::string resolvePtrTypes(std::set<pdg::Node *> &addrNodes, std::string fieldID)
+    {
+      std::string ptrType = "";
+      for (auto node : addrNodes)
+      {
+        auto nodeVal = node->getValue();
+        if (!nodeVal )
+          continue;
+        auto classifiedType = PtrTypeMap[nodeVal];
+        // find a conflicts in such case
+        if (classifiedType != ptrType)
+        {
+          // first issue a warning
+          if (Instruction *i = dyn_cast<Instruction>(nodeVal))
+          {
+            if (!ptrType.empty())
+              errs() << "[Warning]: find conflicting nescheck types in func " << i->getFunction()->getName() << " - " << fieldID << " - " << classifiedType << "|" << ptrType << "\n";
+          }
+          // DYN > SEQ > SAFE
+          if (classifiedType == "DYN")
+            ptrType = "DYN";
+          else if (classifiedType == "SEQ")
+          {
+            if (ptrType == "SAFE" || ptrType == "")
+              ptrType = "SEQ";
+          }
+          else {
+            ptrType = "SAFE";
+          }
+        }
+      }
+      return ptrType;
+    }
     // for each boundary funciton, analyze the pointers passed across, and classify the pointers
     // according to nescheck's result.
     void classifyBoundaryPtrs(bool accumulate_stats)
@@ -654,14 +688,14 @@ namespace NesCheck
             continue;
           root_nodes.push_back(arg_tree->getRootNode());
         }
-        // return type root nodes
+        // return parameter root nodes
         auto ret_arg_tree = func_w->getRetFormalInTree();
         if (!ret_arg_tree)
           continue;
         if (ret_arg_tree->getRootNode())
           root_nodes.push_back(ret_arg_tree->getRootNode());
 
-        bool is_driver_func = _DDA->getSDA()->isDriverFunc(*func);
+        bool isDriverFunc = _DDA->getSDA()->isDriverFunc(*func);
         // start with the root node, then traverse fild nodes and classify each accordingly
         for (auto root_node : root_nodes)
         {
@@ -676,44 +710,55 @@ namespace NesCheck
             {
               queue.push(child_node);
             }
-            auto field_id = pdg::pdgutils::computeTreeNodeID(*front);
-            field_id = pdg::pdgutils::trimStr(field_id);
+            auto fieldID = pdg::pdgutils::computeTreeNodeID(*front);
+            fieldID = pdg::pdgutils::trimStr(fieldID);
+            // ignore fields without DItypes (rare case)
             if (!front->getDIType())
               continue;
-            // if (!pdg::dbgutils::isPointerType(*front->getDIType()))
-            //   continue;
+            // 
             if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
             // if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
             //   continue;
             // check reachable address variables (interprecedural)
             std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
-            auto reachable_nodes = _PDG->findNodesReachedByEdges(*front, edge_types);
-            for (auto n : reachable_nodes)
+            auto reachableNodes = _PDG->findNodesReachedByEdges(*front, edge_types);
+            // obtain the classified ptr type
+            std::string ptrType = resolvePtrTypes(reachableNodes, fieldID);
+            // set sequential type
+            if (ptrType == "SEQ" && pdg::dbgutils::isPointerType(*front->getDIType()))
+              front->setSeqPtr();
+            // set sentinel type
+            if (front->is_sentinel)
+              front->setSeqPtr();
+            // classify child node types
+            if (accumulate_stats)
             {
-              auto node_val = n->getValue();
-              if (!node_val)
-                continue;
-              // if (Instruction *ii = dyn_cast<Instruction>(node_val))
-              //   errs() << "find val node: " << field_id << " - " << *ii << " - " << ii->getFunction()->getName() << "\n";
-              if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
-              {
-                // TODO: check possible conflict here
-                // if (DEBUG)
-                //   ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
-                auto classified_ptr_type = PtrTypeMap[node_val];
-                // mark the node as seq pointer, these nodes use array syntax while genereating IDL
-                if (accumulate_stats)
-                  _ksplit_stats->collectDataStats(*front, classified_ptr_type, is_driver_func, func);
-
-                if (classified_ptr_type == "SEQ" && pdg::dbgutils::isPointerType(*front->getDIType()))
-                  front->setSeqPtr();
-                break;
-              }
-              // speical handling for seq pointers
-              if (front->is_sentinel)
-                front->setSeqPtr();
+              _ksplit_stats->collectDataStats(*front, ptrType, *func, func_w->getArgIdxByFormalInTree(root_node->getTree()), isDriverFunc);
             }
+            // for (auto n : reachable_nodes)
+            // {
+            //   auto node_val = n->getValue();
+            //   if (!node_val)
+            //     continue;
+            //   if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
+            //   {
+            //     // TODO: check possible conflict here
+            //     // if (DEBUG)
+            //     //   ksplitRecordPtrType(*node_val, PtrTypeMap[node_val], *front);
+            //     auto classified_ptr_type = PtrTypeMap[node_val];
+            //     // mark the node as seq pointer, these nodes use array syntax while genereating IDL
+            //     // if (accumulate_stats)
+            //     //   _ksplit_stats->collectDataStats(*front, classified_ptr_type, *func, is_driver_func);
+
+            //     if (classified_ptr_type == "SEQ" && pdg::dbgutils::isPointerType(*front->getDIType()))
+            //       front->setSeqPtr();
+            //     break;
+            //   }
+            //   // speical handling for seq pointers
+            //   if (front->is_sentinel)
+            //     front->setSeqPtr();
+            // }
           }
         }
         // also an opportunity for checking conflicts

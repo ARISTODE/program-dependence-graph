@@ -43,6 +43,7 @@ namespace pdg
     std::vector<llvm::Argument *> &getArgList() { return _arg_list; }
     bool hasNullRetVal() { return (_ret_val_formal_in_tree == nullptr); }
     std::set<llvm::Value *> computeAddrVarDerivedFromArg(llvm::Argument &arg);
+    int getArgIdxByFormalInTree(Tree* tree);
 
   private:
     Node *_entry_node;

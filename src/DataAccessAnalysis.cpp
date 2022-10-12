@@ -61,6 +61,17 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     _ksplit_stats->_total_func_size += total_num_funcs;
   // compute collocated sites
   computeCollocatedAllocsite(M);
+  auto sharedAllocators = computeSharedAllocators();
+  errs() << "kenrel shared allocator num: " << _ksplit_stats->_kernelSharedAllocators << "\n";
+  errs() << "driver shared allocator num: " << _ksplit_stats->_driverSharedAllocators << "\n";
+  for (auto allocator : sharedAllocators)
+  {
+    Function* f = allocator->getFunc();
+    if (f == nullptr)
+      continue;
+    auto nodeVal = allocator->getValue();
+    errs() << "find shared allocator: " << *nodeVal << " in function " << f->getName() << " - " << _SDA->isDriverFunc(*f) << "\n";
+  }
 
   errs() << "Finish analyzing data access info.";
 
@@ -79,7 +90,7 @@ void pdg::DataAccessAnalysis::generateSyncStubsForBoundaryFunctions(Module &M)
   for (auto func_name : boundary_func_names)
   {
     // need to concate the _nesCheck postfix, because nescheck change the signature
-    Function* nescheck_func = pdgutils::getNescheckVersionFunc(M, func_name);
+    Function *nescheck_func = pdgutils::getNescheckVersionFunc(M, func_name);
     if (nescheck_func == nullptr || nescheck_func->isDeclaration())
       continue;
     generateIDLForFunc(*nescheck_func);
@@ -96,7 +107,7 @@ void pdg::DataAccessAnalysis::generateSyncStubsForBoundaryFunctions(Module &M)
   // generate rpc_export stub for functions exported form driver through export_symbol
   for (auto s : _driver_exported_func_symbols)
   {
-    Function* func = M.getFunction(StringRef(s));
+    Function *func = M.getFunction(StringRef(s));
     if (func == nullptr || func->isDeclaration())
       continue;
     generateIDLForFunc(*func, true);
@@ -192,6 +203,79 @@ void pdg::DataAccessAnalysis::readDriverExportedFuncSymbols(std::string file_nam
   }
 }
 
+bool pdg::DataAccessAnalysis::isSharedAllocator(Value &allocator)
+{
+  // check whether an allocated object can be passed across isolation boundary
+  // step 1: initalize the domain for the alloc site
+  // local allocator
+  bool ixgbeProbeFlag = false;
+  auto curDomain = DomainTag::DRIVER_DOMAIN;
+  if (CallInst *ci = dyn_cast<CallInst>(&allocator))
+  {
+    Function *f = ci->getFunction();
+    // eliminate kzalloc* functions, as kzalloc calls __kmalloc internally
+    auto funcName = f->getName().str();
+    if (funcName.find("kzalloc") != std::string::npos)
+      return false;
+
+    if (f->getName() == "ixgbe_probe")
+      ixgbeProbeFlag = true;
+    // now only tracking driver side allocators
+    if (!_SDA->isDriverFunc(*f))
+      curDomain = DomainTag::KERNEL_DOMAIN;
+    // return false;
+  }
+  // TODO: consider global variables
+  // step 2: check whether the allocator is propagated to the kernel domain
+  auto valNode = _PDG->getNode(allocator);
+  assert(valNode != nullptr && "cannot generate size anno str for null node\n");
+  std::set<EdgeType> search_edge_types = {
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_ALIAS,
+      EdgeType::DATA_RET};
+  auto reachableNodes = _PDG->findNodesReachedByEdges(*valNode, search_edge_types);
+  if (ixgbeProbeFlag)
+    errs() << "allocator " << allocator << " reachable node num " << reachableNodes.size() << "\n";
+  for (auto node : reachableNodes)
+  {
+    Function *f = node->getFunc();
+    if (f == nullptr)
+      continue;
+    if (ixgbeProbeFlag)
+    {
+      if (node->getValue())
+        errs() << "ixgbe probe reaching func: " << f->getName() << " - " << *node->getValue() << "\n";
+    }
+    auto nodeDomain = DomainTag::KERNEL_DOMAIN;
+    // find kernel functions
+    if (_SDA->isDriverFunc(*f))
+      nodeDomain = DomainTag::DRIVER_DOMAIN;
+    if (nodeDomain != curDomain)
+    {
+      if (curDomain == DomainTag::KERNEL_DOMAIN)
+        _ksplit_stats->_kernelSharedAllocators++;
+      else
+        _ksplit_stats->_driverSharedAllocators++;
+      return true;
+    }
+  }
+  return false;
+}
+
+std::unordered_set<pdg::Node *> pdg::DataAccessAnalysis::computeSharedAllocators()
+{
+  std::unordered_set<pdg::Node *> sharedAllocators;
+  auto allocators = _PDG->getAllocators();
+  for (auto allocator : allocators)
+  {
+    if (Instruction *i = dyn_cast<Instruction>(allocator))
+      errs() << "allocator in func: " << *allocator << " | " << i->getFunction()->getName() << "\n";
+    if (isSharedAllocator(*allocator))
+      sharedAllocators.insert(_PDG->getNode(*allocator));
+  }
+  return sharedAllocators;
+}
+
 void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
 {
   // first composing the allocator string in format alloc<{{size, GP_FLAG}}>
@@ -199,6 +283,10 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   std::string size_str = "<{{";
   if (CallInst *ci = dyn_cast<CallInst>(&allocator))
   {
+    Function *f = ci->getFunction();
+    // now only tracking driver side allocators
+    if (!_SDA->isDriverFunc(*f))
+      return;
     // get size operand
     auto size_operand = ci->getArgOperand(0);
     assert(size_operand != nullptr && "allocator has null size operand!\n");
@@ -233,6 +321,7 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   alias_nodes.insert(val_node);
   // if any alias is address variable of the parameter tree, then we consider the allocated
   // object need to be allocated at the caller side.
+  bool passAcrossBoundary = false;
   for (auto alias_node : alias_nodes)
   {
     // alias_node->dump();
@@ -241,6 +330,7 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
       auto param_tree_node = alias_node->getAbstractTreeNode();
       TreeNode *tn = (TreeNode *)param_tree_node;
       tn->setAllocStr(alloc_str + "(caller)");
+      passAcrossBoundary = true;
     }
     else
     {
@@ -253,6 +343,7 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
         {
           TreeNode *tn = (TreeNode *)n;
           tn->setAllocStr(alloc_str + "(callee)");
+          passAcrossBoundary = true;
         }
       }
     }
@@ -422,9 +513,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
         if (!gep->hasAllConstantIndices())
         {
           if (pdgutils::isStructPointerType(*gep->getPointerOperand()->getType()))
-          {
             errs() << "[Warning]: GEP has variadic idx. May miss field access - " << gep->getFunction()->getName() << "\n";
-          }
         }
       }
     }
@@ -649,6 +738,19 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && child_node->is_sentinel && field_type_name == "union")
       continue;
 
+    // Function* f = tree_node.getTree()->getFunc();
+    // if (f != nullptr)
+    //   errs() << "checking boundary func: " << f->getName() << "\n";
+    // std::set<EdgeType> edges = {EdgeType::DATA_ALIAS, EdgeType::PARAMETER_IN};
+    // auto alias_nodes = _PDG->findNodesReachedByEdges(tree_node, edges);
+    // errs() << "var name: " << field_var_name <<  "\n";
+    // for (auto node : alias_nodes) {
+    //   if (!node->getValue())
+    //     continue;
+    //   if (auto inst = dyn_cast<Instruction>(node->getValue())) {
+    //     errs() << "\talias in func " << inst->getFunction()->getName() << "\n";
+    //   }
+    // }
     // collect shared field stat
     child_node->is_shared = true;
     // countControlData(*child_node);
@@ -696,7 +798,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     else if (child_node->isSeqPtr() && !dbgutils::isArrayType(*field_di_type)) // leave sized array to be handled by default generation
     {
       std::string element_proj_type_str = field_lowest_di_type_name;
-      if (dbgutils::isStructType(*field_lowest_di_type))
+      if (field_lowest_di_type && dbgutils::isStructType(*field_lowest_di_type))
       {
         element_proj_type_str = "projection " + field_lowest_di_type_name;
         node_queue.push(child_node);
@@ -790,24 +892,24 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
           }
           // only produce a reference to global definition
           fields_projection_str << indent_level
-                            << "projection "
-                            << parent_struct_type_name
-                            << "_"
-                            << "global_"
-                            << field_type_name
-                            << "* "
-                            << field_var_name
-                            << ";\n";
+                                << "projection "
+                                << parent_struct_type_name
+                                << "_"
+                                << "global_"
+                                << field_type_name
+                                << "* "
+                                << field_var_name
+                                << ";\n";
         }
         else
         {
           // if is anonymous struct/union, directly generate projection inside the current projection
           if (field_var_name.empty())
           {
-            fields_projection_str 
-            << indent_level << "{\n" 
-            << nested_fields_proj.str() 
-            << indent_level << "}\n";
+            fields_projection_str
+                << indent_level << "{\n"
+                << nested_fields_proj.str()
+                << indent_level << "}\n";
           }
           else
           {
@@ -838,7 +940,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
       Function *called_func = _module->getFunction(exported_func_name);
       if (called_func == nullptr)
         continue;
-      
+
       // if the defintion doesn't exist yet, recording the func name, the def will be genereated later
       // if (_exist_func_defs.find(exported_func_name) == _exist_func_defs.end())
       //   _exist_func_defs.insert(exported_func_name);
@@ -996,7 +1098,6 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
       if (proj_var_name.empty())
         proj_var_name = proj_type_name;
 
-
       // parent_struct name
       std::string parent_struct_type_name = "";
       if (parent_node != nullptr)
@@ -1058,7 +1159,7 @@ std::string handleIoRemap(Function &F, std::string &ret_type_str)
 void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_exported_func)
 {
   // need to use this wrapper to handle nescheck rewrittern funcs
-  FunctionWrapper *fw = getNescheckFuncWrapper(F); 
+  FunctionWrapper *fw = getNescheckFuncWrapper(F);
   std::string rpc_str = "";
   // generate function rpc stub
   // first generate for return value
@@ -1297,7 +1398,7 @@ void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &tree_node, std::set<
           Value *copy_bytes_size = ci->getArgOperand(2);
           if (TruncInst *ti = dyn_cast<TruncInst>(copy_bytes_size))
           {
-            Value* trunced_val = ti->getOperand(0);
+            Value *trunced_val = ti->getOperand(0);
             if (LoadInst *li = dyn_cast<LoadInst>(trunced_val))
             {
               Value *value_store_reg = li->getPointerOperand();
@@ -1410,7 +1511,7 @@ std::set<Function *> pdg::DataAccessAnalysis::getPointedFuncAtArgIdx(Function &F
     {
       auto func_ptr_arg = ci->getArgOperand(arg_idx);
       assert(func_ptr_arg != nullptr && "cannot get pointed func at arg idx!\n");
-      if (Function* f = dyn_cast<Function>(func_ptr_arg))
+      if (Function *f = dyn_cast<Function>(func_ptr_arg))
         ret.insert(f);
     }
   }
@@ -1439,7 +1540,7 @@ bool pdg::DataAccessAnalysis::isDriverDefinedGlobal(GlobalVariable &gv)
   return false;
 }
 
-pdg::FunctionWrapper* pdg::DataAccessAnalysis::getNescheckFuncWrapper(Function &F)
+pdg::FunctionWrapper *pdg::DataAccessAnalysis::getNescheckFuncWrapper(Function &F)
 {
   // get function name
   std::string func_name = F.getName().str();

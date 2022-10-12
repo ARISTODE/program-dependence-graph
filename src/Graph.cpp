@@ -1,4 +1,5 @@
-#include "Graph.hh"
+// #include "Graph.hh"
+#include "PDGCallGraph.hh"
 
 using namespace llvm;
 
@@ -10,6 +11,7 @@ static std::set<std::string> KernelAllocators = {
     "__kmalloc",
     "alloc_netdev",
     "alloc_netdev_mqs",
+    "alloc_etherdev_mqs"
 };
 
 static std::set<std::string> KernelDeAllocators = {
@@ -177,11 +179,11 @@ void pdg::ProgramGraph::build(Module &M)
         }
       }
       // identify array allocated on stack. If the array is passed across isolation domain, also need to annotate the array with alloc attribute
-      if (AllocaInst *ai = dyn_cast<AllocaInst>(&*inst_iter))
-      {
-        if (ai->getAllocatedType()->isArrayTy())
-          _allocators.insert(ai);
-      }
+      // if (AllocaInst *ai = dyn_cast<AllocaInst>(&*inst_iter))
+      // {
+      //   if (ai->getAllocatedType()->isArrayTy())
+      //     _allocators.insert(ai);
+      // }
     }
     func_w->buildFormalTreeForArgs();
     func_w->buildFormalTreesForRetVal();
@@ -190,6 +192,10 @@ void pdg::ProgramGraph::build(Module &M)
     _func_wrapper_map.insert(std::make_pair(&F, func_w));
   }
 
+  // build call graph
+  auto &call_g = PDGCallGraph::getInstance();
+  if (!call_g.isBuild())
+    call_g.build(M);
   // handle call sites
   for (auto &F : M)
   {
@@ -204,7 +210,13 @@ void pdg::ProgramGraph::build(Module &M)
     {
       auto called_func = pdgutils::getCalledFunc(*ci);
       if (called_func == nullptr)
-        continue;
+      {
+        // handle indirect call
+        auto ind_call_candidates = call_g.getIndirectCallCandidates(*ci, M);
+        if (ind_call_candidates.size() > 0)
+          called_func = *ind_call_candidates.begin();
+        // continue;
+      }
       if (!hasFuncWrapper(*called_func))
         continue;
       CallWrapper *cw = new CallWrapper(*ci);
@@ -399,6 +411,7 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 void pdg::ProgramGraph::addTreeNodesToGraph(pdg::Tree &tree)
 {
   TreeNode* root_node = tree.getRootNode();
+  assert(root_node && "cannot add tree nodes to graph, nullptr root node\n");
   std::queue<TreeNode*> node_queue;
   node_queue.push(root_node);
   while (!node_queue.empty())

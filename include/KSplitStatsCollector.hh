@@ -25,7 +25,7 @@ namespace pdg
     }
     void collectTotalPointerStats(llvm::DIType &dt);
     // void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string func_name);
-    void collectDataStats(TreeNode &tree_node, std::string nescheck_ptr_type, bool is_driver_func=false, llvm::Function* func = nullptr);
+    void collectDataStats(TreeNode &tree_node, std::string nescheck_ptr_type, llvm::Function &func, int paramIdx = -1, bool is_driver_func = false);
     void collectSharedPointerStats(TreeNode &tree_node, std::string nescheck_ptr_type);
     void collectInferredStringStats(std::set<std::string> &annotations);
     void printStats();
@@ -141,13 +141,19 @@ namespace pdg
     unsigned _unknown_write = 0;
     unsigned _unknown_rw = 0;
 
+    // allocator stats
+    unsigned _driverSharedAllocators = 0;
+    unsigned _kernelSharedAllocators = 0;
+
     // driver specific data
     unsigned _driver_read_fields = 0;
     unsigned _driver_write_fields = 0;
     unsigned _driver_access_fields = 0;
     unsigned _driver_read_ptr_fields = 0;
     unsigned _driver_write_ptr_fields = 0;
+    unsigned _driver_write_func_ptr_fields = 0;
     unsigned _driver_access_ptr_fields = 0;
+    unsigned _driver_write_through_ptr_fields = 0;
 
     // outdated
     unsigned _unhandled_array_num = 0; // for some dyn size arr, we could try infer it's size

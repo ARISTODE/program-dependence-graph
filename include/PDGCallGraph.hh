@@ -32,12 +32,15 @@ namespace pdg
     std::vector<Node*> computeTransitiveClosure(Node &src);
     void setupExcludeFuncs();
     void setupExportedFuncs();
+    void setupDriverFuncs();
     bool isExcludeFunc(llvm::Function &F);
     bool isExportedFunc(llvm::Function &F);
+    bool isDriverFunc(llvm::Function &F);
 
   private:
     std::set<std::string> _exclude_func_names;
     std::set<std::string> _exported_func_names;
+    std::set<std::string> _driver_func_names;
   };
 } // namespace pdg
 

@@ -518,16 +518,16 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
           // }
         }
 
-        if (EnableAnalysisStats)
-        {
-          _ksplit_stats->_shared_atomic_op += 1;
-          errs() << "shared atomic op: " << atomic_op->getFunction()->getName() << " - " << *atomic_op << "\n";
-          for (auto name : modified_names)
-          {
-            errs() << "\t op name: " << name << "\n";
-          }
-          _warning_shared_atomic_ops.insert(atomic_op);
-        }
+        // if (EnableAnalysisStats)
+        // {
+        //   _ksplit_stats->_shared_atomic_op += 1;
+        //   errs() << "shared atomic op: " << atomic_op->getFunction()->getName() << " - " << *atomic_op << "\n";
+        //   for (auto name : modified_names)
+        //   {
+        //     errs() << "\t op name: " << name << "\n";
+        //   }
+        //   _warning_shared_atomic_ops.insert(atomic_op);
+        // }
         break;
       }
     }
