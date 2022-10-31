@@ -539,6 +539,16 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   auto addr_vars = tree_node.getAddrVars();
   for (auto addr_var : addr_vars)
   {
+    // skip gep with 0 indices, this could cause false aliasing
+    if (!tree_node.isStructMember())
+    {
+      if (auto gep = dyn_cast<GetElementPtrInst>(addr_var))
+      {
+        if (gep->hasAllZeroIndices())
+          continue;
+      }
+    }
+
     if (Instruction *i = dyn_cast<Instruction>(addr_var))
     {
       // checking for globals
@@ -561,7 +571,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
   bool only_has_cross_domain_access = true;
   std::set<EdgeType> edge_types = {
       EdgeType::PARAMETER_IN,
-      EdgeType::DATA_RET,
+      EdgeType::DATA_ALIAS,
   };
   auto parameter_in_nodes = _PDG->findNodesReachedByEdges(tree_node, edge_types);
   for (auto n : parameter_in_nodes)
@@ -571,6 +581,15 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
     // compute r/w to the node
     if (n->getValue() != nullptr)
     {
+      // skip gep with 0 indices for container object
+      if (!tree_node.isStructMember())
+      {
+        if (auto gep = dyn_cast<GetElementPtrInst>(n->getValue()))
+        {
+          if (gep->hasAllZeroIndices())
+            continue;
+        }
+      }
       if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
       {
         auto inst_func = i->getFunction();
@@ -609,6 +628,68 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &tree_node, 
 
   if (only_has_cross_domain_access && !has_intra_access)
     tree_node.setCanOptOut(true);
+}
+
+void pdg::DataAccessAnalysis::checkCrossDomainRAWforFormalTreeNode(TreeNode &tree_node)
+{
+  if (!tree_node.getFunc() || tree_node.getDIType() == nullptr)
+    return;
+
+  bool isKernelFunc = !_SDA->isDriverFunc(*tree_node.getFunc());
+
+  if (isKernelFunc)
+  {
+    // kernel function
+    bool isPtrType = dbgutils::isPointerType(*tree_node.getDIType());
+    if (isPtrType)
+    {
+      auto accessTags = tree_node.getAccessTags();
+      // find all the pointer read at the kernel domain
+      if (accessTags.find(AccessTag::DATA_READ) != accessTags.end())
+      {
+        std::set<EdgeType> edgeSet = {
+            EdgeType::PARAMETER_IN,
+            EdgeType::DATA_ALIAS,
+            EdgeType::DATA_RAW};
+        auto backwardReachableNodes = _PDG->findNodesReachedByEdges(tree_node, edgeSet, true);
+        for (auto n : backwardReachableNodes)
+        {
+          if (!n->getValue())
+            continue;
+          if (pdgutils::hasWriteAccess(*n->getValue()))
+          {
+            if (_SDA->isDriverFunc(*n->getFunc()))
+            {
+              auto fieldName = tree_node.getSrcName();
+              if (tree_node.getFunc())
+              {
+                errs() << "kernel RAW driver ptr field: " << fieldName << " - "
+                       << "Read func: " << tree_node.getFunc()->getName() << " - "
+                       << "Update func: " << n->getFunc()->getName() << "\n";
+                auto srcFuncNode = _call_graph->getNode(*n->getFunc());
+                auto dstFuncNode = _call_graph->getNode(*tree_node.getFunc());
+                auto paths = _call_graph->computePaths(*srcFuncNode, *dstFuncNode);
+                for (auto path : paths)
+                {
+                  errs() << "\t";
+                  auto count = 0;
+                  for (auto func : path)
+                  {
+                    if (count != path.size() - 1)
+                      errs() << func->getName() << "->";
+                    else
+                      errs() << func->getName() << "\n";
+                    count += 1;
+                  }
+                }
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 void pdg::DataAccessAnalysis::computeDataAccessForTree(Tree *tree, bool is_ret)
@@ -738,21 +819,10 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &tree_node, raw_s
     if (SharedDataFlag && !_SDA->isSharedFieldID(field_id) && !is_func_ptr_type && !isGlobalStructField && child_node->is_sentinel && field_type_name == "union")
       continue;
 
-    // Function* f = tree_node.getTree()->getFunc();
-    // if (f != nullptr)
-    //   errs() << "checking boundary func: " << f->getName() << "\n";
-    // std::set<EdgeType> edges = {EdgeType::DATA_ALIAS, EdgeType::PARAMETER_IN};
-    // auto alias_nodes = _PDG->findNodesReachedByEdges(tree_node, edges);
-    // errs() << "var name: " << field_var_name <<  "\n";
-    // for (auto node : alias_nodes) {
-    //   if (!node->getValue())
-    //     continue;
-    //   if (auto inst = dyn_cast<Instruction>(node->getValue())) {
-    //     errs() << "\talias in func " << inst->getFunction()->getName() << "\n";
-    //   }
-    // }
     // collect shared field stat
     child_node->is_shared = true;
+    // check cross domain RAW
+    checkCrossDomainRAWforFormalTreeNode(*child_node);
     // countControlData(*child_node);
     auto access_tags = child_node->getAccessTags();
 
@@ -1065,6 +1135,8 @@ void pdg::DataAccessAnalysis::generateIDLFromArgTree(Tree *arg_tree, std::ofstre
     {
       if (current_node->getDILocalVar() != nullptr)
       {
+        // check cross domain RAW
+        checkCrossDomainRAWforFormalTreeNode(*current_node);
         proj_var_name = dbgutils::getSourceLevelVariableName(*current_node->getDILocalVar());
         assert(proj_var_name != "" && "cannot find parameter name in generateIDLFromArgTree\n");
       }
@@ -1262,6 +1334,8 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool process_expor
 
     // store annotations in the root node, used by ksplit stats collector
     root_node->is_shared = true;
+    if (dbgutils::isPointerType(*arg_di_type))
+      root_node->getChildNodes()[0]->is_shared = true;
     root_node->annotations.insert(annotations.begin(), annotations.end());
 
     // if string annotation is found, change the type name to string

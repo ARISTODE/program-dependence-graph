@@ -53,6 +53,7 @@ namespace pdg
     std::string constructAnnoStr(std::set<std::string> &annotations);
     bool isFileExist(std::string file_name);
     bool isSkbNode(TreeNode& tree_node);
+    bool isPrecedeInst(llvm::Instruction &i1, llvm::Instruction &i2, llvm::Function &F);
   } // namespace pdgutils
 } // namespace pdg
 #endif

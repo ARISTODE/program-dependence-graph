@@ -34,6 +34,7 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
       // auto t2 = std::chrono::high_resolution_clock::now();
       // defuse += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
       addRAWEdges(*inst_iter);
+      addRAWEdgesUnderapproximate(*inst_iter);
       // auto t3 = std::chrono::high_resolution_clock::now();
       // raw += std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2);
       addAliasEdges(*inst_iter);
@@ -92,11 +93,6 @@ void pdg::DataDependencyGraph::addDefUseEdges(Instruction &inst)
   }
 }
 
-void pdg::DataDependencyGraph::addDefUseEdgesForGlobalVars(Module &M)
-{
-  
-}
-
 void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
 {
   if (!isa<LoadInst>(&inst))
@@ -116,7 +112,48 @@ void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
   if (src == nullptr || dst == nullptr)
     return;
   dst->addNeighbor(*src, EdgeType::DATA_RAW);
+  src->addNeighbor(*dst, EdgeType::DATA_RAW_REV);
 }
+
+void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst) {
+  ProgramGraph &g = ProgramGraph::getInstance();
+  if (LoadInst *li = dyn_cast<LoadInst>(&inst)) {
+    Function* curFunc = inst.getFunction();
+    // obtain load address
+    auto loadAddr = li->getPointerOperand();
+    auto addrNode = g.getNode(*loadAddr);
+    if (addrNode == nullptr) {
+        errs() << "empty addr node load inst " << *loadAddr << " in func " << curFunc->getName().str() << "\n";
+        return;
+    }
+    auto aliasNodes =
+        addrNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+    aliasNodes.insert(addrNode);
+    // check the user of the load addr, search for store inst
+    // check for alias nodes
+    for (auto aliasNode : aliasNodes) {
+      auto nodeVal = aliasNode->getValue();
+      if (!nodeVal)
+        continue;
+      for (auto user : nodeVal->users()) {
+        if (StoreInst* si = dyn_cast<StoreInst>(user)) {
+          if (si->getPointerOperand() == nodeVal) {
+            // check for order, the store must happen before the load
+            if (!pdgutils::isPrecedeInst(*si, *li, *curFunc))
+              continue;
+            // add raw dep from store to load
+            auto storeNode = g.getNode(*si);
+            auto loadNode = g.getNode(*li);
+            assert((storeNode && loadNode) && "error processing empty node (RAW edge processing)\n");
+            storeNode->addNeighbor(*loadNode, EdgeType::DATA_RAW);
+          }
+        }
+      }
+    }
+  }
+}
+
+
 
 AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Value &v2)
 {

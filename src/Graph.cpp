@@ -121,7 +121,10 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src,
     {
       if (edge_types.find(edge->getEdgeType()) == edge_types.end())
         continue;
-      node_queue.push(edge->getDstNode());
+      if (is_backward)
+        node_queue.push(edge->getSrcNode());
+      else
+        node_queue.push(edge->getDstNode());
     }
   }
   return ret;

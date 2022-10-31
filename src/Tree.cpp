@@ -203,3 +203,12 @@ bool pdg::TreeNode::isStructMember()
     return (_node_di_type->getTag() == llvm::dwarf::DW_TAG_member);
   return false;
 }
+
+std::string pdg::TreeNode::getSrcName()
+{
+  if (_di_local_var)
+    return _di_local_var->getName().str();
+  if (getDIType())
+    return dbgutils::getSourceLevelVariableName(*getDIType());
+  return "";
+}

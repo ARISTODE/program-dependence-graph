@@ -45,18 +45,18 @@ namespace pdg
       std::string getAllocStr() { return _alloc_str; }
       void setDeallocStr(std::string str) { _dealloc_str = str; }
       std::string getDeallocStr() { return _dealloc_str; }
-      bool isSeqPtr() { return _is_seq_ptr; }
-      void setSeqPtr() { _is_seq_ptr = true; }
+      bool isSeqPtr() { return is_seq_ptr; }
+      void setSeqPtr() { is_seq_ptr = true; }
       void dump() override;
-
-    // used for collecting ksplit stats
+      std::string getSrcName();
+      // used for collecting ksplit stats
     public:
       bool is_shared = false;
       bool is_ioremap = false;
       bool is_user = false;
       bool is_sentinel = false;
       bool is_string = false;
-      bool _is_seq_ptr = false;
+      bool is_seq_ptr = false;
       std::set<std::string> annotations;
 
     private:

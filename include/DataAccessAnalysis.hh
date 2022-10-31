@@ -34,6 +34,7 @@ namespace pdg
     void computeDataAccessForGlobalTree(Tree *tree);
     void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false, bool is_ret = false);
     void computeDataAccessForFuncArgs(llvm::Function &F);
+    void checkCrossDomainRAWforFormalTreeNode(TreeNode &tree_node);
     void generateIDLForFunc(llvm::Function &F, bool process_exported_func = false);
     void generateRpcForFunc(llvm::Function &F, bool process_exported_func = false);
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);

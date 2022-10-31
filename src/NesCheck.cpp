@@ -72,7 +72,7 @@ STATISTIC(MetadataTableUpdates, "Metadata table updates");
 STATISTIC(NesCheckVariablesWithMetadataTableEntries, "Variables with metadata table entries");
 */
 typedef IRBuilder<> BuilderTy;
-//typedef IRBuilder<true, TargetFolder> BuilderTy;
+// typedef IRBuilder<true, TargetFolder> BuilderTy;
 
 namespace NesCheck
 {
@@ -97,7 +97,7 @@ namespace NesCheck
     std::set<Value *> WildPtrs;
     std::set<Value *> UnknownPtrs;
     std::set<pdg::Node *> ProcessedNodes;
-    std::map<Value*, std::string> PtrTypeMap;
+    std::map<Value *, std::string> PtrTypeMap;
     pdg::AtomicRegionAnalysis *_ARA;
     pdg::DataAccessAnalysis *_DDA;
     pdg::ProgramGraph *_PDG;
@@ -203,9 +203,9 @@ namespace NesCheck
       {
         Type *t = v->getType();
         // if (!isa<Function>(v))
-          // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << *v << " - type:" << *t << "\n";
+        // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << *v << " - type:" << *t << "\n";
         // else
-          // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << ((Function *)v)->getName() << " - type:" << *t << "\n";
+        // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << ((Function *)v)->getName() << " - type:" << *t << "\n";
 
         if (t->isPointerTy())
           t = ((PointerType *)t)->getElementType();
@@ -276,7 +276,7 @@ namespace NesCheck
       else
       {
         // Vector
-        //TODO - Can infer manually mostly
+        // TODO - Can infer manually mostly
         return UnknownSizeConstInt;
       }
     }
@@ -408,10 +408,10 @@ namespace NesCheck
     }
 
     /*
-    for pointer type data, we classify into multiple categories  
-    singleton, seq pointer, and wild pointer  
+    for pointer type data, we classify into multiple categories
+    singleton, seq pointer, and wild pointer
     then, for each of these casers, we further check whether the pointer is read/write in the kernel domain.
-    TODO: we should also consider the updates on the data which is passed from driver to kernel. This updates 
+    TODO: we should also consider the updates on the data which is passed from driver to kernel. This updates
     could tell stories about whether a data controlled by the driver (updated) could affect kernel data.
     */
     void classifyPtrSharedData(pdg::TreeNode &tree_node, std::string classified_ptr_type)
@@ -430,7 +430,7 @@ namespace NesCheck
             _ksplit_stats->_seq_read++;
           else if (classified_ptr_type == "DYN")
             _ksplit_stats->_wild_read++;
-          else 
+          else
             _ksplit_stats->_unknown_read++;
         }
         else
@@ -492,19 +492,19 @@ namespace NesCheck
       }
       else if (tag_size == 2)
       {
-          if (pdg::dbgutils::isUnionType(*di_type))
-            _ksplit_stats->_union_rw++;
-          else if (pdg::dbgutils::isStructType(*di_type))
-            _ksplit_stats->_struct_rw++;
-          else if (pdg::dbgutils::isPrimitiveType(*di_type))
-            _ksplit_stats->_primitive_rw++;
-          else
-            _ksplit_stats->_other_rw++;
+        if (pdg::dbgutils::isUnionType(*di_type))
+          _ksplit_stats->_union_rw++;
+        else if (pdg::dbgutils::isStructType(*di_type))
+          _ksplit_stats->_struct_rw++;
+        else if (pdg::dbgutils::isPrimitiveType(*di_type))
+          _ksplit_stats->_primitive_rw++;
+        else
+          _ksplit_stats->_other_rw++;
       }
     }
 
     /*
-    Take boundary functions that are called from driver to kernel as input. 
+    Take boundary functions that are called from driver to kernel as input.
     Then, for each data, collects all it's accesses in the kernel domain, uisng domain tag.
     Classify data into pointer/non-pointer, then classify then further into read/write only and control data.
     */
@@ -625,7 +625,9 @@ namespace NesCheck
       for (auto node : addrNodes)
       {
         auto nodeVal = node->getValue();
-        if (!nodeVal )
+        if (!nodeVal)
+          continue;
+        if (PtrTypeMap.find(nodeVal) == PtrTypeMap.end())
           continue;
         auto classifiedType = PtrTypeMap[nodeVal];
         // find a conflicts in such case
@@ -637,7 +639,7 @@ namespace NesCheck
             if (!ptrType.empty())
               errs() << "[Warning]: find conflicting nescheck types in func " << i->getFunction()->getName() << " - " << fieldID << " - " << classifiedType << "|" << ptrType << "\n";
           }
-          // DYN > SEQ > SAFE
+          // classification priority: DYN > SEQ > SAFE
           if (classifiedType == "DYN")
             ptrType = "DYN";
           else if (classifiedType == "SEQ")
@@ -645,7 +647,8 @@ namespace NesCheck
             if (ptrType == "SAFE" || ptrType == "")
               ptrType = "SEQ";
           }
-          else {
+          else
+          {
             ptrType = "SAFE";
           }
         }
@@ -715,7 +718,7 @@ namespace NesCheck
             // ignore fields without DItypes (rare case)
             if (!front->getDIType())
               continue;
-            // 
+            //
             if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
             // if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())

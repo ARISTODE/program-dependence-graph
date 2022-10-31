@@ -81,21 +81,27 @@ void pdg::KSplitStats::printDataStats()
   _stats_file << " ====== driver data accesses ======\n";
   _stats_file << "Driver read only fields: " << _driver_read_fields << " - " << ((float)_driver_read_fields / _fields_shared_analysis * 100) << "%"
               << "\n";
-  _stats_file << "Driver write only fields: " << _driver_write_fields << " - " << ((float)_driver_write_fields / _fields_shared_analysis * 100) << "%"
-              << "\n";
-  _stats_file << "Driver access fields: " << _driver_access_fields << " - " << ((float)_driver_write_fields / _fields_shared_analysis * 100) << "%"
+  _stats_file << "Driver read only ptr fields: " << _driver_read_ptr_fields << " - " << ((float)_driver_read_ptr_fields / _shared_ptr_num * 100) << "%"
               << "\n";
 
-  _stats_file << "Driver read only ptr fields: " << _driver_read_ptr_fields << " - " << ((float)_driver_read_ptr_fields / _shared_ptr_num * 100) << "%"
+  _stats_file << "Driver write only fields: " << _driver_write_fields << " - " << ((float)_driver_write_fields / _fields_shared_analysis * 100) << "%"
               << "\n";
   _stats_file << "Driver write only ptr fields: " << _driver_write_ptr_fields << " - " << ((float)_driver_write_ptr_fields / _shared_ptr_num * 100) << "%"
               << "\n";
   _stats_file << "Driver write only func ptr fields: " << _driver_write_func_ptr_fields << " - " << ((float)_driver_write_func_ptr_fields / _driver_write_ptr_fields * 100) << "%"
               << "\n";
-  _stats_file << "Driver access ptr fields: " << _driver_access_ptr_fields << " - " << ((float)_driver_access_ptr_fields / _shared_ptr_num * 100) << "%"
-              << "\n";
   _stats_file << "Driver write through ptr fields: " << _driver_write_through_ptr_fields << "\n";
 
+  _stats_file << "Driver access fields: " << _driver_access_fields << " - " << ((float)_driver_write_fields / _fields_shared_analysis * 100) << "%"
+              << "\n";
+  _stats_file << "Driver access ptr fields: " << _driver_access_ptr_fields << " - " << ((float)_driver_access_ptr_fields / _shared_ptr_num * 100) << "%"
+              << "\n";
+
+  _stats_file << "Driver writable fields: " << (_driver_access_fields + _driver_write_fields) << "\n";
+  _stats_file << "Driver writable ptr fields: " << (_driver_access_ptr_fields + _driver_write_ptr_fields) << "\n";
+
+  _stats_file << "Driver readable fields: " << (_driver_access_fields + _driver_read_fields) << "\n";
+  _stats_file << "Driver readable fields: " << (_driver_access_ptr_fields + _driver_read_ptr_fields) << "\n";
   _stats_file.close();
 }
 
@@ -165,11 +171,11 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
   DIType *dt = tree_node.getDIType();
   if (!dt)
     return;
-  std::string fieldName = dbgutils::getSourceLevelVariableName(*dt);
+  std::string fieldName = tree_node.getSrcName();
   std::string funcName = func.getName().str();
 
   // need to extract bit field info here because this info will be lost if we strip the tag
-  bool is_bitfield = dt->isBitField();
+  bool isBitField = dt->isBitField();
   bool isFuncPtrField = dbgutils::isFuncPointerType(*dt);
 
   auto access_tags = tree_node.getAccessTags();
@@ -200,11 +206,11 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
       // obtain the pointed value node
       if (tree_node.numOfChild() == 1)
       {
-        auto valueNode = tree_node.getChildNodes()[0];
-        auto valueNodeAccTags = valueNode->getAccessTags();
-        if (valueNodeAccTags.size() > 0)
+        auto pointedObjNode = tree_node.getChildNodes()[0];
+        auto objNodeAccTags = pointedObjNode->getAccessTags();
+        if (objNodeAccTags.size() > 0)
         {
-          if (valueNodeAccTags.find(AccessTag::DATA_WRITE) != valueNodeAccTags.end())
+          if (objNodeAccTags.find(AccessTag::DATA_WRITE) != objNodeAccTags.end())
           {
             _driver_write_through_ptr_fields++;
             errs() << "write through pointer: " << fieldName << " in func " << funcName << "\n";
@@ -221,6 +227,21 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
       {
         _driver_access_ptr_fields++;
         std::get<2>(ptrFieldAccTuple) += 1;
+        if (isFuncPtrField)
+        {
+          _driver_write_func_ptr_fields += 1;
+          errs() << "driver update only ptr field (func): " << fieldName << " - "
+                 << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+        }
+        else
+        {
+          errs() << "driver update ptr field (non-func): " << fieldName << " - "
+                 << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+          for (auto addrVar : tree_node.getAddrVars())
+          {
+            errs() << "\t" << *addrVar << "\n";
+          }
+        }
       }
     }
     // collect read only, write only fields
@@ -247,10 +268,16 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
           _driver_write_ptr_fields++;
           std::get<1>(ptrFieldAccTuple) += 1;
           if (isFuncPtrField)
+          {
             _driver_write_func_ptr_fields += 1;
+            errs() << "driver update only ptr field (func): " << fieldName << " - "
+                   << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+          }
           else
+          {
             errs() << "driver update only ptr field (non-func): " << fieldName << " - "
                    << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+          }
         }
       }
     }
@@ -258,7 +285,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
 
   _fields_shared_analysis++;
   // pointers, basic types, struct, union, array
-  if (is_bitfield)
+  if (isBitField)
   {
     _shared_bitfield++;
   }

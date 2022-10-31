@@ -11,10 +11,12 @@ namespace pdg
     CONTROL_FLOW, // control flow edges
     DATA_DEF_USE,
     DATA_RAW,
+    DATA_RAW_REV,
     DATA_READ,
     DATA_ALIAS,
     DATA_RET,
     PARAMETER_IN,
+    PARAMETER_IN_REV,
     PARAMETER_OUT,
     PARAMETER_FIELD,
     GLOBAL_DEP,

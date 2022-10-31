@@ -76,7 +76,7 @@ void pdg::BoundaryAnalysis::computeDriverFuncs(Module &M)
     _driver_domain_funcs.push_back(func_name);
   }
   // consider all library functions as driver funcs
-  _driver_domain_funcs.insert(std::end(_driver_domain_funcs), std::begin(_black_list_func_names), std::end(_black_list_func_names));
+  // _driver_domain_funcs.insert(std::end(_driver_domain_funcs), std::begin(_black_list_func_names), std::end(_black_list_func_names));
 }
 
 void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)

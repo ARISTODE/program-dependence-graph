@@ -350,6 +350,7 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
       current_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
+      // adding alias vars to tree's address var set
       auto alias_nodes = getAliasNodes(*addr_var_node);
       for (auto alias_node : alias_nodes)
       {
@@ -360,7 +361,10 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
           continue;
         if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(alias_node_val))
         {
-          if (!gep->hasAllZeroIndices())
+          // when finding alias, if a gep instruction is found with (0,0) indices, it means the first 
+          // element in the object/buffer. We need to skip this because it will confuse access analysis 
+          // and causing false positives for the accesses on the container object. 
+          if (gep->hasAllZeroIndices())
             continue;
         }
         current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
@@ -611,8 +615,6 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
         continue;
       if (n->getFunc() == current_func)
       {
-        // if (current_func->getName() == "msr_open")
-        //   errs() << "find inter proc addr var: " << dbgutils::getSourceLevelTypeName(*current_node->getDIType()) << " - " << *n->getValue() << " - " << current_func->getName() << "\n";
         if (current_node->getDIType() != nullptr && !dbgutils::isPointerType(*current_node->getDIType()))
         {
           auto parent_node = current_node->getParentNode();

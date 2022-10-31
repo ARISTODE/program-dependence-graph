@@ -37,6 +37,7 @@ namespace pdg
   public:
     std::ofstream _stats_file;
     std::unordered_map<llvm::Function*, std::tuple<unsigned, unsigned, unsigned>> _drv_api_acc_map;
+    // record function ptr (read, write, read/write)
     std::unordered_map<llvm::Function*, std::tuple<unsigned, unsigned, unsigned>> _drv_api_ptr_acc_map;
     // 1.a complexity
     unsigned _driver_to_kernel_func_call = 0;

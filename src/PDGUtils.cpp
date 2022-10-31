@@ -3,12 +3,10 @@
 using namespace llvm;
 
 static std::set<std::string> dataWriteLibFuncs = {
-  "__memcpy"
-};
+    "__memcpy"};
 
 static std::set<std::string> asmWriteOpcode = {
-  "bts"
-};
+    "bts"};
 
 StructType *pdg::pdgutils::getStructTypeFromGEP(GetElementPtrInst &gep)
 {
@@ -23,7 +21,7 @@ StructType *pdg::pdgutils::getStructTypeFromGEP(GetElementPtrInst &gep)
 
 Function *pdg::pdgutils::getNescheckVersionFunc(Module &M, std::string func_name)
 {
-  Function* nescheck_func = M.getFunction(func_name);
+  Function *nescheck_func = M.getFunction(func_name);
   if (nescheck_func == nullptr || nescheck_func->isDeclaration())
   {
     std::string nescheck_func_name = func_name + "_nesCheck";
@@ -34,7 +32,7 @@ Function *pdg::pdgutils::getNescheckVersionFunc(Module &M, std::string func_name
   return nescheck_func;
 }
 
-uint64_t pdg::pdgutils::getGEPOffsetInBits(Module& M, StructType &struct_type, GetElementPtrInst &gep)
+uint64_t pdg::pdgutils::getGEPOffsetInBits(Module &M, StructType &struct_type, GetElementPtrInst &gep)
 {
   // get the accessed struct member offset from the gep instruction
   int gep_offset = getGEPAccessFieldOffset(gep);
@@ -91,7 +89,7 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
   if (gep_bit_offset < 0)
     return false;
 
-  Value* lshr_op_inst = getLShrOnGep(gep);
+  Value *lshr_op_inst = getLShrOnGep(gep);
   if (lshr_op_inst != nullptr)
   {
     if (auto lshr = dyn_cast<BinaryOperator>(lshr_op_inst))
@@ -105,7 +103,7 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
     }
   }
   uint64_t di_type_bit_offset = dt.getOffsetInBits();
-  
+
   if (gep_bit_offset == di_type_bit_offset)
     return true;
   return false;
@@ -118,7 +116,7 @@ bool pdg::pdgutils::isNodeBitOffsetMatchGEPBitOffset(Node &n, GetElementPtrInst 
     return false;
   Module &module = *(gep.getFunction()->getParent());
   uint64_t gep_bit_offset = pdgutils::getGEPOffsetInBits(module, *struct_ty, gep);
-  DIType* node_di_type = n.getDIType();
+  DIType *node_di_type = n.getDIType();
   if (node_di_type == nullptr || gep_bit_offset == INT_MIN)
     return false;
   uint64_t node_bit_offset = node_di_type->getOffsetInBits();
@@ -620,4 +618,18 @@ bool pdg::pdgutils::isSkbNode(TreeNode &tree_node)
   auto root_node_dt = root_node->getDIType();
   std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*root_node_dt, true);
   return (root_di_type_name_raw == "sk_buff*" || root_di_type_name_raw == "skb_buff");
+}
+
+// check if i1 is precede of i2
+bool pdg::pdgutils::isPrecedeInst(Instruction &i1, Instruction &i2, Function &F)
+{
+  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+  {
+    auto &curInst = *inst_iter;
+    if (&curInst == &i1)
+      return true;
+    if (&curInst == &i2)
+      return false;
+  }
+  return false;
 }
