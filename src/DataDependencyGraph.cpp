@@ -48,7 +48,6 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
   return false;
 }
 
-
 void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
@@ -123,7 +122,7 @@ void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst) {
     auto loadAddr = li->getPointerOperand();
     auto addrNode = g.getNode(*loadAddr);
     if (addrNode == nullptr) {
-        errs() << "empty addr node load inst " << *loadAddr << " in func " << curFunc->getName().str() << "\n";
+        // errs() << "empty addr node load inst " << *loadAddr << " in func " << curFunc->getName().str() << "\n";
         return;
     }
     auto aliasNodes =
@@ -152,8 +151,6 @@ void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst) {
     }
   }
 }
-
-
 
 AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Value &v2)
 {

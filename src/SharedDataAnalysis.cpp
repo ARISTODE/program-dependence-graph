@@ -15,6 +15,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   _module = &M;
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
   _call_graph = &PDGCallGraph::getInstance();
+  fieldStatsFile.open("fieldAccessStats.csv");
   // read driver/kernel domian funcs
   setupStrOps();
   readSentinelFields();
@@ -22,6 +23,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   readGlobalFuncOpStructNames();
   setupDriverFuncs(M);
   setupKernelFuncs(M);
+  setupExportedFuncPtrFieldNames();
   // get boundary functions
   setupBoundaryFuncs(M);
   // compute struct type passed through boundary (shared struct type)
@@ -33,10 +35,16 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   // dumpSharedFieldID();
+  errs() << "number of shared fields: " << _shared_field_id.size() << "\n";
+  errs() << "number of kernel read driver update fields: " << _sharedKRDWFields << "\n";
   // computeSharedGlobalVars();
   if (!pdgutils::isFileExist("shared_struct_types"))
     dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
+  // collect shared fields detail access stats
+  collectSharedFieldsAccessStats();
+  fieldStatsFile.close();
+  errs() << "Shared fields computation finished\n";
   return false;
 }
 
@@ -51,6 +59,15 @@ void pdg::SharedDataAnalysis::setupStrOps()
   _string_op_names.insert("strncmp");
   _string_op_names.insert("strpbrk");
   _string_op_names.insert("kobject_set_name");
+}
+
+void pdg::SharedDataAnalysis::setupExportedFuncPtrFieldNames()
+{
+  std::ifstream driverExportedFuncPtrNames("exported_func_ptrs");
+  for (std::string line; std::getline(driverExportedFuncPtrNames, line);)
+  {
+    exportedFuncPtrFieldNames.insert(line);
+  }
 }
 
 void pdg::SharedDataAnalysis::setupDriverFuncs(Module &M)
@@ -228,7 +245,7 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
   // computed in this step.
   // for (auto f : _boundary_funcs)
   // {
-  //   if (f->isDeclaration())
+  //   if (f->isDeclaration())  
   //     continue;
   //   auto fw = _PDG->getFuncWrapper(*f);
   //   for (auto arg : fw->getArgList())
@@ -316,7 +333,13 @@ void pdg::SharedDataAnalysis::connectTypeTreeToAddrVars(Tree &type_tree)
         continue;
       auto addr_var_node = _PDG->getNode(*addr_var);
       current_node->addNeighbor(*addr_var_node, EdgeType::VAL_DEP);
-      // TODO: add alias here
+      // consider aliasing
+      auto aliasNodes = _PDG->findNodesReachedByEdge(*addr_var_node, EdgeType::DATA_ALIAS);
+      for (auto aliasNode : aliasNodes)
+      {
+        current_node->addAddrVar(*aliasNode->getValue());
+        current_node->addNeighbor(*aliasNode, EdgeType::VAL_DEP);
+      }
     }
     for (auto child_node : current_node->getChildNodes())
     {
@@ -340,7 +363,9 @@ void pdg::SharedDataAnalysis::computeVarsWithDITypeInFunc(DIType &dt, Function &
     if (inst_lowest_di_type == nullptr)
       continue;
     if (dbgutils::hasSameDIName(dt, *inst_lowest_di_type))
+    {
       vars.insert(&*inst_iter);
+    }
   }
 }
 
@@ -367,33 +392,44 @@ bool pdg::SharedDataAnalysis::isStructFieldNode(TreeNode &tree_node)
   return dbgutils::isStructType(*parent_node_di_type);
 }
 
-bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &tree_node)
+bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &tree_node, bool &hasReadByKernel, bool &hasUpdateByDriver)
 {
+  auto dt = tree_node.getDIType();
+  if (dt && dbgutils::isFuncPointerType(*dt))
+    return true;
   auto addr_vars = tree_node.getAddrVars();
   bool accessed_in_driver = false;
   bool accessed_in_kernel = false;
-  // Function* driver_func = nullptr;
-  // Function* kernel_func = nullptr;
+
   for (auto addr_var : addr_vars)
   {
     if (Instruction *i = dyn_cast<Instruction>(addr_var))
     {
       Function *f = i->getFunction();
+
       if (_driver_domain_funcs.find(f) != _driver_domain_funcs.end())
       {
         accessed_in_driver = true;
-        // driver_func = f;
+        if (pdgutils::hasWriteAccess(*i))
+          hasUpdateByDriver = true;
       }
       if (_kernel_domain_funcs.find(f) != _kernel_domain_funcs.end())
       {
         accessed_in_kernel = true;
-        // kernel_func = f;
+        if (pdgutils::hasReadAccess(*i))
+          hasReadByKernel = true;
       }
     }
 
-    if (accessed_in_driver && accessed_in_kernel)
+    if (hasReadByKernel && hasUpdateByDriver)
+    {
+      _sharedKRDWFields++;
       return true;
+    }
   }
+
+  if (accessed_in_driver && accessed_in_kernel)
+    return true;
   return false;
 }
 
@@ -427,10 +463,7 @@ bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string 
 {
   if (field_id.empty())
     return false;
-  bool is_shared_id = (_shared_field_id.find(field_id) != _shared_field_id.end());
-  // bool is_shared_struct_type = isSharedStructType(field_type_name);
-  // return (is_shared_id || is_shared_struct_type && !field_type_name.empty());
-  return is_shared_id;
+  return (_shared_field_id.find(field_id) != _shared_field_id.end());
 }
 
 void pdg::SharedDataAnalysis::computeSharedFieldID()
@@ -444,34 +477,49 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
     Tree *tree = dt_tree_pair.second;
     std::queue<TreeNode *> node_queue;
     node_queue.push(tree->getRootNode());
+    // setting up map for collecting fields access stat
+    auto sharedStructDIType = dbgutils::getLowestDIType(*tree->getRootNode()->getDIType());
+    assert(sharedStructDIType != nullptr && "cannot collect fields access stats for empty struct di type\n");
+    auto sharedStructName = dbgutils::getSourceLevelTypeName(*sharedStructDIType);
+
     while (!node_queue.empty())
     {
       TreeNode *current_tree_node = node_queue.front();
       node_queue.pop();
-      DIType *node_di_type = current_tree_node->getDIType();
-      if (node_di_type == nullptr)
+      DIType *nodeDIType = current_tree_node->getDIType();
+      if (nodeDIType == nullptr)
         continue;
 
-      if (isStructFieldNode(*current_tree_node))
+      bool isPtrType = dbgutils::isPointerType(*nodeDIType);
+      bool isFuncPtrType = dbgutils::isFuncPointerType(*nodeDIType);
+      bool hasReadByKernel = false;
+      bool hasUpdateByDriver = false;
+      if (current_tree_node->isStructField())
       {
-        if (dbgutils::isFuncPointerType(*node_di_type) && current_tree_node->getParentNode() != nullptr)
-          _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_tree_node));
-        else if (isTreeNodeShared(*current_tree_node))
+        if (dbgutils::isFuncPointerType(*nodeDIType))
         {
-          auto field_id = pdgutils::computeTreeNodeID(*current_tree_node);
-          if (!field_id.empty())
-            _shared_field_id.insert(field_id);
+          _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_tree_node));
+          countReadWriteAccessTimes(*current_tree_node);
+        }
+        else if (isTreeNodeShared(*current_tree_node, hasReadByKernel, hasUpdateByDriver))
+        {
+          auto fieldID = pdgutils::computeTreeNodeID(*current_tree_node);
+          if (!fieldID.empty())
+            _shared_field_id.insert(fieldID);
           // check whether a shared field is used in string operation.
           if (isFieldUsedInStringOps(*current_tree_node))
-            _string_field_id.insert(field_id);
+            _string_field_id.insert(fieldID);
           // check whether a field is used in pointer arithmetic
           if (DEBUG)
           {
             if (pdgutils::hasPtrArith(*current_tree_node, true))
-              errs() << "find ptr arith in sd: " << field_id << "\n";
+              errs() << "find ptr arith in sd: " << fieldID << "\n";
           }
+          // insert an entry for shared field access stat
+          sharedStructTypeFieldsAccessMap[sharedStructName].insert(std::make_tuple(fieldID, isPtrType, isFuncPtrType, hasReadByKernel, hasUpdateByDriver));
+          // collect read/write accesses in driver/kernel domain
+          countReadWriteAccessTimes(*current_tree_node);
         }
-        // here, we also check if a field is used as a string in any string manipulation functions
       }
 
       for (auto child : current_tree_node->getChildNodes())
@@ -482,6 +530,7 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
   }
   _shared_field_id.insert("struct inodei_rdev");
   _shared_field_id.insert("struct inodedevt");
+  _shared_field_id.insert("struct filef_inode");
 }
 
 void pdg::SharedDataAnalysis::computeSharedGlobalVars()
@@ -628,6 +677,171 @@ Function *pdg::SharedDataAnalysis::getModuleInitFunc(Module &M)
       return &F;
   }
   return nullptr;
+}
+
+void pdg::SharedDataAnalysis::collectSharedFieldsAccessStats()
+{
+  auto &ksplit_stats = KSplitStats::getInstance();
+  ksplit_stats.numSharedStructType += sharedStructTypeFieldsAccessMap.size();
+
+  for (auto iter = sharedStructTypeFieldsAccessMap.begin(); iter != sharedStructTypeFieldsAccessMap.end(); ++iter)
+  {
+    auto accessFieldStatTuples = iter->second;
+    for (auto tupleIter = accessFieldStatTuples.begin(); tupleIter != accessFieldStatTuples.end(); ++tupleIter)
+    {
+      auto isPtrType = std::get<1>(*tupleIter);
+      auto isFuncPtrType = std::get<2>(*tupleIter);
+      auto isReadByKernel = std::get<3>(*tupleIter);
+      auto isUpdateByDriver = std::get<4>(*tupleIter);
+      if (isReadByKernel)
+      {
+        ksplit_stats.kernelReadableFieldsPerTy += 1;
+        if (isPtrType)
+          ksplit_stats.kernelReadablePtrFieldsPerTy += 1;
+      }
+
+      if (isUpdateByDriver)
+      {
+        ksplit_stats.driverWritableFieldsPerTy += 1;
+        if (isPtrType)
+        {
+          errs() << "driver update ptr field (shared type): " << std::get<0>(*tupleIter) << "\n";
+          ksplit_stats.driverWritablePtrFieldsPerTy += 1;
+        }
+      }
+
+      if (isReadByKernel && isUpdateByDriver)
+      {
+        ksplit_stats.kernelReadDriverUpdateSharedFieldsPerTy += 1;
+        if (isPtrType)
+        {
+          ksplit_stats.kernelReadDriverUpdateSharedPtrFieldsPerTy += 1;
+          if (isFuncPtrType) 
+            ksplit_stats.kernelReadDriverUpdateSharedFuncPtrFieldsPerTy += 1;
+        }
+      }
+    }
+  }
+}
+
+void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
+{
+  if (!treeNode.isStructField())
+    return;
+
+  auto addrVars = treeNode.getAddrVars();
+  unsigned driverReadTimes = 0;
+  unsigned driverWriteTimes = 0;
+  unsigned kernelReadTimes = 0;
+  unsigned kernelWriteTimes = 0;
+
+  if (isFuncPtr(treeNode))
+    driverWriteTimes += 1;
+
+  for (auto addrVar : addrVars)
+  {
+    if (Instruction *i = dyn_cast<Instruction>(addrVar))
+    {
+      Function *f = i->getFunction();
+      // count driver read write times
+      if (_driver_domain_funcs.find(f) != _driver_domain_funcs.end())
+      {
+        if (pdgutils::hasWriteAccess(*i))
+          driverWriteTimes++;
+        else if (pdgutils::hasReadAccess(*i))
+          driverReadTimes++;
+      }
+      // count kernel read write times
+      else if (_kernel_domain_funcs.find(f) != _kernel_domain_funcs.end())
+      {
+        if (pdgutils::hasReadAccess(*i))
+          kernelReadTimes++;
+        else if (pdgutils::hasWriteAccess(*i))
+          kernelWriteTimes++;
+      }
+    }
+  }
+
+  auto fieldName = treeNode.getSrcHierarchyName(false);
+  if (kernelReadTimes != 0 && driverWriteTimes != 0) {
+    std::string fieldTypeStr = getFieldTypeStr(treeNode);
+    fieldStatsFile << fieldTypeStr << fieldName << "," << kernelReadTimes << "," << driverWriteTimes << "\n";
+  }
+}
+
+std::string pdg::SharedDataAnalysis::getFieldTypeStr(TreeNode &treeNode)
+{
+  std::string ret = "";
+  auto &ksplitStats = KSplitStats::getInstance();
+  // first check branch conditions
+  auto dt = treeNode.getDIType();
+  if (dbgutils::isPointerType(*dt))
+  {
+    ret += "ptr|";
+    ksplitStats.numRWPtr++;
+    if (isFuncPtr(treeNode))
+    {
+      ksplitStats.numRWFuncPtr++;
+      ret += "fp|";
+    }
+    if (usedInBranch(treeNode))
+    {
+      ksplitStats.numRWPtrCondVar++;
+      ret += "cond|";
+    }
+    if (pdgutils::hasPtrArith(treeNode, true))
+    {
+      ksplitStats.numRWPtrInPtrArith++;
+      ret += "ptrari|";
+    }
+  }
+  else {
+    ksplitStats.numRWNonPtr++;
+    // non pointer type
+    if (usedInBranch(treeNode))
+    {
+      ksplitStats.numRWNonPtrCondVar++;
+      ret += "cond|";
+    }
+    if (pdgutils::hasPtrArith(treeNode, true))
+    {
+      ksplitStats.numRWNonPtrInPtrArith++;
+      ret += "ptrari|";
+    }
+  }
+  return ret;
+}
+
+bool pdg::SharedDataAnalysis::isFuncPtr(TreeNode &treeNode)
+{
+  auto dt = treeNode.getDIType();
+  if (!dt)
+    return false;
+  if (dbgutils::isFuncPointerType(*dt))
+    return true;
+  return false;
+}
+
+bool pdg::SharedDataAnalysis::isDriverCallBackFuncPtrFieldNode(TreeNode &treeNode)
+{
+  auto dt = treeNode.getDIType();
+  auto fieldName = treeNode.getSrcName();
+  if (exportedFuncPtrFieldNames.find(fieldName) != exportedFuncPtrFieldNames.end())
+    return true;
+  return false;
+}
+
+bool pdg::SharedDataAnalysis::usedInBranch(TreeNode &treeNode)
+{
+  for (auto addrVar : treeNode.getAddrVars())
+  {
+    for (auto user : addrVar->users())
+    {
+      if (isa<BranchInst>(user))
+        return true;
+    }
+  }
+  return false;
 }
 
 static RegisterPass<pdg::SharedDataAnalysis>

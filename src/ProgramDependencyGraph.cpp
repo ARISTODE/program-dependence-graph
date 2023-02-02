@@ -53,6 +53,8 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
     connectIntraprocDependencies(F);
     connectInterprocDependencies(F);
     // this is a simplification from caller's formal tree to call site actual trees
+    // we use this to quickly reach from formal tree to any parameter pass to 
+    // callees through parameter_in edge
     connectFormalInTreeWithActualTree(F);
     func_size++;
   }
@@ -149,6 +151,7 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     if (!actual_in_tree || !formal_in_tree)
       continue;
     _PDG->addTreeNodesToGraph(*actual_in_tree);
+    // connect actual in and formal in trees
     connectInTrees(actual_in_tree, formal_in_tree, EdgeType::PARAMETER_IN);
 
     // step 3: connect actual out -> formal out
@@ -187,11 +190,10 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
   }
 }
 
-// ===== connect dependencies =====
+// ===== connect intraprocedural dependencies =====
 void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F)
 {
   // add control dependency edges
-  // TODO: Figure out why control pass will run automatically.
   getAnalysis<ControlDependencyGraph>(F); // add data dependencies for nodes in F
   // connect formal tree with address variables
   FunctionWrapper *func_w = getFuncWrapper(F);
@@ -361,14 +363,17 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formal_i
           continue;
         if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(alias_node_val))
         {
-          // when finding alias, if a gep instruction is found with (0,0) indices, it means the first 
-          // element in the object/buffer. We need to skip this because it will confuse access analysis 
-          // and causing false positives for the accesses on the container object. 
-          if (gep->hasAllZeroIndices())
-            continue;
+          if (!current_node->isStructMember())
+          {
+            // when finding alias for non-sturct member field, if a gep instruction is found with (0,0) indices,
+            // it means the first element in the object/buffer. We need to skip this because it will confuse
+            // access analysis and causing false positives for the accesses on the container object.
+            if (gep->hasAllZeroIndices())
+              continue;
+          }
         }
-        current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
         current_node->addAddrVar(*alias_node_val);
+        current_node->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
       }
     }
 
@@ -599,7 +604,7 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
   node_queue.push(root_node);
   std::set<EdgeType> edge_types = {
       EdgeType::PARAMETER_IN,
-      EdgeType::DATA_RET,
+      // EdgeType::DATA_RET,
   };
   Function *current_func = formal_in_tree.getFunc();
   if (current_func == nullptr)
@@ -615,16 +620,16 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
         continue;
       if (n->getFunc() == current_func)
       {
-        if (current_node->getDIType() != nullptr && !dbgutils::isPointerType(*current_node->getDIType()))
-        {
-          auto parent_node = current_node->getParentNode();
-          // TODO: need to change pdg construction later
-          if (parent_node != nullptr)
-          {
-            parent_node->addAddrVar(*n->getValue());
-          }
-        }
-        else
+        // if (current_node->getDIType() != nullptr && !dbgutils::isPointerType(*current_node->getDIType()))
+        // {
+        //   auto parent_node = current_node->getParentNode();
+        //   // TODO: need to change pdg construction later
+        //   if (parent_node != nullptr)
+        //   {
+        //     parent_node->addAddrVar(*n->getValue());
+        //   }
+        // }
+        // else
           current_node->addAddrVar(*n->getValue());
       }
     }

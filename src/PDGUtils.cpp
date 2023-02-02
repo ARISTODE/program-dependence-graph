@@ -148,6 +148,8 @@ bool pdg::pdgutils::hasReadAccess(Value &v)
       if (gep->getPointerOperand() == &v)
         return true;
     }
+    if (isa<CallInst>(user))
+      return true;
   }
   return false;
 }
@@ -543,9 +545,11 @@ bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)
 bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
 {
   // auto &ksplit_stats = KSplitStats::getInstance();
-  auto field_id = pdgutils::computeTreeNodeID(tree_node);
-
-  // check if a field is
+  auto fieldID = pdgutils::computeTreeNodeID(tree_node);
+  std::string funcName = "";
+  if (tree_node.getFunc())
+    funcName = tree_node.getFunc()->getName().str();
+  // check if a field is used in pointer arithemetic
   for (auto addr_var : tree_node.getAddrVars())
   {
     // check if a field is used to derive pointer arithmetic for other field
@@ -557,37 +561,20 @@ bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
       {
         if (isa<GetElementPtrInst>(user))
           return true;
-        // {
-        //   if (is_shared_data)
-        //   {
-        //     ksplit_stats.increasePtrGEPArithSDNum();
-        //     // errs() << "SD find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
-        //   }
-        //   else
-        //   {
-        //     ksplit_stats.increasePtrGEPArithDaaNum();
-        //     // errs() << "DAA find ptr arith (gep): " << field_id << " - " << gep->getFunction()->getName() << "\n";
-        //   }
-        //   return true;
-        // }
       }
     }
 
     // check if a field is directly used in pointer arithmetic computation
     for (auto user : addr_var->users())
     {
-      if (auto var_user = dyn_cast<PtrToIntInst>(user))
+      if (isa<PtrToIntInst>(user))
       {
-        // if (is_shared_data)
-        // {
-        //   errs() << "SD find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
-        //   ksplit_stats.increasePtrtoIntArithSDNum();
-        // }
-        // else
-        // {
-        //   errs() << "DAA find ptr arith (ptrtoint): " << field_id << " - " << var_user->getFunction()->getName() << "\n";
-        //   ksplit_stats.increasePtrtoIntArithDaaNum();
-        // }
+        errs() << "find ptr arith on " << fieldID << " in func " << funcName << "\n";
+        return true;
+      }
+      if (isa<GetElementPtrInst>(user))
+      {
+        errs() << "find ptr arith on " << fieldID << " in func " << funcName << "\n";
         return true;
       }
     }

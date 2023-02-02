@@ -18,6 +18,7 @@ namespace pdg
     bool runOnModule(llvm::Module &M) override;
     void setupDriverFuncs(llvm::Module &M);
     void setupStrOps();
+    void setupExportedFuncPtrFieldNames();
     void readDriverGlobalStrucTypes();
     void setupKernelFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getDriverFuncs() { return _driver_domain_funcs; }
@@ -43,7 +44,7 @@ namespace pdg
     void computeVarsWithDITypeInFunc(llvm::DIType &dt, llvm::Function &F, std::set<llvm::Value *> &vars);
     std::set<llvm::Value *> computeVarsWithDITypeInModule(llvm::DIType &dt, llvm::Module &M);
     bool isStructFieldNode(TreeNode &tree_node);
-    bool isTreeNodeShared(TreeNode &tree_node);
+    bool isTreeNodeShared(TreeNode &tree_node, bool &hasReadByKernel, bool &hasUpdateByDriver);
     bool isFieldUsedInStringOps(TreeNode &tree_node);
     bool isStringFieldID(std::string field_id) { return _string_op_names.find(field_id) != _string_op_names.end(); }
     bool isSharedFieldID(std::string field_id, std::string field_type_name="");
@@ -60,6 +61,13 @@ namespace pdg
     // some side tests
     void printPingPongCalls(llvm::Module &M);
     void dumpSharedTypes(std::string file_name);
+    // shared fields access stats
+    void collectSharedFieldsAccessStats();
+    void countReadWriteAccessTimes(TreeNode &treeNode);
+    std::string getFieldTypeStr(TreeNode &treeNode);
+    bool usedInBranch(TreeNode &treeNode);
+    bool isFuncPtr(TreeNode &treeNode);
+    bool isDriverCallBackFuncPtrFieldNode(TreeNode &treeNode);
 
   private:
     ProgramGraph *_PDG;
@@ -81,6 +89,11 @@ namespace pdg
     std::set<std::string> _driver_func_op_struct_names;
     std::set<std::string> _driver_global_struct_types;
     std::set<std::string> _sentinel_fields;
+    std::set<std::string> exportedFuncPtrFieldNames;
+    // tuple definition (field name, is pointer, is func ptr, is read by kernel, is update by driver)
+    unsigned int _sharedKRDWFields = 0;
+    std::map<std::string, std::set<std::tuple<std::string, bool, bool, bool, bool>>> sharedStructTypeFieldsAccessMap;
+    std::ofstream fieldStatsFile;
   };
 } // namespace pdg
 #endif

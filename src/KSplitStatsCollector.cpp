@@ -83,7 +83,6 @@ void pdg::KSplitStats::printDataStats()
               << "\n";
   _stats_file << "Driver read only ptr fields: " << _driver_read_ptr_fields << " - " << ((float)_driver_read_ptr_fields / _shared_ptr_num * 100) << "%"
               << "\n";
-
   _stats_file << "Driver write only fields: " << _driver_write_fields << " - " << ((float)_driver_write_fields / _fields_shared_analysis * 100) << "%"
               << "\n";
   _stats_file << "Driver write only ptr fields: " << _driver_write_ptr_fields << " - " << ((float)_driver_write_ptr_fields / _shared_ptr_num * 100) << "%"
@@ -91,17 +90,47 @@ void pdg::KSplitStats::printDataStats()
   _stats_file << "Driver write only func ptr fields: " << _driver_write_func_ptr_fields << " - " << ((float)_driver_write_func_ptr_fields / _driver_write_ptr_fields * 100) << "%"
               << "\n";
   _stats_file << "Driver write through ptr fields: " << _driver_write_through_ptr_fields << "\n";
-
-  _stats_file << "Driver access fields: " << _driver_access_fields << " - " << ((float)_driver_write_fields / _fields_shared_analysis * 100) << "%"
+  _stats_file << "Driver access fields: " << _driver_access_fields << " - " << ((float)_driver_access_fields / _fields_shared_analysis * 100) << "%"
               << "\n";
   _stats_file << "Driver access ptr fields: " << _driver_access_ptr_fields << " - " << ((float)_driver_access_ptr_fields / _shared_ptr_num * 100) << "%"
               << "\n";
-
-  _stats_file << "Driver writable fields: " << (_driver_access_fields + _driver_write_fields) << "\n";
-  _stats_file << "Driver writable ptr fields: " << (_driver_access_ptr_fields + _driver_write_ptr_fields) << "\n";
-
   _stats_file << "Driver readable fields: " << (_driver_access_fields + _driver_read_fields) << "\n";
-  _stats_file << "Driver readable fields: " << (_driver_access_ptr_fields + _driver_read_ptr_fields) << "\n";
+  _stats_file << "Driver readable ptr fields: " << (_driver_access_ptr_fields + _driver_read_ptr_fields) << "\n";
+
+  _stats_file << "No. Kernel readable fields: " << kernelReadableFields << "\n";
+  _stats_file << "No. Kernel readable ptr fields: " << kernelReadablePtrFields << "\n";
+  _stats_file << "No. Kernel readable non-ptr fields: " << (kernelReadableFields - kernelReadablePtrFields) << "\n";
+  _stats_file << "No. Driver writable fields: " << (_driver_access_fields + _driver_write_fields) << "\n";
+  _stats_file << "No. Driver writable ptr fields: " << (_driver_access_ptr_fields + _driver_write_ptr_fields) << "\n";
+  _stats_file << "No. Driver writable non-ptr fields: " << (_driver_access_fields + _driver_write_fields - _driver_access_ptr_fields - _driver_write_ptr_fields) << "\n";
+  _stats_file << "No. Shared fields kernel may read after driver write: " << kernelRAWDriverSharedFields << "\n";
+  _stats_file << "No. Shared ptr fields kernel may read after driver write: " << kernelRAWDriverSharedPtrFields << "\n";
+  _stats_file << "No. Shared non-Ptr fields kernel may read after driver write: " << (kernelRAWDriverSharedFields - kernelRAWDriverSharedPtrFields) << "\n";
+  _stats_file << "No. Shared fields kernel read driver update: " << kernelReadDriverUpdateSharedFields << "\n";
+  _stats_file << "No. Shared ptr fields kernel read driver update: " << kernelReadDriverUpdateSharedPtrFields << "\n";
+  _stats_file << "No. Shared non-ptr fields kernel read driver update: " << (kernelReadDriverUpdateSharedFields - kernelReadDriverUpdateSharedPtrFields) << "\n";
+
+  // per shared type stats
+  _stats_file << " ----------------  Per Type Stat ----------------- "
+              << "\n";
+  _stats_file << "No. Shared struct types: " << numSharedStructType << "\n";
+  // _stats_file << "No. Kernel readable fields (per type): " << kernelReadableFieldsPerTy << "\n";
+  // _stats_file << "No. Kernel readable ptr fields (per type): " << kernelReadablePtrFieldsPerTy << "\n";
+  // _stats_file << "No. Kernel readable non-ptr fields (per type): " << (kernelReadableFieldsPerTy - kernelReadablePtrFieldsPerTy) << "\n";
+  // _stats_file << "No. Driver writable fields (per type): " << driverWritableFieldsPerTy << "\n";
+  // _stats_file << "No. Driver writable ptr fields (per type): " << driverWritablePtrFieldsPerTy << "\n";
+  // _stats_file << "No. Driver writable non-ptr fields (per type): " << (driverWritableFieldsPerTy - driverWritablePtrFieldsPerTy) << "\n";
+  // _stats_file << "No. Shared fields kernel read driver update: " << kernelReadDriverUpdateSharedFieldsPerTy << "\n";
+  // _stats_file << "No. Shared ptr fields kernel read driver update: " << kernelReadDriverUpdateSharedPtrFieldsPerTy << "\n";
+  // _stats_file << "No. Shared func ptr fields kernel read driver update: " << kernelReadDriverUpdateSharedFuncPtrFieldsPerTy << "\n";
+  // _stats_file << "No. Shared non-ptr fields kernel read driver update: " << (kernelReadDriverUpdateSharedFieldsPerTy - kernelReadDriverUpdateSharedPtrFieldsPerTy) << "\n";
+  _stats_file << "No. RW ptr: " << numRWPtr << "\n";
+  _stats_file << "No. RW func ptr: " << numRWFuncPtr << "\n";
+  _stats_file << "No. RW ptr used in branch: " << numRWPtrCondVar << "\n";
+  _stats_file << "No. RW ptr used in ptr arith: " << numRWPtrInPtrArith << "\n";
+  _stats_file << "No. RW non ptr: " << numRWNonPtr << "\n";
+  _stats_file << "No. RW non ptr used in branch: " << numRWNonPtrCondVar << "\n";
+  _stats_file << "No. RW non ptr used in ptr arith: " << numRWNonPtrInPtrArith << "\n";
   _stats_file.close();
 }
 
@@ -171,7 +200,9 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
   DIType *dt = tree_node.getDIType();
   if (!dt)
     return;
-  std::string fieldName = tree_node.getSrcName();
+  if (!tree_node.isStructField())
+    return;
+  std::string fieldName = tree_node.getSrcHierarchyName();
   std::string funcName = func.getName().str();
 
   // need to extract bit field info here because this info will be lost if we strip the tag
@@ -179,7 +210,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
   bool isFuncPtrField = dbgutils::isFuncPointerType(*dt);
 
   auto access_tags = tree_node.getAccessTags();
-  if (access_tags.size() == 0 && !tree_node.isRootNode())
+  if (access_tags.size() == 0)
     return;
 
   dt = dbgutils::stripMemberTag(*dt);
@@ -219,6 +250,8 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
       }
     }
 
+    // collects pointer updates when kernel pass a parameter to driver, and driver updates the
+    // parameter
     if (access_tags.size() == 2)
     {
       _driver_access_fields++;
@@ -227,22 +260,27 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
       {
         _driver_access_ptr_fields++;
         std::get<2>(ptrFieldAccTuple) += 1;
+        // chekcing pointer update cases
         if (isFuncPtrField)
         {
           _driver_write_func_ptr_fields += 1;
-          errs() << "driver update only ptr field (func): " << fieldName << " - "
+          errs() << "driver update ptr field (func): " << fieldName << " - "
                  << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
         }
         else
         {
           errs() << "driver update ptr field (non-func): " << fieldName << " - "
                  << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+          errs() << "addr var size: " << tree_node.getAddrVars().size() << "\n";
           for (auto addrVar : tree_node.getAddrVars())
           {
-            errs() << "\t" << *addrVar << "\n";
+            if (auto inst = dyn_cast<Instruction>(addrVar))
+              errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
           }
         }
       }
+      else
+        errs() << "driver access field: " << fieldName << " - " << funcName << "\n";
     }
     // collect read only, write only fields
     else if (access_tags.size() == 1)
@@ -255,7 +293,10 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
         {
           _driver_read_ptr_fields++;
           std::get<0>(ptrFieldAccTuple) += 1;
+          errs() << "driver read only ptr data: " << fieldName << " - " << funcName << "\n";
         }
+        else
+          errs() << "driver read only data: " << fieldName << " - " << funcName << "\n";
       }
       else if (access_tags.find(AccessTag::DATA_WRITE) != access_tags.end())
       {
@@ -263,23 +304,42 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
         std::get<1>(fieldAccTuple) += 1;
         // TODO: debugging purpose
         errs() << "driver update only field: " << fieldName << " - " << funcName << "\n";
-        if (isPtrType)
+        if (!tree_node.isRootNode())
         {
-          _driver_write_ptr_fields++;
-          std::get<1>(ptrFieldAccTuple) += 1;
-          if (isFuncPtrField)
+          if (isPtrType)
           {
-            _driver_write_func_ptr_fields += 1;
-            errs() << "driver update only ptr field (func): " << fieldName << " - "
-                   << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
-          }
-          else
-          {
-            errs() << "driver update only ptr field (non-func): " << fieldName << " - "
-                   << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+            _driver_write_ptr_fields++;
+            std::get<1>(ptrFieldAccTuple) += 1;
+            if (isFuncPtrField)
+            {
+              _driver_write_func_ptr_fields += 1;
+              errs() << "driver update only ptr field (func): " << fieldName << " - "
+                     << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+            }
+            else
+            {
+              errs() << "driver update only ptr field (non-func): " << fieldName << " - "
+                     << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+              errs() << "addr var size: " << tree_node.getAddrVars().size() << "\n";
+              for (auto addrVar : tree_node.getAddrVars())
+              {
+                if (auto inst = dyn_cast<Instruction>(addrVar))
+                  errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
+              }
+            }
           }
         }
       }
+    }
+  }
+  else
+  {
+    // collect kernel stats
+    if (access_tags.find(AccessTag::DATA_READ) != access_tags.end())
+    {
+      kernelReadableFields++;
+      if (isPtrType)
+        kernelReadablePtrFields++;
     }
   }
 

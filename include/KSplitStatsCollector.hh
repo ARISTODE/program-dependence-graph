@@ -146,7 +146,9 @@ namespace pdg
     unsigned _driverSharedAllocators = 0;
     unsigned _kernelSharedAllocators = 0;
 
-    // driver specific data
+    // kernel driver specific access data
+    // per instance
+    unsigned accessedSharedFields = 0;
     unsigned _driver_read_fields = 0;
     unsigned _driver_write_fields = 0;
     unsigned _driver_access_fields = 0;
@@ -155,6 +157,28 @@ namespace pdg
     unsigned _driver_write_func_ptr_fields = 0;
     unsigned _driver_access_ptr_fields = 0;
     unsigned _driver_write_through_ptr_fields = 0;
+    unsigned kernelReadableFields = 0;
+    unsigned kernelReadablePtrFields = 0;
+    unsigned kernelRAWDriverSharedFields = 0;
+    unsigned kernelRAWDriverSharedPtrFields = 0;
+    unsigned kernelReadDriverUpdateSharedFields = 0;
+    unsigned kernelReadDriverUpdateSharedPtrFields = 0;
+    // per shared struct type 
+    unsigned numSharedStructType = 0;
+    unsigned kernelReadableFieldsPerTy = 0;
+    unsigned kernelReadablePtrFieldsPerTy = 0;
+    unsigned driverWritableFieldsPerTy = 0;
+    unsigned driverWritablePtrFieldsPerTy = 0;
+    unsigned kernelReadDriverUpdateSharedFieldsPerTy = 0;
+    unsigned kernelReadDriverUpdateSharedPtrFieldsPerTy = 0;
+    unsigned kernelReadDriverUpdateSharedFuncPtrFieldsPerTy = 0;
+    unsigned numRWPtr = 0;
+    unsigned numRWFuncPtr = 0;
+    unsigned numRWNonPtr = 0;
+    unsigned numRWPtrCondVar = 0;
+    unsigned numRWNonPtrCondVar = 0;
+    unsigned numRWPtrInPtrArith = 0;
+    unsigned numRWNonPtrInPtrArith = 0;
 
     // outdated
     unsigned _unhandled_array_num = 0; // for some dyn size arr, we could try infer it's size

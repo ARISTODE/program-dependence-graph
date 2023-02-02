@@ -35,6 +35,10 @@ namespace pdg
     void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false, bool is_ret = false);
     void computeDataAccessForFuncArgs(llvm::Function &F);
     void checkCrossDomainRAWforFormalTreeNode(TreeNode &tree_node);
+    void computeKernelReadDriverUpdateFields(llvm::Module &M);
+    void computeFieldReadWriteForTree(Tree *argTree, bool isKernelFunc = true);
+    void computeKernelReadSharedFields(llvm::Function &F);
+    void computeDriverUpdateSharedFields(llvm::Function &F);
     void generateIDLForFunc(llvm::Function &F, bool process_exported_func = false);
     void generateRpcForFunc(llvm::Function &F, bool process_exported_func = false);
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
@@ -68,6 +72,9 @@ namespace pdg
     KSplitStats *getKSplitStats() { return _ksplit_stats; }
     SharedDataAnalysis *getSDA() { return _SDA; }
     ProgramGraph *getPDG() { return _PDG; }
+    // shared fields analysis
+    std::set<std::string> _kernelReadSharedFields;
+    std::set<std::string> _driverUpdateSharedFields;
 
   private:
     llvm::Module *_module;
@@ -91,6 +98,8 @@ namespace pdg
     std::set<llvm::Function *> _kernel_funcs_regsitered_with_indirect_ptr;
     std::set<llvm::Function *> _transitive_boundary_funcs;
     bool _generating_idl_for_global = false;
+    std::set<std::string> _visitedSharedFieldIDInRAWAna;
+    unsigned int _kernelRAWDriverFields = 0;
   };
 }
 

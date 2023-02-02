@@ -40,6 +40,7 @@ int pdg::TreeNode::expandNode()
   if (!dbgutils::isPointerType(*dt) && !dbgutils::isProjectableType(*dt))
     return 0;
 
+  // for pointer type, build a child node, connect the chlid node with parent node
   if (dbgutils::isPointerType(*dt))
   {
     DIType* pointed_obj_dt = dbgutils::getLowestDIType(*dt);
@@ -50,6 +51,7 @@ int pdg::TreeNode::expandNode()
     return 1;
   }
   // TODO: should change to aggregate type later
+  // for aggregate types, connect all the fields node with the parent struct node
   if (dbgutils::isProjectableType(*dt))
   {
     auto di_node_arr = dyn_cast<DICompositeType>(dt)->getElements();
@@ -204,6 +206,16 @@ bool pdg::TreeNode::isStructMember()
   return false;
 }
 
+bool pdg::TreeNode::isStructField()
+{
+  if (_node_di_type != nullptr)
+  {
+    auto dt = dbgutils::stripAttributes(*_node_di_type);
+    return (dt->getTag() == llvm::dwarf::DW_TAG_member);
+  }
+  return false;
+}
+
 std::string pdg::TreeNode::getSrcName()
 {
   if (_di_local_var)
@@ -211,4 +223,33 @@ std::string pdg::TreeNode::getSrcName()
   if (getDIType())
     return dbgutils::getSourceLevelVariableName(*getDIType());
   return "";
+}
+
+std::string pdg::TreeNode::getTypeName()
+{
+  if (getDIType()) 
+    return dbgutils::getSourceLevelTypeName(*getDIType());
+  return "";
+}
+
+std::string pdg::TreeNode::getSrcHierarchyName(bool hideStructTypeName)
+{
+  std::string retStr = "";
+  auto curNode = this;
+  while (curNode)
+  {
+    if (hideStructTypeName && curNode->getDIType() && dbgutils::isCompositeType(*curNode->getDIType()))
+    {
+      curNode = curNode->getParentNode();
+      continue;
+    }
+
+    if (!curNode->getSrcName().empty())
+      retStr = curNode->getSrcName() + retStr;
+    curNode = curNode->getParentNode();
+    // add -> to indicate the fields
+    if (curNode)
+      retStr = "->" + retStr;
+  }
+  return retStr;
 }

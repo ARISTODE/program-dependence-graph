@@ -35,6 +35,7 @@ namespace pdg
       std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
       bool isRootNode() {return _parent_node == nullptr;}
       bool isStructMember();
+      bool isStructField();
       int numOfChild() { return _children.size(); }
       bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
@@ -49,6 +50,8 @@ namespace pdg
       void setSeqPtr() { is_seq_ptr = true; }
       void dump() override;
       std::string getSrcName();
+      std::string getTypeName();
+      std::string getSrcHierarchyName(bool hideStructTypeName = true); // obj->field->field
       // used for collecting ksplit stats
     public:
       bool is_shared = false;

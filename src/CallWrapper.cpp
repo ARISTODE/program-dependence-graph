@@ -9,6 +9,7 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
   if (called_func->isVarArg())
     return;
   // construct actual tree based on the type signature of callee
+  Function *callingFunc = _call_inst->getFunction();
   auto formal_arg_list = callee_fw.getArgList();
   assert(_arg_list.size() == formal_arg_list.size() && "actual/formal arg size don't match!");
   // iterate through actual param list and construct actual tree by copying formal tree
@@ -30,6 +31,7 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
     arg_actual_in_tree->setTreeNodeType(GraphNodeType::ACTUAL_IN);
     TreeNode* actual_in_root_node = arg_actual_in_tree->getRootNode();
     actual_in_root_node->addAddrVar(**actual_arg_iter);
+    actual_in_root_node->setFunc(*callingFunc);
     arg_actual_in_tree->build();
     _arg_actual_in_tree_map.insert(std::make_pair(*actual_arg_iter, arg_actual_in_tree));
     // build actual out tree
@@ -38,6 +40,7 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
     arg_actual_out_tree->setTreeNodeType(GraphNodeType::ACTUAL_OUT);
     TreeNode* actual_out_root_node = arg_actual_out_tree->getRootNode();
     actual_out_root_node->addAddrVar(**actual_arg_iter);
+    actual_out_root_node->setFunc(*callingFunc);
     arg_actual_out_tree->build();
     _arg_actual_out_tree_map.insert(std::make_pair(*actual_arg_iter, arg_actual_out_tree));
     actual_arg_iter++;

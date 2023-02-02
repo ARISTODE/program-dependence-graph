@@ -634,11 +634,11 @@ namespace NesCheck
         if (classifiedType != ptrType)
         {
           // first issue a warning
-          if (Instruction *i = dyn_cast<Instruction>(nodeVal))
-          {
-            if (!ptrType.empty())
-              errs() << "[Warning]: find conflicting nescheck types in func " << i->getFunction()->getName() << " - " << fieldID << " - " << classifiedType << "|" << ptrType << "\n";
-          }
+          // if (Instruction *i = dyn_cast<Instruction>(nodeVal))
+          // {
+          //   if (!ptrType.empty())
+          //     errs() << "[Warning]: find conflicting nescheck types in func " << i->getFunction()->getName() << " - " << fieldID << " - " << classifiedType << "|" << ptrType << "\n";
+          // }
           // classification priority: DYN > SEQ > SAFE
           if (classifiedType == "DYN")
             ptrType = "DYN";
@@ -668,7 +668,7 @@ namespace NesCheck
         {
           std::string nescheck_func_name = func_name + "_nesCheck";
           cur_func = CurrentModule->getFunction(StringRef(nescheck_func_name));
-          if (cur_func->isDeclaration())
+          if (cur_func == nullptr || cur_func->isDeclaration())
             continue;
         }
         auto func_w = _PDG->getFuncWrapper(*func);
@@ -713,20 +713,19 @@ namespace NesCheck
             {
               queue.push(child_node);
             }
-            auto fieldID = pdg::pdgutils::computeTreeNodeID(*front);
-            fieldID = pdg::pdgutils::trimStr(fieldID);
             // ignore fields without DItypes (rare case)
             if (!front->getDIType())
               continue;
-            //
             if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
-            // if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front->isRootNode())
-            //   continue;
+            if (front->isStructMember() && !front->is_shared)
+              continue;
             // check reachable address variables (interprecedural)
             std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
             auto reachableNodes = _PDG->findNodesReachedByEdges(*front, edge_types);
             // obtain the classified ptr type
+            auto fieldID = pdg::pdgutils::computeTreeNodeID(*front);
+            fieldID = pdg::pdgutils::trimStr(fieldID);
             std::string ptrType = resolvePtrTypes(reachableNodes, fieldID);
             // set sequential type
             if (ptrType == "SEQ" && pdg::dbgutils::isPointerType(*front->getDIType()))
@@ -1694,6 +1693,20 @@ namespace NesCheck
       classifyBoundaryPtrs(false);
       // after classification, generate IDL for boundary interface, global var and atomic operations
       _DDA->generateSyncStubsForBoundaryFunctions(M);
+      // _DDA->computeKernelReadDriverUpdateFields(M);
+      // std::vector<std::string> kernelReadDriverUpdateFields;
+      // errs() << _DDA->_kernelReadSharedFields.size() << " - " << _DDA->_driverUpdateSharedFields.size() << "\n";
+      // std::set_intersection(_DDA->_kernelReadSharedFields.begin(),
+      //                       _DDA->_kernelReadSharedFields.end(),
+      //                       _DDA->_driverUpdateSharedFields.begin(),
+      //                       _DDA->_driverUpdateSharedFields.end(),
+      //                       std::back_inserter(kernelReadDriverUpdateFields));
+
+      // errs() << "kernel read driver update fields:\n";
+      // for (auto field : kernelReadDriverUpdateFields)
+      // {
+      //   errs() << "\t" << field << "\n";
+      // }
       // _DDA->generateSyncStubsForGlobalVars();
       // _ARA->generateSyncStubsForAtomicRegions();
       classifyBoundaryPtrs(true);

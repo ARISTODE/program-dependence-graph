@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.4.3)
 project(pdg)
+message (STATUS "Searching CMAKE Path in ${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}")
 find_package(LLVM "10.0.1" REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LT_LLVM_INSTALL_DIR}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_CMAKE_DIR}")
 
 message("LLVM STATUS:
   Definitions ${LLVM_DEFINITIONS}
