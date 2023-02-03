@@ -1,7 +1,4 @@
-#include "Graph.hh"
-#include "PDGEdge.hh"
-#include "PDGEnums.hh"
-#include "llvm/IR/Instructions.h"
+#include "PDGCallGraph.hh"
 
 using namespace llvm;
 
@@ -156,6 +153,10 @@ void pdg::ProgramGraph::build(Module &M)
     _func_wrapper_map.insert(std::make_pair(&F, func_w));
   }
 
+  // build call graph
+  auto &call_g = PDGCallGraph::getInstance();
+  if (!call_g.isBuild())
+    call_g.build(M);
   // handle call sites
   for (auto &F : M)
   {
@@ -170,7 +171,12 @@ void pdg::ProgramGraph::build(Module &M)
     {
       auto called_func = pdgutils::getCalledFunc(*ci);
       if (called_func == nullptr)
-        continue;
+      {
+        // handle indirect call
+        auto ind_call_candidates = call_g.getIndirectCallCandidates(*ci, M);
+        if (ind_call_candidates.size() > 0)
+          called_func = *ind_call_candidates.begin();
+      }
       if (!hasFuncWrapper(*called_func))
         continue;
       CallWrapper *cw = new CallWrapper(*ci);

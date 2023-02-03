@@ -207,45 +207,63 @@ void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F) {
   }
 }
 
-void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F) {
+void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
+{
+  auto &call_g = PDGCallGraph::getInstance();
   auto func_w = getFuncWrapper(F);
   auto call_insts = func_w->getCallInsts();
-  for (auto call_inst : call_insts) {
-    if (_PDG->hasCallWrapper(*call_inst)) {
+  for (auto call_inst : call_insts)
+  {
+    if (_PDG->hasCallWrapper(*call_inst))
+    {
       auto call_w = getCallWrapper(*call_inst);
-      if (!call_w)
-        continue;
       auto call_site_node = _PDG->getNode(*call_inst);
-      if (!call_site_node)
+      if (!call_w || !call_site_node)
         continue;
 
-      for (auto arg : call_w->getArgList()) {
+      if (call_w->getCalledFunc() && call_w->getCalledFunc()->isVarArg()) 
+        continue;
+      for (auto arg : call_w->getArgList())
+      {
         Tree *actual_in_tree = call_w->getArgActualInTree(*arg);
-        if (!actual_in_tree) {
-           errs() << "[WARNING]: empty actual tree for callsite " <<
-           *call_inst << " in func " << F.getName() << "\n";
-            continue;
+        if (!actual_in_tree)
+        {
+          // errs() << "[WARNING]: empty actual tree for callsite " << *call_inst << " in func " << F.getName() << "\n";
+          continue;
         }
         Tree *actual_out_tree = call_w->getArgActualOutTree(*arg);
-        call_site_node->addNeighbor(*actual_in_tree->getRootNode(),
-                                    EdgeType::PARAMETER_IN);
-        call_site_node->addNeighbor(*actual_out_tree->getRootNode(),
-                                    EdgeType::PARAMETER_OUT);
+        call_site_node->addNeighbor(*actual_in_tree->getRootNode(), EdgeType::PARAMETER_IN);
+        call_site_node->addNeighbor(*actual_out_tree->getRootNode(), EdgeType::PARAMETER_OUT);
         connectActualInTreeWithAddrVars(*actual_in_tree, *call_inst);
         connectActualOutTreeWithAddrVars(*actual_out_tree, *call_inst);
       }
       // connect return trees
-      // TODO: should change the name here. for return value, we should only
-      // connect the tree node with vars after the call instruction
-      if (!call_w->hasNullRetVal()) {
-        connectActualOutTreeWithAddrVars(*call_w->getRetActualInTree(),
-                                         *call_inst);
-        connectActualOutTreeWithAddrVars(*call_w->getRetActualOutTree(),
-                                         *call_inst);
+      // TODO: should change the name here. for return value, we should only connect
+      // the tree node with vars after the call instruction
+      if (!call_w->hasNullRetVal())
+      {
+        connectActualOutTreeWithAddrVars(*call_w->getRetActualInTree(), *call_inst);
+        connectActualOutTreeWithAddrVars(*call_w->getRetActualOutTree(), *call_inst);
       }
 
-      auto called_func_w = getFuncWrapper(*call_w->getCalledFunc());
-      connectCallerAndCallee(*call_w, *called_func_w);
+      // direct call
+      if (call_w->getCalledFunc() != nullptr)
+      {
+        auto called_func_w = getFuncWrapper(*call_w->getCalledFunc());
+        connectCallerAndCallee(*call_w, *called_func_w);
+      }
+      else
+      {
+        // indirect call
+        auto ind_called_funcs = call_g.getIndirectCallCandidates(*call_w->getCallInst(), *_module);
+        for (auto ind_called_func : ind_called_funcs)
+        {
+          if (ind_called_func->isDeclaration() || ind_called_func->isVarArg())
+            continue;
+          auto called_func_w = getFuncWrapper(*ind_called_func);
+          connectCallerAndCallee(*call_w, *called_func_w);
+        }
+      }
     }
   }
 }
