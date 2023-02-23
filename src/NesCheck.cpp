@@ -102,7 +102,7 @@ namespace NesCheck
     pdg::DataAccessAnalysis *_DDA;
     pdg::ProgramGraph *_PDG;
     std::set<std::string> BoundaryFuncNames;
-    pdg::KSplitStats *_ksplit_stats;
+    pdg::KSplitStats *_ksplitStats;
 
     AnalysisState TheState;
     Type *MySizeType;
@@ -414,10 +414,10 @@ namespace NesCheck
     TODO: we should also consider the updates on the data which is passed from driver to kernel. This updates
     could tell stories about whether a data controlled by the driver (updated) could affect kernel data.
     */
-    void classifyPtrSharedData(pdg::TreeNode &tree_node, std::string classified_ptr_type)
+    void classifyPtrSharedData(pdg::TreeNode &treeNode, std::string classified_ptr_type)
     {
-      auto di_type = tree_node.getDIType();
-      auto access_tags = tree_node.getAccessTags();
+      auto di_type = treeNode.getDIType();
+      auto access_tags = treeNode.getAccessTags();
       auto tag_size = access_tags.size();
       if (tag_size == 1)
       {
@@ -425,44 +425,44 @@ namespace NesCheck
         if (access_tags.find(pdg::AccessTag::DATA_READ) != access_tags.end())
         {
           if (classified_ptr_type == "SAFE")
-            _ksplit_stats->_singleton_read++;
+            _ksplitStats->_singleton_read++;
           else if (classified_ptr_type == "SEQ")
-            _ksplit_stats->_seq_read++;
+            _ksplitStats->_seq_read++;
           else if (classified_ptr_type == "DYN")
-            _ksplit_stats->_wild_read++;
+            _ksplitStats->_wild_read++;
           else
-            _ksplit_stats->_unknown_read++;
+            _ksplitStats->_unknown_read++;
         }
         else
         {
           // only write
           if (classified_ptr_type == "SAFE")
-            _ksplit_stats->_singleton_write++;
+            _ksplitStats->_singleton_write++;
           else if (classified_ptr_type == "SEQ")
-            _ksplit_stats->_seq_write++;
+            _ksplitStats->_seq_write++;
           else if (classified_ptr_type == "DYN")
-            _ksplit_stats->_wild_write++;
+            _ksplitStats->_wild_write++;
           else
-            _ksplit_stats->_unknown_write++;
+            _ksplitStats->_unknown_write++;
         }
       }
       else if (tag_size == 2)
       {
         if (classified_ptr_type == "SAFE")
-          _ksplit_stats->_singleton_rw++;
+          _ksplitStats->_singleton_rw++;
         else if (classified_ptr_type == "SEQ")
-          _ksplit_stats->_seq_rw++;
+          _ksplitStats->_seq_rw++;
         else if (classified_ptr_type == "DYN")
-          _ksplit_stats->_wild_rw++;
+          _ksplitStats->_wild_rw++;
         else
-          _ksplit_stats->_unknown_rw++;
+          _ksplitStats->_unknown_rw++;
       }
     }
 
-    void classifyNonPtrSharedData(pdg::TreeNode &tree_node)
+    void classifyNonPtrSharedData(pdg::TreeNode &treeNode)
     {
-      auto di_type = tree_node.getDIType();
-      auto access_tags = tree_node.getAccessTags();
+      auto di_type = treeNode.getDIType();
+      auto access_tags = treeNode.getAccessTags();
       auto tag_size = access_tags.size();
       // union
       if (tag_size == 1)
@@ -470,36 +470,36 @@ namespace NesCheck
         if (access_tags.find(pdg::AccessTag::DATA_READ) != access_tags.end())
         {
           if (pdg::dbgutils::isUnionType(*di_type))
-            _ksplit_stats->_union_read++;
+            _ksplitStats->_union_read++;
           else if (pdg::dbgutils::isStructType(*di_type))
-            _ksplit_stats->_struct_read++;
+            _ksplitStats->_struct_read++;
           else if (pdg::dbgutils::isPrimitiveType(*di_type))
-            _ksplit_stats->_primitive_read++;
+            _ksplitStats->_primitive_read++;
           else
-            _ksplit_stats->_other_read++;
+            _ksplitStats->_other_read++;
         }
         else
         {
           if (pdg::dbgutils::isUnionType(*di_type))
-            _ksplit_stats->_union_write++;
+            _ksplitStats->_union_write++;
           else if (pdg::dbgutils::isStructType(*di_type))
-            _ksplit_stats->_struct_write++;
+            _ksplitStats->_struct_write++;
           else if (pdg::dbgutils::isPrimitiveType(*di_type))
-            _ksplit_stats->_primitive_write++;
+            _ksplitStats->_primitive_write++;
           else
-            _ksplit_stats->_other_write++;
+            _ksplitStats->_other_write++;
         }
       }
       else if (tag_size == 2)
       {
         if (pdg::dbgutils::isUnionType(*di_type))
-          _ksplit_stats->_union_rw++;
+          _ksplitStats->_union_rw++;
         else if (pdg::dbgutils::isStructType(*di_type))
-          _ksplit_stats->_struct_rw++;
+          _ksplitStats->_struct_rw++;
         else if (pdg::dbgutils::isPrimitiveType(*di_type))
-          _ksplit_stats->_primitive_rw++;
+          _ksplitStats->_primitive_rw++;
         else
-          _ksplit_stats->_other_rw++;
+          _ksplitStats->_other_rw++;
       }
     }
 
@@ -510,7 +510,7 @@ namespace NesCheck
     */
     // void classifyBoundaryData()
     // {
-    //   std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
+    //   std::set<pdg::EdgeType> edgeTypes = {pdg::EdgeType::PARAMETER_IN};
     //   auto SDA = _DDA->getSDA();
     //   for (auto func : SDA->getBoundaryFuncs())
     //   {
@@ -518,12 +518,12 @@ namespace NesCheck
     //     if (!SDA->isKernelFunc(*func))
     //       continue;
 
-    //     std::string func_name = func->getName().str();
+    //     std::string funcName = func->getName().str();
     //     Function *cur_func = func;
     //     // need to handle specially becuase nescheck rewrite function signature
     //     if (func->isDeclaration())
     //     {
-    //       std::string nescheck_func_name = func_name + "_nesCheck";
+    //       std::string nescheck_func_name = funcName + "_nesCheck";
     //       cur_func = CurrentModule->getFunction(StringRef(nescheck_func_name));
     //       if (cur_func->isDeclaration())
     //         continue;
@@ -533,24 +533,24 @@ namespace NesCheck
     //     std::vector<pdg::TreeNode *> root_nodes;
     //     for (auto arg : func_w->getArgList())
     //     {
-    //       auto arg_tree = func_w->getArgFormalInTree(*arg);
-    //       if (!arg_tree)
+    //       auto argTree = func_w->getArgFormalInTree(*arg);
+    //       if (!argTree)
     //         continue;
-    //       if (!arg_tree->getRootNode())
+    //       if (!argTree->getRootNode())
     //         continue;
-    //       root_nodes.push_back(arg_tree->getRootNode());
+    //       root_nodes.push_back(argTree->getRootNode());
     //     }
     //     // return type root nodes
-    //     auto ret_arg_tree = func_w->getRetFormalInTree();
-    //     if (!ret_arg_tree)
+    //     auto retArgTree = func_w->getRetFormalInTree();
+    //     if (!retArgTree)
     //       continue;
-    //     if (ret_arg_tree->getRootNode())
-    //       root_nodes.push_back(ret_arg_tree->getRootNode());
+    //     if (retArgTree->getRootNode())
+    //       root_nodes.push_back(retArgTree->getRootNode());
 
-    //     for (auto root_node : root_nodes)
+    //     for (auto rootNode : root_nodes)
     //     {
     //       std::queue<pdg::TreeNode *> queue;
-    //       queue.push(root_node);
+    //       queue.push(rootNode);
     //       while (!queue.empty())
     //       {
     //         auto front_node = queue.front();
@@ -559,15 +559,15 @@ namespace NesCheck
     //         {
     //           queue.push(child_node);
     //         }
-    //         auto field_id = pdg::pdgutils::computeTreeNodeID(*front_node);
-    //         field_id = pdg::pdgutils::trimStr(field_id);
+    //         auto fieldId = pdg::pdgutils::computeTreeNodeID(*front_node);
+    //         fieldId = pdg::pdgutils::trimStr(fieldId);
     //         // check access condition
     //         if (!front_node->getDIType())
     //           continue;
     //         if (front_node->getAccessTags().size() == 0 && !front_node->isRootNode())
     //           continue;
     //         // filter out shared data
-    //         if (!_DDA->getSDA()->isSharedFieldID(field_id) && !front_node->isRootNode())
+    //         if (!_DDA->getSDA()->isSharedFieldID(fieldId) && !front_node->isRootNode())
     //           continue;
     //         auto reachable_nodes = _PDG->findNodesReachedByEdge(*front_node, pdg::EdgeType::PARAMETER_IN);
     //         bool only_accessed_in_kernel = true;
@@ -603,11 +603,11 @@ namespace NesCheck
     //             if (!node_val)
     //               continue;
     //             // if (Instruction *ii = dyn_cast<Instruction>(node_val))
-    //             //   errs() << "find val node: " << field_id << " - " << *ii << " - " << ii->getFunction()->getName() << "\n";
+    //             //   errs() << "find val node: " << fieldId << " - " << *ii << " - " << ii->getFunction()->getName() << "\n";
     //             if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
     //             {
     //               auto classified_ptr_type = PtrTypeMap[node_val];
-    //               _ksplit_stats->collectDataStats(*front_node, classified_ptr_type);
+    //               _ksplitStats->collectDataStats(*front_node, classified_ptr_type);
     //               classifyPtrSharedData(*front_node, classified_ptr_type);
     //               break;
     //             }
@@ -661,12 +661,12 @@ namespace NesCheck
     {
       for (auto func : _DDA->getSDA()->getBoundaryFuncs())
       {
-        std::string func_name = func->getName().str();
+        std::string funcName = func->getName().str();
         Function *cur_func = func;
         // need to handle specially becuase nescheck rewrite function signature
         if (func->isDeclaration())
         {
-          std::string nescheck_func_name = func_name + "_nesCheck";
+          std::string nescheck_func_name = funcName + "_nesCheck";
           cur_func = CurrentModule->getFunction(StringRef(nescheck_func_name));
           if (cur_func == nullptr || cur_func->isDeclaration())
             continue;
@@ -678,32 +678,32 @@ namespace NesCheck
         // create an entry for driver API fields and ptr fields access
         if (_DDA->getSDA()->isDriverFunc(*func))
         {
-          _ksplit_stats->_drv_api_acc_map.insert(std::make_pair(func, std::make_tuple(0, 0, 0)));
-          _ksplit_stats->_drv_api_ptr_acc_map.insert(std::make_pair(func, std::make_tuple(0, 0, 0)));
+          _ksplitStats->_drv_api_acc_map.insert(std::make_pair(func, std::make_tuple(0, 0, 0)));
+          _ksplitStats->_drv_api_ptr_acc_map.insert(std::make_pair(func, std::make_tuple(0, 0, 0)));
         }
 
         for (auto arg : func_w->getArgList())
         {
-          auto arg_tree = func_w->getArgFormalInTree(*arg);
-          if (!arg_tree)
+          auto argTree = func_w->getArgFormalInTree(*arg);
+          if (!argTree)
             continue;
-          if (!arg_tree->getRootNode())
+          if (!argTree->getRootNode())
             continue;
-          root_nodes.push_back(arg_tree->getRootNode());
+          root_nodes.push_back(argTree->getRootNode());
         }
         // return parameter root nodes
-        auto ret_arg_tree = func_w->getRetFormalInTree();
-        if (!ret_arg_tree)
+        auto retArgTree = func_w->getRetFormalInTree();
+        if (!retArgTree)
           continue;
-        if (ret_arg_tree->getRootNode())
-          root_nodes.push_back(ret_arg_tree->getRootNode());
+        if (retArgTree->getRootNode())
+          root_nodes.push_back(retArgTree->getRootNode());
 
         bool isDriverFunc = _DDA->getSDA()->isDriverFunc(*func);
         // start with the root node, then traverse fild nodes and classify each accordingly
-        for (auto root_node : root_nodes)
+        for (auto rootNode : root_nodes)
         {
           std::queue<pdg::TreeNode *> queue;
-          queue.push(root_node);
+          queue.push(rootNode);
           while (!queue.empty())
           {
             pdg::TreeNode *front = queue.front();
@@ -718,11 +718,11 @@ namespace NesCheck
               continue;
             if (front->getAccessTags().size() == 0 && !front->isRootNode())
               continue;
-            if (front->isStructMember() && !front->is_shared)
+            if (front->isStructMember() && !front->isShared)
               continue;
             // check reachable address variables (interprecedural)
-            std::set<pdg::EdgeType> edge_types = {pdg::EdgeType::PARAMETER_IN};
-            auto reachableNodes = _PDG->findNodesReachedByEdges(*front, edge_types);
+            std::set<pdg::EdgeType> edgeTypes = {pdg::EdgeType::PARAMETER_IN};
+            auto reachableNodes = _PDG->findNodesReachedByEdges(*front, edgeTypes);
             // obtain the classified ptr type
             auto fieldID = pdg::pdgutils::computeTreeNodeID(*front);
             fieldID = pdg::pdgutils::trimStr(fieldID);
@@ -736,7 +736,7 @@ namespace NesCheck
             // classify child node types
             if (accumulate_stats)
             {
-              _ksplit_stats->collectDataStats(*front, ptrType, *func, func_w->getArgIdxByFormalInTree(root_node->getTree()), isDriverFunc);
+              _ksplitStats->collectDataStats(*front, ptrType, *func, func_w->getArgIdxByFormalInTree(rootNode->getTree()), isDriverFunc);
             }
             // for (auto n : reachable_nodes)
             // {
@@ -751,7 +751,7 @@ namespace NesCheck
             //     auto classified_ptr_type = PtrTypeMap[node_val];
             //     // mark the node as seq pointer, these nodes use array syntax while genereating IDL
             //     // if (accumulate_stats)
-            //     //   _ksplit_stats->collectDataStats(*front, classified_ptr_type, *func, is_driver_func);
+            //     //   _ksplitStats->collectDataStats(*front, classified_ptr_type, *func, is_driver_func);
 
             //     if (classified_ptr_type == "SEQ" && pdg::dbgutils::isPointerType(*front->getDIType()))
             //       front->setSeqPtr();
@@ -767,61 +767,61 @@ namespace NesCheck
       }
     }
 
-    void ksplitRecordPtrType(Value &ptr, std::string ptr_type, pdg::TreeNode &tree_node)
+    void ksplitRecordPtrType(Value &ptr, std::string ptr_type, pdg::TreeNode &treeNode)
     {
       if (!ptr.getType()->isPointerTy())
         return;
       if (ptr_type == "SAFE")
       {
-        // _ksplit_stats->increaseSafePtrNum();
+        // _ksplitStats->increaseSafePtrNum();
         SafePtrs.insert(&ptr);
         // if (Instruction *i = dyn_cast<Instruction>(&ptr))
         // {
         //   std::string var_name =  "";
-        //   if (tree_node.isRootNode())
-        //     var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDILocalVar());
+        //   if (treeNode.isRootNode())
+        //     var_name = pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDILocalVar());
         //   else
-        //     var_name = pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType());
+        //     var_name = pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType());
         //   errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName() << " - " << var_name << "\n";
         // }
       }
       else if (ptr_type == "SEQ")
       {
         if (Instruction *i = dyn_cast<Instruction>(&ptr))
-          errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
-        if (!pdg::dbgutils::isArrayType(*tree_node.getDIType()))
+          errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << "\n";
+        if (!pdg::dbgutils::isArrayType(*treeNode.getDIType()))
         {
-          // _ksplit_stats->increaseArrayNum();
+          // _ksplitStats->increaseArrayNum();
           // total array number is equal to handled array num + unhandled array num
-          // _ksplit_stats->increaseUnhandledArrayNum();
+          // _ksplitStats->increaseUnhandledArrayNum();
         }
-        if (pdg::dbgutils::isStructPointerType(*tree_node.getDIType()))
-          // _ksplit_stats->increaseStructArrayNum();
+        if (pdg::dbgutils::isStructPointerType(*treeNode.getDIType()))
+          // _ksplitStats->increaseStructArrayNum();
           SeqPtrs.insert(&ptr);
       }
       else if (ptr_type == "DYN")
       {
-        if (!pdg::dbgutils::isVoidPointerType(*tree_node.getDIType()))
+        if (!pdg::dbgutils::isVoidPointerType(*treeNode.getDIType()))
         {
           if (Instruction *i = dyn_cast<Instruction>(&ptr))
           {
             errs() << " ===========================================================================\n";
-            errs() << "Find non-void wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << " - " << tree_node.getFunc()->getName() << "\n";
+            errs() << "Find non-void wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << " - " << treeNode.getFunc()->getName() << "\n";
             errs() << " ===========================================================================\n";
           }
-          // _ksplit_stats->increaseNonVoidWildPtrNum();
+          // _ksplitStats->increaseNonVoidWildPtrNum();
         }
         else
         {
-          // _ksplit_stats->increaseVoidWildPtrNum();
+          // _ksplitStats->increaseVoidWildPtrNum();
         }
         WildPtrs.insert(&ptr);
       }
       else if (ptr_type == "UNKNOWN")
       {
         if (Instruction *i = dyn_cast<Instruction>(&ptr))
-          errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*tree_node.getDIType()) << "\n";
-        // _ksplit_stats->increaseUnknownPtrNum();
+          errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << "\n";
+        // _ksplitStats->increaseUnknownPtrNum();
         errs() << "unknown: " << ptr << "\n";
         UnknownPtrs.insert(&ptr);
       }
@@ -836,36 +836,36 @@ namespace NesCheck
       // auto node_val = node->getValue();
       // if (Instruction *i = dyn_cast<Instruction>(node_val))
       // {
-      //   auto func_name = i->getFunction()->getName().str();
-      //   if (func_name.find("_nesCheck") != std::string::npos)
-      //     func_name.erase(func_name.find("_nesCheck"));
+      //   auto funcName = i->getFunction()->getName().str();
+      //   if (funcName.find("_nesCheck") != std::string::npos)
+      //     funcName.erase(funcName.find("_nesCheck"));
       //   // here, maybe we should aim for functions other than boundary funcs.
-      //   if (BoundaryFuncNames.find(func_name) == BoundaryFuncNames.end())
+      //   if (BoundaryFuncNames.find(funcName) == BoundaryFuncNames.end())
       //     return;
       // }
 
-      // std::set<pdg::TreeNode *> tree_nodes;
+      // std::set<pdg::TreeNode *> treeNodes;
       // for (auto in_edge : node->getInEdgeSet())
       // {
       //   if (in_edge->getEdgeType() == pdg::EdgeType::PARAMETER_IN && in_edge->getSrcNode()->getNodeType() == pdg::GraphNodeType::FORMAL_IN)
       //   {
       //     pdg::TreeNode *tn = static_cast<pdg::TreeNode *>(in_edge->getSrcNode());
-      //     tree_nodes.insert(tn);
+      //     treeNodes.insert(tn);
       //     break;
       //   }
       // }
 
-      // for (auto tree_node : tree_nodes)
+      // for (auto treeNode : treeNodes)
       // {
-      //   auto field_id = pdg::pdgutils::computeTreeNodeID(*tree_node);
+      //   auto fieldId = pdg::pdgutils::computeTreeNodeID(*treeNode);
       //   // check if the classified field is shared id
-      //   if (!_DDA->getSDA()->isSharedFieldID(field_id) && !tree_node->isRootNode())
+      //   if (!_DDA->getSDA()->isSharedFieldID(fieldId) && !treeNode->isRootNode())
       //     continue;
-      //   if (ProcessedNodes.find(tree_node) != ProcessedNodes.end())
+      //   if (ProcessedNodes.find(treeNode) != ProcessedNodes.end())
       //     continue;
-      //   ProcessedNodes.insert(tree_node);
-      //   errs() << pdg::dbgutils::getSourceLevelTypeName(*tree_node->getDIType()) << "\n";
-      //   ksplitRecordPtrType(*ptr, ptrType, *tree_node);
+      //   ProcessedNodes.insert(treeNode);
+      //   errs() << pdg::dbgutils::getSourceLevelTypeName(*treeNode->getDIType()) << "\n";
+      //   ksplitRecordPtrType(*ptr, ptrType, *treeNode);
       // }
     }
 
@@ -1586,7 +1586,7 @@ namespace NesCheck
       _ARA = &getAnalysis<pdg::AtomicRegionAnalysis>();
       _DDA = _ARA->getDAA();
       _PDG = _DDA->getPDG();
-      _ksplit_stats = &pdg::KSplitStats::getInstance();
+      _ksplitStats = &pdg::KSplitStats::getInstance();
       auto start = std::chrono::high_resolution_clock::now();
       BoundaryFuncNames = _DDA->getSDA()->getBoundaryFuncNames();
 
@@ -1715,13 +1715,13 @@ namespace NesCheck
       {
         if (printRawStats)
         {
-          _ksplit_stats->printTable1Raw();
-          _ksplit_stats->printTable2Raw();
+          _ksplitStats->printTable1Raw();
+          _ksplitStats->printTable2Raw();
         }
         else
         {
-          _ksplit_stats->printDrvAPIStats();
-          _ksplit_stats->printDataStats();
+          _ksplitStats->printDrvAPIStats();
+          _ksplitStats->printDataStats();
         }
       }
       auto stop = std::chrono::high_resolution_clock::now();

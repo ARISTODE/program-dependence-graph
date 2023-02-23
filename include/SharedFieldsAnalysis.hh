@@ -19,7 +19,7 @@ namespace pdg
     void getDbgDeclareInstsInFunc(llvm::Function &F, std::set<llvm::DbgDeclareInst *> &dbg_insts);
     void propagateDebuggingInfoInFunc(llvm::Function &F);
     std::pair<llvm::DIType *, llvm::DIType *> computeInstDIType(llvm::Instruction &i);
-    void insertValueDITypePair(llvm::Value *val, llvm::DIType* parent_dt, llvm::DIType *dt);
+    void insertValueDITypePair(llvm::Value *val, llvm::DIType* parentDt, llvm::DIType *dt);
     std::pair<llvm::DIType *, llvm::DIType *> getValDITypePair(llvm::Value &val);
     llvm::DIType *getValDIType(llvm::Value &val);
     void readDriverFuncs(llvm::Module &M);

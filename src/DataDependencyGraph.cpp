@@ -59,9 +59,10 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
       continue;
     if (!inst.getType()->isPointerTy())
       continue;
-    auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
+    // auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
     auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
-    if (anders_aa_result != NoAlias || alias_result != NoAlias)
+    // if (anders_aa_result != NoAlias || alias_result != NoAlias)
+    if (alias_result != NoAlias)
     {
       Node* src = g.getNode(inst);
       Node* dst = g.getNode(*inst_iter);

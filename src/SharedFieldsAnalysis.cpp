@@ -146,12 +146,12 @@ std::pair<llvm::DIType *, llvm::DIType *> pdg::SharedFieldsAnalysis::computeInst
   return std::make_pair(nullptr, nullptr);
 }
 
-void pdg::SharedFieldsAnalysis::insertValueDITypePair(Value *val, DIType* parent_dt, DIType *field_dt)
+void pdg::SharedFieldsAnalysis::insertValueDITypePair(Value *val, DIType* parentDt, DIType *fieldDt)
 {
   if (_inst_ditype_map.find(val) != _inst_ditype_map.end())
-    _inst_ditype_map[val] = std::make_pair(field_dt, parent_dt);
+    _inst_ditype_map[val] = std::make_pair(fieldDt, parentDt);
   else
-    _inst_ditype_map.insert(std::make_pair(val, std::make_pair(field_dt, parent_dt)));
+    _inst_ditype_map.insert(std::make_pair(val, std::make_pair(fieldDt, parentDt)));
 }
 
 std::pair<DIType *, DIType *> pdg::SharedFieldsAnalysis::getValDITypePair(Value &val)

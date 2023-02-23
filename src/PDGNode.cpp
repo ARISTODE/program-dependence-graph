@@ -2,11 +2,11 @@
 
 using namespace llvm;
 
-void pdg::Node::addNeighbor(Node &neighbor, EdgeType edge_type)
+void pdg::Node::addNeighbor(Node &neighbor, EdgeType edgeTy)
 {
-  if (hasOutNeighborWithEdgeType(neighbor, edge_type))
+  if (hasOutNeighborWithEdgeType(neighbor, edgeTy))
     return;
-  Edge *edge = new Edge(this, &neighbor, edge_type);
+  Edge *edge = new Edge(this, &neighbor, edgeTy);
   addOutEdge(*edge);
   neighbor.addInEdge(*edge);
 }
@@ -21,12 +21,12 @@ std::set<pdg::Node *> pdg::Node::getInNeighbors()
   return in_neighbors;
 }
 
-std::set<pdg::Node *> pdg::Node::getInNeighborsWithDepType(pdg::EdgeType edge_type)
+std::set<pdg::Node *> pdg::Node::getInNeighborsWithDepType(pdg::EdgeType edgeTy)
 {
   std::set<Node *> in_neighbors_with_dep_type;
   for (auto edge : _in_edge_set)
   {
-    if (edge->getEdgeType() == edge_type)
+    if (edge->getEdgeType() == edgeTy)
       in_neighbors_with_dep_type.insert(edge->getSrcNode());
   }
   return in_neighbors_with_dep_type;
@@ -42,49 +42,49 @@ std::set<pdg::Node *> pdg::Node::getOutNeighbors()
   return out_neighbors;
 }
 
-std::set<pdg::Node *> pdg::Node::getOutNeighborsWithDepType(pdg::EdgeType edge_type)
+std::set<pdg::Node *> pdg::Node::getOutNeighborsWithDepType(pdg::EdgeType edgeTy)
 {
   std::set<Node *> out_neighbors_with_dep_type;
   for (auto edge : _out_edge_set)
   {
-    if (edge->getEdgeType() == edge_type)
+    if (edge->getEdgeType() == edgeTy)
       out_neighbors_with_dep_type.insert(edge->getDstNode());
   }
   return out_neighbors_with_dep_type;
 }
 
-bool pdg::Node::hasInNeighborWithEdgeType(Node &n, EdgeType edge_type)
+bool pdg::Node::hasInNeighborWithEdgeType(Node &n, EdgeType edgeTy)
 {
   for (auto e : _in_edge_set)
   {
-    if (e->getSrcNode() == &n && e->getEdgeType() == edge_type)
+    if (e->getSrcNode() == &n && e->getEdgeType() == edgeTy)
       return true;
   }
   return false;
 }
 
-bool pdg::Node::hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type)
+bool pdg::Node::hasOutNeighborWithEdgeType(Node &n, EdgeType edgeTy)
 {
   for (auto e : _out_edge_set)
   {
-    if (e->getDstNode() == &n && e->getEdgeType() == edge_type)
+    if (e->getDstNode() == &n && e->getEdgeType() == edgeTy)
       return true;
   }
   return false;
 }
 
-std::set<pdg::Node *> pdg::Node::getNeighborsWithDepType(std::set<pdg::EdgeType> edge_types)
+std::set<pdg::Node *> pdg::Node::getNeighborsWithDepType(std::set<pdg::EdgeType> edgeTypes)
 {
   std::set<Node *> ret;
   for (auto edge : _in_edge_set)
   {
-    if (edge_types.find(edge->getEdgeType()) != edge_types.end())
+    if (edgeTypes.find(edge->getEdgeType()) != edgeTypes.end())
       ret.insert(edge->getSrcNode());
   }
 
   for (auto edge : _out_edge_set)
   {
-    if (edge_types.find(edge->getEdgeType()) != edge_types.end())
+    if (edgeTypes.find(edge->getEdgeType()) != edgeTypes.end())
       ret.insert(edge->getDstNode());
   }
   return ret;

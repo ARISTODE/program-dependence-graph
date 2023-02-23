@@ -11,12 +11,12 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
   // construct actual tree based on the type signature of callee
   Function *callingFunc = _call_inst->getFunction();
   auto formal_arg_list = callee_fw.getArgList();
-  assert(_arg_list.size() == formal_arg_list.size() && "actual/formal arg size don't match!");
+  assert(_argList.size() == formal_arg_list.size() && "actual/formal arg size don't match!");
   // iterate through actual param list and construct actual tree by copying formal tree
-  auto actual_arg_iter = _arg_list.begin();
+  auto actual_arg_iter = _argList.begin();
   auto formal_arg_iter = formal_arg_list.begin();
   
-  while (actual_arg_iter != _arg_list.end())
+  while (actual_arg_iter != _argList.end())
   {
     Tree* arg_formal_in_tree = callee_fw.getArgFormalInTree(**formal_arg_iter);
     if (!arg_formal_in_tree) {
@@ -88,8 +88,8 @@ pdg::Tree *pdg::CallWrapper::getArgActualOutTree(Value &actual_arg)
 
 int pdg::CallWrapper::getArgIdxByVal(Value& val)
 {
-  auto it = std::find(_arg_list.begin(), _arg_list.end(), &val);
-  if (it == _arg_list.end())
+  auto it = std::find(_argList.begin(), _argList.end(), &val);
+  if (it == _argList.end())
     return -1;
-  return std::distance(_arg_list.begin(), it);
+  return std::distance(_argList.begin(), it);
 }

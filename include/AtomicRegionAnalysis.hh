@@ -52,7 +52,7 @@ namespace pdg
     bool isAtomicAsmString(std::string str);
     bool isAtomicOperation(llvm::Instruction &i);
     bool isAliasOfBoundaryPtrs(llvm::Value &v);
-    bool isKernelLockInstance(std::string field_id);
+    bool isKernelLockInstance(std::string fieldId);
     // used for checking shared states updated outside of critical regions.
     void computeCodeRegions();
     // void printCodeRegionsUpdateSharedStates(llvm::Module &M);
@@ -60,7 +60,7 @@ namespace pdg
     bool hasBoundaryAliasNodes(llvm::Value &v);
     // sync stub generation
     void generateSyncStubForTree(Tree* tree, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str);
-    void generateSyncStubProjFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level);
+    void generateSyncStubProjFromTreeNode(TreeNode &treeNode, llvm::raw_string_ostream &read_proj_str, llvm::raw_string_ostream &write_proj_str, std::queue<TreeNode *> &nodeQueue, std::string indentLevel);
     llvm::Value *getUsedLock(llvm::CallInst &lock_inst);
     void dumpCS();
     void dumpAtomicOps();
@@ -76,13 +76,13 @@ namespace pdg
   private:
     SharedDataAnalysis *_SDA;
     DataAccessAnalysis *_DAA;
-    KSplitStats *_ksplit_stats;
+    KSplitStats *_ksplitStats;
     CSMap _critical_sections;
     LockMap _lock_map;
     AtomicOpSet _atomic_operations;
     BoundaryPtrSet _boundary_ptrs;
     BoundaryArgNodeSet _boundary_arg_nodes;
-    PDGCallGraph *_call_graph;
+    PDGCallGraph *_callGraph;
     KSplitCFG *_ksplit_cfg;
     int _warning_cs_count;
     int _warning_atomic_op_count;

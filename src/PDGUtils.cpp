@@ -13,18 +13,18 @@ StructType *pdg::pdgutils::getStructTypeFromGEP(GetElementPtrInst &gep)
   Value *baseAddr = gep.getPointerOperand();
   if (baseAddr->getType()->isPointerTy())
   {
-    if (StructType *struct_type = dyn_cast<StructType>(baseAddr->getType()->getPointerElementType()))
-      return struct_type;
+    if (StructType *structTy = dyn_cast<StructType>(baseAddr->getType()->getPointerElementType()))
+      return structTy;
   }
   return nullptr;
 }
 
-Function *pdg::pdgutils::getNescheckVersionFunc(Module &M, std::string func_name)
+Function *pdg::pdgutils::getNescheckVersionFunc(Module &M, std::string funcName)
 {
-  Function *nescheck_func = M.getFunction(func_name);
+  Function *nescheck_func = M.getFunction(funcName);
   if (nescheck_func == nullptr || nescheck_func->isDeclaration())
   {
-    std::string nescheck_func_name = func_name + "_nesCheck";
+    std::string nescheck_func_name = funcName + "_nesCheck";
     nescheck_func = M.getFunction(nescheck_func_name);
     if (nescheck_func == nullptr || nescheck_func->isDeclaration())
       return nullptr;
@@ -32,7 +32,7 @@ Function *pdg::pdgutils::getNescheckVersionFunc(Module &M, std::string func_name
   return nescheck_func;
 }
 
-uint64_t pdg::pdgutils::getGEPOffsetInBits(Module &M, StructType &struct_type, GetElementPtrInst &gep)
+uint64_t pdg::pdgutils::getGEPOffsetInBits(Module &M, StructType &structTy, GetElementPtrInst &gep)
 {
   // get the accessed struct member offset from the gep instruction
   int gep_offset = getGEPAccessFieldOffset(gep);
@@ -40,8 +40,8 @@ uint64_t pdg::pdgutils::getGEPOffsetInBits(Module &M, StructType &struct_type, G
     return INT_MIN;
   // use the struct layout to figure out the offset in bits
   auto const &data_layout = M.getDataLayout();
-  auto const struct_layout = data_layout.getStructLayout(&struct_type);
-  if (gep_offset >= struct_type.getNumElements())
+  auto const struct_layout = data_layout.getStructLayout(&structTy);
+  if (gep_offset >= structTy.getNumElements())
   {
     // errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
     return INT_MIN;
@@ -116,19 +116,19 @@ bool pdg::pdgutils::isNodeBitOffsetMatchGEPBitOffset(Node &n, GetElementPtrInst 
     return false;
   Module &module = *(gep.getFunction()->getParent());
   uint64_t gep_bit_offset = pdgutils::getGEPOffsetInBits(module, *struct_ty, gep);
-  DIType *node_di_type = n.getDIType();
-  if (node_di_type == nullptr || gep_bit_offset == INT_MIN)
+  DIType *nodeDt = n.getDIType();
+  if (nodeDt == nullptr || gep_bit_offset == INT_MIN)
     return false;
-  uint64_t node_bit_offset = node_di_type->getOffsetInBits();
+  uint64_t node_bit_offset = nodeDt->getOffsetInBits();
   if (gep_bit_offset == node_bit_offset)
     return true;
   return false;
 }
 
 // a wrapper func that strip pointer casts
-Function *pdg::pdgutils::getCalledFunc(CallInst &call_inst)
+Function *pdg::pdgutils::getCalledFunc(CallInst &callInst)
 {
-  auto called_val = call_inst.getCalledOperand();
+  auto called_val = callInst.getCalledOperand();
   if (!called_val)
     return nullptr;
   if (Function *func = dyn_cast<Function>(called_val->stripPointerCasts()))
@@ -316,66 +316,66 @@ AliasResult pdg::pdgutils::queryAliasUnderApproximate(Value &v1, Value &v2)
   return NoAlias;
 }
 
-void pdg::pdgutils::printTreeNodesLabel(Node *node, raw_string_ostream &OS, std::string tree_node_type_str)
+void pdg::pdgutils::printTreeNodesLabel(Node *node, raw_string_ostream &OS, std::string treeNodeTyStr)
 {
   TreeNode *n = static_cast<TreeNode *>(node);
-  int tree_node_depth = n->getDepth();
-  DIType *node_di_type = n->getDIType();
-  if (!node_di_type)
+  int treeNode_depth = n->getDepth();
+  DIType *nodeDt = n->getDIType();
+  if (!nodeDt)
     return;
-  std::string field_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
-  OS << tree_node_type_str << " | " << tree_node_depth << " | " << field_type_name;
+  std::string field_type_name = dbgutils::getSourceLevelTypeName(*nodeDt);
+  OS << treeNodeTyStr << " | " << treeNode_depth << " | " << field_type_name;
 }
 
-std::string pdg::pdgutils::stripFuncNameVersionNumber(std::string func_name)
+std::string pdg::pdgutils::stripFuncNameVersionNumber(std::string funcName)
 {
-  auto deli_pos = func_name.find('.');
+  auto deli_pos = funcName.find('.');
   if (deli_pos == std::string::npos)
-    return func_name;
-  return func_name.substr(0, deli_pos);
+    return funcName;
+  return funcName.substr(0, deli_pos);
 }
 
-std::string pdg::pdgutils::stripNescheckPostfix(std::string func_name)
+std::string pdg::pdgutils::stripNescheckPostfix(std::string funcName)
 {
-  auto str_ref = StringRef(func_name);
+  auto str_ref = StringRef(funcName);
   auto pos = str_ref.find("_nesCheck");
   if (pos != StringRef::npos)
     return str_ref.substr(0, pos).str();
-  return func_name;
+  return funcName;
 }
 
-std::string pdg::pdgutils::getSourceFuncName(std::string func_name)
+std::string pdg::pdgutils::getSourceFuncName(std::string funcName)
 {
-  return stripNescheckPostfix(stripFuncNameVersionNumber(func_name));
+  return stripNescheckPostfix(stripFuncNameVersionNumber(funcName));
 }
 
-std::string pdg::pdgutils::computeTreeNodeID(TreeNode &tree_node)
+std::string pdg::pdgutils::computeTreeNodeID(TreeNode &treeNode)
 {
   std::string parent_type_name = "";
   std::string node_field_name = "";
-  TreeNode *parent_node = tree_node.getParentNode();
-  if (parent_node != nullptr)
+  TreeNode *parentNode = treeNode.getParentNode();
+  if (parentNode != nullptr)
   {
-    auto parent_di_type = dbgutils::stripMemberTag(*parent_node->getDIType());
+    auto parent_di_type = dbgutils::stripMemberTag(*parentNode->getDIType());
     if (parent_di_type != nullptr)
       parent_type_name = dbgutils::getSourceLevelTypeName(*parent_di_type);
   }
 
-  if (!tree_node.getDIType())
+  if (!treeNode.getDIType())
     return parent_type_name;
-  DIType *node_di_type = dbgutils::stripAttributes(*tree_node.getDIType());
-  node_field_name = dbgutils::getSourceLevelVariableName(*node_di_type);
+  DIType *nodeDt = dbgutils::stripAttributes(*treeNode.getDIType());
+  node_field_name = dbgutils::getSourceLevelVariableName(*nodeDt);
 
   return trimStr(parent_type_name + node_field_name);
 }
 
-std::string pdg::pdgutils::computeFieldID(DIType &parent_dt, DIType &field_dt)
+std::string pdg::pdgutils::computeFieldID(DIType &parentDt, DIType &fieldDt)
 {
-  auto parent_type_name = dbgutils::getSourceLevelTypeName(parent_dt, true);
-  auto field_name = dbgutils::getSourceLevelVariableName(field_dt);
-  if (parent_type_name.empty() || field_name.empty())
+  auto parent_type_name = dbgutils::getSourceLevelTypeName(parentDt, true);
+  auto fieldName = dbgutils::getSourceLevelVariableName(fieldDt);
+  if (parent_type_name.empty() || fieldName.empty())
     return "";
-  return trimStr(parent_type_name + field_name);
+  return trimStr(parent_type_name + fieldName);
 }
 
 std::string pdg::pdgutils::stripVersionTag(std::string str)
@@ -430,16 +430,16 @@ std::string pdg::pdgutils::trimStr(std::string s)
 
 std::string pdg::pdgutils::constructAnnoStr(std::set<std::string> &annotations)
 {
-  std::string anno_str = "";
+  std::string annoStr = "";
   for (auto anno_iter = annotations.begin(); anno_iter != annotations.end(); ++anno_iter)
   {
-    anno_str += *anno_iter;
+    annoStr += *anno_iter;
     if (std::next(anno_iter) != annotations.end())
-      anno_str += ",";
+      annoStr += ",";
   }
-  if (!anno_str.empty())
-    anno_str = "[" + anno_str + "]";
-  return anno_str;
+  if (!annoStr.empty())
+    annoStr = "[" + annoStr + "]";
+  return annoStr;
 }
 
 bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
@@ -474,19 +474,19 @@ bool pdg::pdgutils::isSentinelType(GlobalVariable &gv)
   return false;
 }
 
-bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
+bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &treeNode)
 {
   std::set<Type *> casted_types;
-  auto di_type = tree_node.getDIType();
+  auto di_type = treeNode.getDIType();
   if (di_type == nullptr)
     return false;
   if (!dbgutils::isVoidPointerType(*di_type))
     return false;
 
   unsigned cast_count = 0;
-  for (auto addr_var : tree_node.getAddrVars())
+  for (auto addrVar : treeNode.getAddrVars())
   {
-    for (auto user : addr_var->users())
+    for (auto user : addrVar->users())
     {
       if (isa<BitCastInst>(user))
       {
@@ -514,15 +514,15 @@ bool pdg::pdgutils::isVoidPointerHasMultipleCasts(TreeNode &tree_node)
 bool pdg::pdgutils::hasAsmWriteAccess(InlineAsm &ia)
 {
   auto asm_str = ia.getAsmString();
-  auto op_code = asm_str.substr(0, asm_str.find(" "));
-  if (isWriteAccessAsmOpcode(op_code))
+  auto opCode = asm_str.substr(0, asm_str.find(" "));
+  if (isWriteAccessAsmOpcode(opCode))
     return true;
   return false;
 }
 
-bool pdg::pdgutils::isWriteAccessAsmOpcode(std::string op_code)
+bool pdg::pdgutils::isWriteAccessAsmOpcode(std::string opCode)
 {
-  return (asmWriteOpcode.find(op_code) != asmWriteOpcode.end());
+  return (asmWriteOpcode.find(opCode) != asmWriteOpcode.end());
 }
 
 bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)
@@ -542,30 +542,60 @@ bool pdg::pdgutils::isUserOfSentinelTypeVal(Value &v)
   return false;
 }
 
-bool pdg::pdgutils::hasPtrArith(TreeNode &tree_node, bool is_shared_data)
+/*
+Pointer arithmetic can be used to compute array index access
+or index a struct field. 
+We need to differentiate two cases, 
+*/
+
+// check if a gep instruction is used to index a struct field
+
+bool pdg::pdgutils::isValueUsedAsOffset(Value &v)
+{
+  for (const User *U : v.users())
+  {
+    // Check if the use is a GEP instruction
+    if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(U))
+    {
+      // if the value is used as the base pointer, then it is not used as an offset
+      if (GEP->getPointerOperand() == &v)
+        continue;
+      errs() << "Value is used as an offset to index into a memory region\n";
+      return true;
+    }
+  }
+  return false;
+}
+
+bool pdg::pdgutils::isTreeNodeValUsedAsOffset(TreeNode &treeNode)
+{
+  for (auto addrVar : treeNode.getAddrVars())
+  {
+    if (isValueUsedAsOffset(*addrVar))
+      return true;
+  }
+  return false;
+}
+
+bool pdg::pdgutils::hasPtrArith(TreeNode &treeNode, bool isSharedData)
 {
   // auto &ksplit_stats = KSplitStats::getInstance();
-  auto fieldID = pdgutils::computeTreeNodeID(tree_node);
+  auto fieldID = pdgutils::computeTreeNodeID(treeNode);
   std::string funcName = "";
-  if (tree_node.getFunc())
-    funcName = tree_node.getFunc()->getName().str();
+  if (treeNode.getFunc())
+    funcName = treeNode.getFunc()->getName().str();
   // check if a field is used in pointer arithemetic
-  for (auto addr_var : tree_node.getAddrVars())
+  for (auto addrVar : treeNode.getAddrVars())
   {
-    // check if a field is used to derive pointer arithmetic for other field
-    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(addr_var))
+    // check if a field is used to derive pointer for other fields
+    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(addrVar))
     {
       if (gep->getType()->isStructTy())
         continue;
-      for (auto user : gep->users())
-      {
-        if (isa<GetElementPtrInst>(user))
-          return true;
-      }
     }
 
     // check if a field is directly used in pointer arithmetic computation
-    for (auto user : addr_var->users())
+    for (auto user : addrVar->users())
     {
       if (isa<PtrToIntInst>(user))
       {
@@ -592,17 +622,17 @@ bool pdg::pdgutils::isStructPointerType(Type &ty)
   return false;
 }
 
-bool pdg::pdgutils::isFileExist(std::string file_name)
+bool pdg::pdgutils::isFileExist(std::string fileName)
 {
-  std::ifstream in_file(file_name);
+  std::ifstream in_file(fileName);
   return in_file.good();
 }
 
-bool pdg::pdgutils::isSkbNode(TreeNode &tree_node)
+bool pdg::pdgutils::isSkbNode(TreeNode &treeNode)
 {
-  auto tree = tree_node.getTree();
-  auto root_node = tree->getRootNode();
-  auto root_node_dt = root_node->getDIType();
+  auto tree = treeNode.getTree();
+  auto rootNode = tree->getRootNode();
+  auto root_node_dt = rootNode->getDIType();
   std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*root_node_dt, true);
   return (root_di_type_name_raw == "sk_buff*" || root_di_type_name_raw == "skb_buff");
 }
@@ -619,4 +649,14 @@ bool pdg::pdgutils::isPrecedeInst(Instruction &i1, Instruction &i2, Function &F)
       return false;
   }
   return false;
+}
+
+void pdg::pdgutils::printTreeNodeAddrVars(TreeNode &treeNode)
+{
+  errs() << "tree node addr vars: ";
+  for (auto addrVar : treeNode.getAddrVars())
+  {
+    if (auto inst = dyn_cast<Instruction>(addrVar))
+    errs() << "\tfunc name: " << inst->getFunction()->getName()  << *inst <<  "\n";
+  }
 }

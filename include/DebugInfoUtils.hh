@@ -33,13 +33,14 @@ namespace pdg
     llvm::DIType *getFuncRetDIType(llvm::Function &F);
     std::string getArrayTypeStr(llvm::DIType &dt);
     std::string getSourceLevelVariableName(llvm::DINode &dt);
-    std::string getSourceLevelTypeName(llvm::DIType &dt, bool is_raw=false);
+    std::string getSourceLevelTypeName(llvm::DIType &dt, bool isRaw=false);
     std::string getSourceLevelTypeNameWithNoQualifer(llvm::DIType &dt);
     std::string getArgumentName(llvm::Argument &arg);
+    unsigned computeFieldOffsetInBytes(llvm::DIType &dt);
     std::set<llvm::DbgInfoIntrinsic *> collectDbgInstInFunc(llvm::Function &F);
     std::set<llvm::DIType*> computeContainedStructTypes(llvm::DIType &dt);
-    std::string getFuncSigName(llvm::DIType &dt, llvm::Function &F, std::string func_ptr_name);
-    unsigned computeDeepCopyFields(llvm::DIType &dt, bool only_count_pointer = false);
+    std::string getFuncSigName(llvm::DIType &dt, llvm::Function &F, std::string funcPtrName);
+    unsigned computeDeepCopyFields(llvm::DIType &dt, bool onlyCountPointer = false);
   } // namespace dbgutils
 } // namespace pdg
 

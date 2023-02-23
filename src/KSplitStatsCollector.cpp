@@ -11,7 +11,7 @@ void pdg::KSplitStats::printDataStats()
   _stats_file << "total funcs size: " << _total_func_size << "\n";
   // table 1.b
   _stats_file << "=============== Fields Marshaled Through ================\n";
-  _stats_file << "num fields deep copying: " << _fields_deep_copy << "\n";
+  _stats_file << "num fields deep copying: " << _fieldsDeepCopyNum << "\n";
   _stats_file << "num fields field access analysis: " << _fields_field_analysis << "\n";
   _stats_file << "num fields shared_analysis: " << _fields_shared_analysis << "\n";
   _stats_file << "num fields removed by boundary opt: " << (_fields_shared_analysis - _fields_removed_boundary_opt) << "\n";
@@ -29,7 +29,7 @@ void pdg::KSplitStats::printDataStats()
   // table 1.d
   _stats_file << "\t =============== Pointers Classification ================\n";
   // unsigned total_shared_ptr = _safe_ptr_num + _shared_void_ptr_num + _unhandled_void_ptr_num + _string_num + _array_num + _unhandled_array_num + _non_void_wild_ptr_num + _func_ptr_num;
-  _stats_file << "\t ptr num: " << _total_ptr_num << "/" << _shared_ptr_num << "\n";
+  _stats_file << "\t ptr num: " << _totalPtrNum << "/" << _shared_ptr_num << "\n";
   _stats_file << "\t safe ptr num: " << _safe_ptr_num << "\n";
   _stats_file << "\t\t ioremap region num: " << _shared_ioremap_num << "\n";
   _stats_file << "\t\t user region num: " << _shared_user_num << "\n";
@@ -143,12 +143,12 @@ void pdg::KSplitStats::printTable1Raw()
   _stats_file << _total_func_size << "/0"
               << "\n";
   // 1.b
-  _stats_file << _fields_deep_copy << "\n";
+  _stats_file << _fieldsDeepCopyNum << "\n";
   _stats_file << _fields_field_analysis << "\n";
   _stats_file << _fields_shared_analysis << "\n";
   _stats_file << (_fields_shared_analysis - _fields_removed_boundary_opt) << "\n";
   // 1.c
-  _stats_file << _total_ptr_num << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
+  _stats_file << _totalPtrNum << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
   _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num << "\n";
   _stats_file << (_total_CS - _shared_CS) << "/" << _shared_CS << "\n";
   _stats_file << _total_rcu << "/" << _shared_rcu << "\n";
@@ -175,9 +175,9 @@ void pdg::KSplitStats::printTable2Raw()
               << "\n";
 
   // XXX: Not needed for table2
-  //_stats_file << _fields_deep_copy  << "/" << _fields_shared_analysis << "\n";
+  //_stats_file << _fieldsDeepCopyNum  << "/" << _fields_shared_analysis << "\n";
   // shared data analysis impact
-  _stats_file << _total_ptr_num << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
+  _stats_file << _totalPtrNum << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
   _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num << "\n";
   _stats_file << (_total_CS - _shared_CS) << "/" << _shared_CS << "\n";
   _stats_file << (_total_rcu - _shared_rcu) << "/" << _shared_rcu << "\n";
@@ -194,32 +194,32 @@ void pdg::KSplitStats::printTable2Raw()
   _stats_file.close();
 }
 
-void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string nescheck_ptr_type, Function &func, int paramIdx, bool is_driver_func)
+void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck_ptr_type, Function &func, int paramIdx, bool is_driver_func)
 {
   // this function classify the tree node and accumulate stats
-  DIType *dt = tree_node.getDIType();
+  DIType *dt = treeNode.getDIType();
   if (!dt)
     return;
-  if (!tree_node.isStructField())
+  if (!treeNode.isStructField())
     return;
-  std::string fieldName = tree_node.getSrcHierarchyName();
+  std::string fieldName = treeNode.getSrcHierarchyName();
   std::string funcName = func.getName().str();
 
   // need to extract bit field info here because this info will be lost if we strip the tag
   bool isBitField = dt->isBitField();
   bool isFuncPtrField = dbgutils::isFuncPointerType(*dt);
 
-  auto access_tags = tree_node.getAccessTags();
+  auto access_tags = treeNode.getAccessTags();
   if (access_tags.size() == 0)
     return;
 
   dt = dbgutils::stripMemberTag(*dt);
   dt = dbgutils::stripAttributes(*dt);
-  // if (dt && tree_node.getAccessTags().size() == 0 && !tree_node.isRootNode())
+  // if (dt && treeNode.getAccessTags().size() == 0 && !treeNode.isRootNode())
   _fields_field_analysis++;
   if (dbgutils::isUnionType(*dt))
     _total_union_num++;
-  if (!tree_node.is_shared)
+  if (!treeNode.isShared)
     return;
 
   bool isPtrType = dbgutils::isPointerType(*dt);
@@ -235,9 +235,9 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
     if (isPtrType)
     {
       // obtain the pointed value node
-      if (tree_node.numOfChild() == 1)
+      if (treeNode.numOfChild() == 1)
       {
-        auto pointedObjNode = tree_node.getChildNodes()[0];
+        auto pointedObjNode = treeNode.getChildNodes()[0];
         auto objNodeAccTags = pointedObjNode->getAccessTags();
         if (objNodeAccTags.size() > 0)
         {
@@ -265,14 +265,14 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
         {
           _driver_write_func_ptr_fields += 1;
           errs() << "driver update ptr field (func): " << fieldName << " - "
-                 << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+                 << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
         }
         else
         {
           errs() << "driver update ptr field (non-func): " << fieldName << " - "
-                 << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
-          errs() << "addr var size: " << tree_node.getAddrVars().size() << "\n";
-          for (auto addrVar : tree_node.getAddrVars())
+                 << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
+          errs() << "addr var size: " << treeNode.getAddrVars().size() << "\n";
+          for (auto addrVar : treeNode.getAddrVars())
           {
             if (auto inst = dyn_cast<Instruction>(addrVar))
               errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
@@ -304,7 +304,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
         std::get<1>(fieldAccTuple) += 1;
         // TODO: debugging purpose
         errs() << "driver update only field: " << fieldName << " - " << funcName << "\n";
-        if (!tree_node.isRootNode())
+        if (!treeNode.isRootNode())
         {
           if (isPtrType)
           {
@@ -314,14 +314,14 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
             {
               _driver_write_func_ptr_fields += 1;
               errs() << "driver update only ptr field (func): " << fieldName << " - "
-                     << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
+                     << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
             }
             else
             {
               errs() << "driver update only ptr field (non-func): " << fieldName << " - "
-                     << funcName << " - " << tree_node.getDepth() << " - " << paramIdx << "\n";
-              errs() << "addr var size: " << tree_node.getAddrVars().size() << "\n";
-              for (auto addrVar : tree_node.getAddrVars())
+                     << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
+              errs() << "addr var size: " << treeNode.getAddrVars().size() << "\n";
+              for (auto addrVar : treeNode.getAddrVars())
               {
                 if (auto inst = dyn_cast<Instruction>(addrVar))
                   errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
@@ -352,7 +352,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
   else if (isPtrType)
   {
     _shared_ptr_num++;
-    collectSharedPointerStats(tree_node, nescheck_ptr_type);
+    collectSharedPointerStats(treeNode, nescheck_ptr_type);
   }
   else if (isa<DIBasicType>(dt))
   {
@@ -379,7 +379,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &tree_node, std::string neschec
   else
   {
     _shared_other++; // This should be 0, otherwise, we need to look at this node
-    errs() << "unclassified field type: " << tree_node.getTree()->getFunc()->getName() << " - " << dbgutils::getSourceLevelTypeName(*dt) << "\n";
+    errs() << "unclassified field type: " << treeNode.getTree()->getFunc()->getName() << " - " << dbgutils::getSourceLevelTypeName(*dt) << "\n";
   }
 }
 
@@ -395,7 +395,7 @@ void pdg::KSplitStats::collectSharedPointerStats(TreeNode &node, std::string nes
     if (node.is_ioremap)
       _shared_ioremap_num++;
     // user
-    if (node.is_user)
+    if (node.isUser)
       _shared_user_num++;
     // func pointer
     if (dbgutils::isFuncPointerType(*dt))
@@ -407,7 +407,7 @@ void pdg::KSplitStats::collectSharedPointerStats(TreeNode &node, std::string nes
       _dyn_sized_sentinel_num++;
       _safe_ptr_num--;
     }
-    else if (node.is_string)
+    else if (node.isString)
     {
       _dyn_sized_arr_num++;
       _dyn_sized_sentinel_num++;
@@ -427,7 +427,7 @@ void pdg::KSplitStats::collectSharedPointerStats(TreeNode &node, std::string nes
     _dyn_sized_arr_num++;
     if (node.is_sentinel)
       _dyn_sized_sentinel_num++;
-    else if (node.is_string)
+    else if (node.isString)
     {
       _dyn_sized_sentinel_num++;
       _dyn_sized_string_num++;

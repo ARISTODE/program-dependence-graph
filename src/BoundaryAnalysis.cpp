@@ -31,7 +31,7 @@ bool pdg::BoundaryAnalysis::runOnModule(Module &M)
 void pdg::BoundaryAnalysis::setupBlackListFuncNames()
 {
   // some default filters
-  _black_list_func_names.insert("llvm");
+  _blackListFuncNames.insert("llvm");
   // read default library func list from liblcd_func.txt
   if (BlackListFileName.empty())
     BlackListFileName = "liblcd_funcs.txt";
@@ -44,7 +44,7 @@ void pdg::BoundaryAnalysis::setupBlackListFuncNames()
 
   for (std::string line; std::getline(black_list_func_file, line);)
   {
-    _black_list_func_names.insert(line);
+    _blackListFuncNames.insert(line);
   }
 }
 
@@ -54,11 +54,11 @@ void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)
   {
     if (F.isDeclaration())
     {
-      std::string func_name = F.getName().str();
-      func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-      if (isBlackListFunc(func_name))
+      std::string funcName = F.getName().str();
+      funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+      if (isBlackListFunc(funcName))
         continue;
-      _imported_funcs.push_back(func_name);
+      _importedFuncs.push_back(funcName);
     }
   }
 }
@@ -69,14 +69,14 @@ void pdg::BoundaryAnalysis::computeDriverFuncs(Module &M)
   {
     if (F.isDeclaration())
       continue;
-    std::string func_name = F.getName().str();
-    func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-    // if (isBlackListFunc(func_name))
+    std::string funcName = F.getName().str();
+    funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+    // if (isBlackListFunc(funcName))
     //   continue;
-    _driver_domain_funcs.push_back(func_name);
+    _driverDomainFuncs.push_back(funcName);
   }
   // consider all library functions as driver funcs
-  // _driver_domain_funcs.insert(std::end(_driver_domain_funcs), std::begin(_black_list_func_names), std::end(_black_list_func_names));
+  // _driverDomainFuncs.insert(std::end(_driverDomainFuncs), std::begin(_blackListFuncNames), std::end(_blackListFuncNames));
 }
 
 void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
@@ -110,7 +110,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     if (!di_gv)
       continue;
     if (!global_var.isConstant() && global_var.hasInitializer())
-      _driver_globalvar_names.push_back(global_var.getName().str());
+      _driverGlobalVarNames.push_back(global_var.getName().str());
     auto gv_di_type = di_gv->getType();
     auto gv_lowest_di_type = dbgutils::getLowestDIType(*gv_di_type);
     if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
@@ -144,7 +144,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
         // if a field is a user of sentinel array (hold the content of sentinel array), then we need to record it 
         // and synchronize this field with special syntax in IDL generation
         if (pdgutils::isUserOfSentinelTypeVal(*struct_element))
-          _sentinel_fields.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
+          _sentinelFields.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
 
         // extract all the function pointer name exported by the driver
         if (!field_type_name.empty())
@@ -154,9 +154,9 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
           field_source_name = gv_di_type_name + "_" + field_source_name;
           if (dbgutils::isFuncPointerType(*struct_field_di_type))
           {
-            _exported_func_ptrs.push_back(field_source_name);
-            _exported_funcs.push_back(field_type_name);
-            _global_op_struct_names.insert(gv_di_type_name);
+            _exportedFuncPtrs.push_back(field_source_name);
+            _exportedFuncs.push_back(field_type_name);
+            _globalOpStructNames.insert(gv_di_type_name);
           }
         }
         // TODO: handle nested structs
@@ -173,10 +173,10 @@ void pdg::BoundaryAnalysis::computeExportedFuncSymbols(Module &M)
     // look for global name starts with __ksymtab or __kstrtab
     if (name.find("__ksymtab_") == 0 || name.find("__kstrtab_") == 0)
     {
-      std::string func_name = name.erase(0, 10);
-      Function *f = M.getFunction(StringRef(func_name));
+      std::string funcName = name.erase(0, 10);
+      Function *f = M.getFunction(StringRef(funcName));
       if (f != nullptr)
-        _exported_func_symbols.insert(func_name);
+        _exportedFuncSymbols.insert(funcName);
     }
   }
 }
@@ -184,26 +184,26 @@ void pdg::BoundaryAnalysis::computeExportedFuncSymbols(Module &M)
 void pdg::BoundaryAnalysis::dumpToFiles()
 {
   errs() << "dumping to files\n";
-  dumpToFile("imported_funcs", _imported_funcs);
-  dumpToFile("driver_funcs", _driver_domain_funcs);
-  dumpToFile("exported_funcs", _exported_funcs);
-  dumpToFile("exported_func_ptrs", _exported_func_ptrs);
-  dumpToFile("sentinel_fields", _sentinel_fields);
-  dumpToFile("driver_globalvar_names", _driver_globalvar_names);
-  std::vector<std::string> exported_func_symbols(_exported_func_symbols.begin(), _exported_func_symbols.end());
+  dumpToFile("imported_funcs", _importedFuncs);
+  dumpToFile("driver_funcs", _driverDomainFuncs);
+  dumpToFile("exported_funcs", _exportedFuncs);
+  dumpToFile("exported_func_ptrs", _exportedFuncPtrs);
+  dumpToFile("sentinel_fields", _sentinelFields);
+  dumpToFile("driver_globalvar_names", _driverGlobalVarNames);
+  std::vector<std::string> exported_func_symbols(_exportedFuncSymbols.begin(), _exportedFuncSymbols.end());
   dumpToFile("driver_exported_func_symbols", exported_func_symbols);
-  std::vector<std::string> global_op_struct_names(_global_op_struct_names.begin(), _global_op_struct_names.end());
+  std::vector<std::string> global_op_struct_names(_globalOpStructNames.begin(), _globalOpStructNames.end());
   dumpToFile("global_op_struct_names", global_op_struct_names);
 }
 
-void pdg::BoundaryAnalysis::dumpToFile(std::string file_name, std::vector<std::string> &names)
+void pdg::BoundaryAnalysis::dumpToFile(std::string fileName, std::vector<std::string> &names)
 {
-  std::ofstream output_file(file_name);
+  std::ofstream outputFile(fileName);
   for (auto name: names)
   {
-    output_file << name << "\n";
+    outputFile << name << "\n";
   }
-  output_file.close();
+  outputFile.close();
 }
 
 static RegisterPass<pdg::BoundaryAnalysis>

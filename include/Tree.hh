@@ -14,13 +14,13 @@ namespace pdg
   {
     public:
       TreeNode(llvm::Value &val, GraphNodeType node_type) : Node(val, node_type) {};
-      TreeNode(const TreeNode& tree_node); 
-      TreeNode(llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type);
-      TreeNode(llvm::Function &f, llvm::DIType *di_type, int depth, TreeNode* parent_node, Tree* tree, GraphNodeType node_type);
+      TreeNode(const TreeNode& treeNode); 
+      TreeNode(llvm::DIType *di_type, int depth, TreeNode* parentNode, Tree* tree, GraphNodeType node_type);
+      TreeNode(llvm::Function &f, llvm::DIType *di_type, int depth, TreeNode* parentNode, Tree* tree, GraphNodeType node_type);
       int expandNode(); // build child nodes and connect with them
       llvm::DILocalVariable *getDILocalVar() { return _di_local_var; }
       void insertChildNode(TreeNode *new_child_node) { _children.push_back(new_child_node); }
-      void setParentTreeNode(TreeNode *parent_node) { _parent_node = parent_node; }
+      void setParentTreeNode(TreeNode *parentNode) { _parent_node = parentNode; }
       void setDILocalVariable(llvm::DILocalVariable &di_local_var) { _di_local_var = &di_local_var; }
       void addAddrVar(llvm::Value &v) { _addr_vars.insert(&v); }
       void setCanOptOut(bool can_opt_out) { _can_opt_out = can_opt_out; }
@@ -54,11 +54,11 @@ namespace pdg
       std::string getSrcHierarchyName(bool hideStructTypeName = true); // obj->field->field
       // used for collecting ksplit stats
     public:
-      bool is_shared = false;
+      bool isShared = false;
       bool is_ioremap = false;
-      bool is_user = false;
+      bool isUser = false;
       bool is_sentinel = false;
-      bool is_string = false;
+      bool isString = false;
       bool is_seq_ptr = false;
       std::set<std::string> annotations;
 
@@ -83,7 +83,7 @@ namespace pdg
     Tree() = default;
     Tree(llvm::Value &v) { _base_val = &v; }
     Tree(const Tree &src_tree);
-    void setRootNode(TreeNode &root_node) { _root_node = &root_node; }
+    void setRootNode(TreeNode &rootNode) { _root_node = &rootNode; }
     void setTreeNodeType(GraphNodeType node_type) { _root_node->setNodeType(node_type); }
     TreeNode *getRootNode() const { return _root_node; }
     int size() { return _size; }

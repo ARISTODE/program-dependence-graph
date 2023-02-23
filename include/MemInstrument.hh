@@ -2,7 +2,8 @@
 #define MEM_INSTRUMENT_H_
 #include "LLVMEssentials.hh"
 #include "llvm/IR/IRBuilder.h"
-#include "SharedDataAnalysis.hh"
+#include "DataAccessAnalysis.hh"
+#include "llvm/Analysis/TargetTransformInfo.h"
 /*
 This pass adds calls to 
 1. set up initial set of legit memory
@@ -25,15 +26,24 @@ namespace pdg
         bool runOnModule(llvm::Module &M) override;
         void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
         void addInstrumentFuncsDeclaration(llvm::Module &M);
-        void insertMemSetupCall(llvm::Function &F);
-        void insertMemAccessCall(std::vector<pdg::Node *> &instrumentFuncNodes);
+        void insertAddMrrCalls(llvm::Function &F);
+        void insertDeleteMrrCalls(llvm::Function &F);
+        void insertCheckMrrCalls(llvm::Function &F);
+        void setupParameterAccessPolicy(llvm::Function &F);
+        void insertFieldAccCheckPolicy(llvm::Function &F);
+        void insertMockAttack(llvm::Function &F);
+        unsigned computeAccTagforAddr(llvm::Value &addr);
+        std::string getDemangledName(const char* mangledName);
 
     private:
-        SharedDataAnalysis *SDA;
+        DataAccessAnalysis *DAA;
         ProgramGraph *PDG;
-        llvm::FunctionCallee setupLegalMemoryFn;
-        llvm::FunctionCallee checkMemReadFn;
-        llvm::FunctionCallee checkMemWriteFn;
+        llvm::Module *Module_;
+        llvm::FunctionCallee addMrrFunc;
+        llvm::FunctionCallee deleteMrrFunc;
+        llvm::FunctionCallee checkPtrAccessFunc;
+        llvm::FunctionCallee setupArgAccessPolicyFunc;
+        llvm::FunctionCallee checkFieldAccessFunc;
     };
 }
 

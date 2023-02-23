@@ -2,28 +2,28 @@
 
 using namespace llvm;
 
-pdg::TreeNode::TreeNode(const TreeNode &tree_node) : Node(tree_node.getNodeType())
+pdg::TreeNode::TreeNode(const TreeNode &treeNode) : Node(treeNode.getNodeType())
 {
-  _func = tree_node.getFunc();
-  _node_di_type = tree_node.getDIType();
-  _node_type = tree_node.getNodeType();
+  _func = treeNode.getFunc();
+  _node_di_type = treeNode.getDIType();
+  _node_type = treeNode.getNodeType();
 }
 
-pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
+pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parentNode, Tree *tree, GraphNodeType node_type) : Node(node_type)
 {
   _node_di_type = di_type;
   _depth = depth;
-  _parent_node = parent_node;
+  _parent_node = parentNode;
   _tree = tree;
-  if (parent_node != nullptr)
-    _func = parent_node->getFunc();
+  if (parentNode != nullptr)
+    _func = parentNode->getFunc();
 }
 
-pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
+pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parentNode, Tree *tree, GraphNodeType node_type) : Node(node_type)
 {
   _node_di_type = di_type;
   _depth = depth;
-  _parent_node = parent_node;
+  _parent_node = parentNode;
   _tree = tree;
   _func = &f;
 }
@@ -128,27 +128,27 @@ pdg::Tree::Tree(const Tree &src_tree)
 
 void pdg::Tree::print()
 {
-  std::queue<TreeNode *> node_queue;
-  node_queue.push(_root_node);
-  while (!node_queue.empty())
+  std::queue<TreeNode *> nodeQueue;
+  nodeQueue.push(_root_node);
+  while (!nodeQueue.empty())
   {
-    int queue_size = node_queue.size();
+    int queue_size = nodeQueue.size();
     while (queue_size > 0)
     {
-      TreeNode *current_node = node_queue.front();
-      node_queue.pop();
+      TreeNode *currentNode = nodeQueue.front();
+      nodeQueue.pop();
       queue_size--;
-      if (current_node == _root_node)
-        errs() << dbgutils::getSourceLevelVariableName(*current_node->getDILocalVar()) << ", ";
+      if (currentNode == _root_node)
+        errs() << dbgutils::getSourceLevelVariableName(*currentNode->getDILocalVar()) << ", ";
       else
       {
-        if (current_node->getDIType() != nullptr)
-          errs() << dbgutils::getSourceLevelVariableName(*current_node->getDIType()) << "(" << current_node->getAddrVars().size() << ")"
+        if (currentNode->getDIType() != nullptr)
+          errs() << dbgutils::getSourceLevelVariableName(*currentNode->getDIType()) << "(" << currentNode->getAddrVars().size() << ")"
                  << ", ";
       }
-      for (auto child : current_node->getChildNodes())
+      for (auto child : currentNode->getChildNodes())
       {
-        node_queue.push(child);
+        nodeQueue.push(child);
       }
     }
     errs() << "\n";
@@ -158,25 +158,25 @@ void pdg::Tree::print()
 void pdg::Tree::build(int max_tree_depth)
 {
   int current_tree_depth = 0;
-  std::queue<TreeNode *> node_queue;
-  node_queue.push(_root_node);
-  while (!node_queue.empty()) // have more child to expand
+  std::queue<TreeNode *> nodeQueue;
+  nodeQueue.push(_root_node);
+  while (!nodeQueue.empty()) // have more child to expand
   {
     current_tree_depth++;
     if (current_tree_depth > max_tree_depth)
       break;
-    int queue_size = node_queue.size();
+    int queue_size = nodeQueue.size();
     while (queue_size > 0)
     {
       queue_size--;
-      TreeNode *current_node = node_queue.front();
-      node_queue.pop();
+      TreeNode *currentNode = nodeQueue.front();
+      nodeQueue.pop();
       _size++;
-      if (current_node->expandNode() > 0)
+      if (currentNode->expandNode() > 0)
       {
-        for (auto child_node : current_node->getChildNodes())
+        for (auto child_node : currentNode->getChildNodes())
         {
-          node_queue.push(child_node);
+          nodeQueue.push(child_node);
         }
       }
     }
@@ -185,16 +185,16 @@ void pdg::Tree::build(int max_tree_depth)
 
 void pdg::Tree::addAccessForAllNodes(AccessTag acc_tag)
 {
-  std::queue<TreeNode *> node_queue;
-  node_queue.push(_root_node);
-  while (!node_queue.empty()) // have more child to expand
+  std::queue<TreeNode *> nodeQueue;
+  nodeQueue.push(_root_node);
+  while (!nodeQueue.empty()) // have more child to expand
   {
-    auto current_node = node_queue.front();
-    node_queue.pop();
-    current_node->addAccessTag(acc_tag);
-    for (auto child_node : current_node->getChildNodes())
+    auto currentNode = nodeQueue.front();
+    nodeQueue.pop();
+    currentNode->addAccessTag(acc_tag);
+    for (auto child_node : currentNode->getChildNodes())
     {
-      node_queue.push(child_node);
+      nodeQueue.push(child_node);
     }
   }
 }

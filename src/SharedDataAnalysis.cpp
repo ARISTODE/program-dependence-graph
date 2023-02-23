@@ -14,7 +14,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
 {
   _module = &M;
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
-  _call_graph = &PDGCallGraph::getInstance();
+  _callGraph = &PDGCallGraph::getInstance();
   fieldStatsFile.open("fieldAccessStats.csv");
   // read driver/kernel domian funcs
   setupStrOps();
@@ -72,7 +72,7 @@ void pdg::SharedDataAnalysis::setupExportedFuncPtrFieldNames()
 
 void pdg::SharedDataAnalysis::setupDriverFuncs(Module &M)
 {
-  _driver_domain_funcs = readFuncsFromFile("driver_funcs", M);
+  _driverDomainFuncs = readFuncsFromFile("driver_funcs", M);
 }
 
 void pdg::SharedDataAnalysis::readDriverGlobalStrucTypes()
@@ -92,13 +92,13 @@ void pdg::SharedDataAnalysis::setupKernelFuncs(Module &M)
       continue;
     // a special case is that driver function has module number concatenated, e.g., ixgbe_write_reg.5
     // neet to exclude such functions
-    std::string func_name = F.getName().str();
+    std::string funcName = F.getName().str();
     // ixgbe_write_reg.5 -> ixgbe_write_reg
-    func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-    auto func = M.getFunction(StringRef(func_name));
+    funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+    auto func = M.getFunction(StringRef(funcName));
     if (func == nullptr)
       continue;
-    if (_driver_domain_funcs.find(func) == _driver_domain_funcs.end())
+    if (_driverDomainFuncs.find(func) == _driverDomainFuncs.end())
     {
       _kernel_domain_funcs.insert(func);
       _kernel_domain_func_names.insert(func->getName().str());
@@ -131,10 +131,10 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
   }
 }
 
-std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file_name, Module &M)
+std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string fileName, Module &M)
 {
   std::set<Function *> ret;
-  std::ifstream ReadFile(file_name);
+  std::ifstream ReadFile(fileName);
   for (std::string line; std::getline(ReadFile, line);)
   {
     Function *f = M.getFunction(StringRef(line));
@@ -152,14 +152,14 @@ std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
   std::set<Function*> boundary_trans_funcs;
   for (auto boundary_func : _boundary_funcs)
   {
-    if (_call_graph->isExcludeFunc(*boundary_func))
+    if (_callGraph->isExcludeFunc(*boundary_func))
     {
       errs() << "found exclude func " << boundary_func->getName() << "\n";
       continue;
     }
-    auto func_node = _call_graph->getNode(*boundary_func);
+    auto func_node = _callGraph->getNode(*boundary_func);
     assert(func_node != nullptr && "cannot get function node for computing transitive closure!");
-    auto trans_func_nodes = _call_graph->computeTransitiveClosure(*func_node);
+    auto trans_func_nodes = _callGraph->computeTransitiveClosure(*func_node);
     for (auto n : trans_func_nodes)
     {
       if (Function *trans_func = dyn_cast<Function>(n->getValue()))
@@ -175,7 +175,7 @@ compute the intersaction of struct types used by both sides.
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()
 {
   std::set<std::string> driver_struct_type_names;
-  for (auto func : _driver_domain_funcs)
+  for (auto func : _driverDomainFuncs)
   {
     if (func->isDeclaration())
       continue;
@@ -184,18 +184,18 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       Node *n = _PDG->getNode(*inst_i);
       if (!n)
         continue;
-      DIType *node_di_type = n->getDIType();
+      DIType *nodeDt = n->getDIType();
       if (StoreInst *si = dyn_cast<StoreInst>(&*inst_i))
       {
         auto val_op = si->getValueOperand()->stripPointerCasts();
         Node *val_n = _PDG->getNode(*val_op);
         if (!val_n)
           continue;
-        node_di_type = val_n->getDIType();
+        nodeDt = val_n->getDIType();
       }
-      if (!node_di_type)
+      if (!nodeDt)
         continue;
-      DIType *lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
+      DIType *lowest_di_type = dbgutils::getLowestDIType(*nodeDt);
       if (lowest_di_type == nullptr)
         continue;
       if (dbgutils::isStructType(*lowest_di_type))
@@ -221,20 +221,20 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       Node *n = _PDG->getNode(*inst_i);
       if (!n)
         continue;
-      DIType *node_di_type = n->getDIType();
-      if (!node_di_type)
+      DIType *nodeDt = n->getDIType();
+      if (!nodeDt)
         continue;
-      if (dbgutils::isStructType(*node_di_type) || dbgutils::isStructPointerType(*node_di_type))
+      if (dbgutils::isStructType(*nodeDt) || dbgutils::isStructPointerType(*nodeDt))
       {
-        DIType *lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
+        DIType *lowest_di_type = dbgutils::getLowestDIType(*nodeDt);
         assert(lowest_di_type != nullptr && "null lowest di type (computeSharedStructTypes)\n");
-        std::string struct_type_name = dbgutils::getSourceLevelTypeName(*lowest_di_type, true);
-        struct_type_name = pdgutils::stripVersionTag(struct_type_name);
-        if (processed_struct_names.find(struct_type_name) != processed_struct_names.end())
+        std::string structTyName = dbgutils::getSourceLevelTypeName(*lowest_di_type, true);
+        structTyName = pdgutils::stripVersionTag(structTyName);
+        if (processed_struct_names.find(structTyName) != processed_struct_names.end())
           continue;
-        processed_struct_names.insert(struct_type_name);
+        processed_struct_names.insert(structTyName);
         // check if driver side has the same di type, if so, add the type as shared type accessed by both driver and kernel
-        if (driver_struct_type_names.find(struct_type_name) != driver_struct_type_names.end())
+        if (driver_struct_type_names.find(structTyName) != driver_struct_type_names.end())
           _shared_struct_di_types.insert(lowest_di_type);
       }
     }
@@ -250,12 +250,12 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
   //   auto fw = _PDG->getFuncWrapper(*f);
   //   for (auto arg : fw->getArgList())
   //   {
-  //     auto arg_di_type = fw->getArgDIType(*arg);
-  //     auto arg_lowest_di_type = dbgutils::getLowestDIType(*arg_di_type);
-  //     if (arg_lowest_di_type != nullptr)
+  //     auto argDt = fw->getArgDIType(*arg);
+  //     auto argLowestDt = dbgutils::getLowestDIType(*argDt);
+  //     if (argLowestDt != nullptr)
   //     {
-  //       if (dbgutils::isStructType(*arg_lowest_di_type))
-  //         _shared_struct_di_types.insert(arg_lowest_di_type);
+  //       if (dbgutils::isStructType(*argLowestDt))
+  //         _shared_struct_di_types.insert(argLowestDt);
   //     }
   //   }
 
@@ -300,7 +300,7 @@ void pdg::SharedDataAnalysis::buildTreesForSharedStructDIType(Module &M)
   for (auto shared_struct_di_type : _shared_struct_di_types)
   {
     Tree *type_tree = new Tree();
-    TreeNode *root_node = new TreeNode(shared_struct_di_type, 0, nullptr, type_tree, GraphNodeType::GLOBAL_TYPE);
+    TreeNode *rootNode = new TreeNode(shared_struct_di_type, 0, nullptr, type_tree, GraphNodeType::GLOBAL_TYPE);
     std::string shared_struct_type_name = dbgutils::getSourceLevelTypeName(*shared_struct_di_type, true);
     if (!shared_struct_type_name.empty())
       _shared_struct_type_names.insert(shared_struct_type_name);
@@ -309,9 +309,9 @@ void pdg::SharedDataAnalysis::buildTreesForSharedStructDIType(Module &M)
     auto vars_with_di_type = computeVarsWithDITypeInModule(*shared_struct_di_type, M);
     for (auto var : vars_with_di_type)
     {
-      root_node->addAddrVar(*var);
+      rootNode->addAddrVar(*var);
     }
-    type_tree->setRootNode(*root_node);
+    type_tree->setRootNode(*rootNode);
     type_tree->build(2);
     connectTypeTreeToAddrVars(*type_tree);
     _global_struct_di_type_map.insert(std::make_pair(shared_struct_di_type, type_tree));
@@ -320,30 +320,30 @@ void pdg::SharedDataAnalysis::buildTreesForSharedStructDIType(Module &M)
 
 void pdg::SharedDataAnalysis::connectTypeTreeToAddrVars(Tree &type_tree)
 {
-  TreeNode *root_node = type_tree.getRootNode();
-  std::queue<TreeNode *> node_queue;
-  node_queue.push(root_node);
-  while (!node_queue.empty())
+  TreeNode *rootNode = type_tree.getRootNode();
+  std::queue<TreeNode *> nodeQueue;
+  nodeQueue.push(rootNode);
+  while (!nodeQueue.empty())
   {
-    TreeNode *current_node = node_queue.front();
-    node_queue.pop();
-    for (auto addr_var : current_node->getAddrVars())
+    TreeNode *currentNode = nodeQueue.front();
+    nodeQueue.pop();
+    for (auto addrVar : currentNode->getAddrVars())
     {
-      if (!_PDG->hasNode(*addr_var))
+      if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addr_var);
-      current_node->addNeighbor(*addr_var_node, EdgeType::VAL_DEP);
+      auto addr_var_node = _PDG->getNode(*addrVar);
+      currentNode->addNeighbor(*addr_var_node, EdgeType::VAL_DEP);
       // consider aliasing
       auto aliasNodes = _PDG->findNodesReachedByEdge(*addr_var_node, EdgeType::DATA_ALIAS);
       for (auto aliasNode : aliasNodes)
       {
-        current_node->addAddrVar(*aliasNode->getValue());
-        current_node->addNeighbor(*aliasNode, EdgeType::VAL_DEP);
+        currentNode->addAddrVar(*aliasNode->getValue());
+        currentNode->addNeighbor(*aliasNode, EdgeType::VAL_DEP);
       }
     }
-    for (auto child_node : current_node->getChildNodes())
+    for (auto child_node : currentNode->getChildNodes())
     {
-      node_queue.push(child_node);
+      nodeQueue.push(child_node);
     }
   }
 }
@@ -381,33 +381,33 @@ std::set<Value *> pdg::SharedDataAnalysis::computeVarsWithDITypeInModule(DIType 
   return vars;
 }
 
-bool pdg::SharedDataAnalysis::isStructFieldNode(TreeNode &tree_node)
+bool pdg::SharedDataAnalysis::isStructFieldNode(TreeNode &treeNode)
 {
-  auto parent_node = tree_node.getParentNode();
-  if (!parent_node)
+  auto parentNode = treeNode.getParentNode();
+  if (!parentNode)
     return false;
-  auto parent_node_di_type = parent_node->getDIType();
+  auto parent_node_di_type = parentNode->getDIType();
   if (!parent_node_di_type)
     return false;
   return dbgutils::isStructType(*parent_node_di_type);
 }
 
-bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &tree_node, bool &hasReadByKernel, bool &hasUpdateByDriver)
+bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode, bool &hasReadByKernel, bool &hasUpdateByDriver)
 {
-  auto dt = tree_node.getDIType();
+  auto dt = treeNode.getDIType();
   if (dt && dbgutils::isFuncPointerType(*dt))
     return true;
-  auto addr_vars = tree_node.getAddrVars();
+  auto addr_vars = treeNode.getAddrVars();
   bool accessed_in_driver = false;
   bool accessed_in_kernel = false;
 
-  for (auto addr_var : addr_vars)
+  for (auto addrVar : addr_vars)
   {
-    if (Instruction *i = dyn_cast<Instruction>(addr_var))
+    if (Instruction *i = dyn_cast<Instruction>(addrVar))
     {
       Function *f = i->getFunction();
 
-      if (_driver_domain_funcs.find(f) != _driver_domain_funcs.end())
+      if (_driverDomainFuncs.find(f) != _driverDomainFuncs.end())
       {
         accessed_in_driver = true;
         if (pdgutils::hasWriteAccess(*i))
@@ -433,10 +433,10 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &tree_node, bool &hasRea
   return false;
 }
 
-bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
+bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &treeNode)
 {
-  std::set<EdgeType> edge_types = {EdgeType::PARAMETER_IN, EdgeType::DATA_ALIAS};
-  auto reach_nodes = _PDG->findNodesReachedByEdges(tree_node, edge_types);
+  std::set<EdgeType> edgeTypes = {EdgeType::PARAMETER_IN, EdgeType::DATA_ALIAS};
+  auto reach_nodes = _PDG->findNodesReachedByEdges(treeNode, edgeTypes);
   for (auto node : reach_nodes)
   {
     if (node->getValue() != nullptr)
@@ -448,9 +448,9 @@ bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
           auto called_func = pdgutils::getCalledFunc(*ci);
           if (called_func == nullptr)
             continue;
-          std::string called_func_name = called_func->getName().str();
-          called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
-          if (_string_op_names.find(called_func_name) != _string_op_names.end())
+          std::string calleeName = called_func->getName().str();
+          calleeName = pdgutils::stripFuncNameVersionNumber(calleeName);
+          if (_string_op_names.find(calleeName) != _string_op_names.end())
             return true;
         }
       }
@@ -459,11 +459,11 @@ bool pdg::SharedDataAnalysis::isFieldUsedInStringOps(TreeNode &tree_node)
   return false;
 }
 
-bool pdg::SharedDataAnalysis::isSharedFieldID(std::string field_id, std::string field_type_name)
+bool pdg::SharedDataAnalysis::isSharedFieldID(std::string fieldId, std::string field_type_name)
 {
-  if (field_id.empty())
+  if (fieldId.empty())
     return false;
-  return (_shared_field_id.find(field_id) != _shared_field_id.end());
+  return (_shared_field_id.find(fieldId) != _shared_field_id.end());
 }
 
 void pdg::SharedDataAnalysis::computeSharedFieldID()
@@ -475,18 +475,18 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
     // auto gb = _module->getNamedValue(StringRef(di_type_name));
 
     Tree *tree = dt_tree_pair.second;
-    std::queue<TreeNode *> node_queue;
-    node_queue.push(tree->getRootNode());
+    std::queue<TreeNode *> nodeQueue;
+    nodeQueue.push(tree->getRootNode());
     // setting up map for collecting fields access stat
     auto sharedStructDIType = dbgutils::getLowestDIType(*tree->getRootNode()->getDIType());
     assert(sharedStructDIType != nullptr && "cannot collect fields access stats for empty struct di type\n");
     auto sharedStructName = dbgutils::getSourceLevelTypeName(*sharedStructDIType);
 
-    while (!node_queue.empty())
+    while (!nodeQueue.empty())
     {
-      TreeNode *current_tree_node = node_queue.front();
-      node_queue.pop();
-      DIType *nodeDIType = current_tree_node->getDIType();
+      TreeNode *current_treeNode = nodeQueue.front();
+      nodeQueue.pop();
+      DIType *nodeDIType = current_treeNode->getDIType();
       if (nodeDIType == nullptr)
         continue;
 
@@ -494,37 +494,37 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       bool isFuncPtrType = dbgutils::isFuncPointerType(*nodeDIType);
       bool hasReadByKernel = false;
       bool hasUpdateByDriver = false;
-      if (current_tree_node->isStructField())
+      if (current_treeNode->isStructField())
       {
         if (dbgutils::isFuncPointerType(*nodeDIType))
         {
-          _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_tree_node));
-          countReadWriteAccessTimes(*current_tree_node);
+          _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_treeNode));
+          countReadWriteAccessTimes(*current_treeNode);
         }
-        else if (isTreeNodeShared(*current_tree_node, hasReadByKernel, hasUpdateByDriver))
+        else if (isTreeNodeShared(*current_treeNode, hasReadByKernel, hasUpdateByDriver))
         {
-          auto fieldID = pdgutils::computeTreeNodeID(*current_tree_node);
+          auto fieldID = pdgutils::computeTreeNodeID(*current_treeNode);
           if (!fieldID.empty())
             _shared_field_id.insert(fieldID);
           // check whether a shared field is used in string operation.
-          if (isFieldUsedInStringOps(*current_tree_node))
+          if (isFieldUsedInStringOps(*current_treeNode))
             _string_field_id.insert(fieldID);
           // check whether a field is used in pointer arithmetic
           if (DEBUG)
           {
-            if (pdgutils::hasPtrArith(*current_tree_node, true))
+            if (pdgutils::hasPtrArith(*current_treeNode, true))
               errs() << "find ptr arith in sd: " << fieldID << "\n";
           }
           // insert an entry for shared field access stat
           sharedStructTypeFieldsAccessMap[sharedStructName].insert(std::make_tuple(fieldID, isPtrType, isFuncPtrType, hasReadByKernel, hasUpdateByDriver));
           // collect read/write accesses in driver/kernel domain
-          countReadWriteAccessTimes(*current_tree_node);
+          countReadWriteAccessTimes(*current_treeNode);
         }
       }
 
-      for (auto child : current_tree_node->getChildNodes())
+      for (auto child : current_treeNode->getChildNodes())
       {
-        node_queue.push(child);
+        nodeQueue.push(child);
       }
     }
   }
@@ -572,7 +572,7 @@ void pdg::SharedDataAnalysis::readSentinelFields()
   std::ifstream ReadFile("sentinel_fields");
   for (std::string line; std::getline(ReadFile, line);)
   {
-    _sentinel_fields.insert(line);
+    _sentinelFields.insert(line);
   }
 }
 
@@ -600,8 +600,8 @@ void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
     if (!caller_node)
       continue;
 
-    std::set<Function *> opposite_domain_funcs = _driver_domain_funcs;
-    if (_driver_domain_funcs.find(f) != _driver_domain_funcs.end())
+    std::set<Function *> opposite_domain_funcs = _driverDomainFuncs;
+    if (_driverDomainFuncs.find(f) != _driverDomainFuncs.end())
       opposite_domain_funcs = _kernel_domain_funcs;
 
     // check if this func can be called from the other domain.
@@ -622,13 +622,13 @@ void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
     if (!is_called)
       continue;
 
-    std::queue<Node *> node_queue;
+    std::queue<Node *> nodeQueue;
     std::unordered_set<Node *> seen_node;
-    node_queue.push(caller_node);
-    while (!node_queue.empty())
+    nodeQueue.push(caller_node);
+    while (!nodeQueue.empty())
     {
-      Node *n = node_queue.front();
-      node_queue.pop();
+      Node *n = nodeQueue.front();
+      nodeQueue.pop();
       if (seen_node.find(n) != seen_node.end())
         continue;
       seen_node.insert(n);
@@ -644,7 +644,7 @@ void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
 
       for (auto out_neighbor : n->getOutNeighbors())
       {
-        node_queue.push(out_neighbor);
+        nodeQueue.push(out_neighbor);
       }
     }
   }
@@ -655,15 +655,15 @@ void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
   errs() << "==========================================================\n";
 }
 
-void pdg::SharedDataAnalysis::dumpSharedTypes(std::string file_name)
+void pdg::SharedDataAnalysis::dumpSharedTypes(std::string fileName)
 {
-  std::ofstream output_file(file_name);
+  std::ofstream outputFile(fileName);
   for (auto shared_struct_type : _shared_struct_type_names)
   {
     if (!shared_struct_type.empty())
-      output_file << shared_struct_type << "\n";
+      outputFile << shared_struct_type << "\n";
   }
-  output_file.close();
+  outputFile.close();
 }
 
 Function *pdg::SharedDataAnalysis::getModuleInitFunc(Module &M)
@@ -672,8 +672,8 @@ Function *pdg::SharedDataAnalysis::getModuleInitFunc(Module &M)
   {
     if (F.isDeclaration())
       continue;
-    std::string func_name = F.getName().str();
-    if (func_name.find("_init_module") != std::string::npos)
+    std::string funcName = F.getName().str();
+    if (funcName.find("_init_module") != std::string::npos)
       return &F;
   }
   return nullptr;
@@ -744,7 +744,7 @@ void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
     {
       Function *f = i->getFunction();
       // count driver read write times
-      if (_driver_domain_funcs.find(f) != _driver_domain_funcs.end())
+      if (_driverDomainFuncs.find(f) != _driverDomainFuncs.end())
       {
         if (pdgutils::hasWriteAccess(*i))
           driverWriteTimes++;
@@ -789,7 +789,7 @@ std::string pdg::SharedDataAnalysis::getFieldTypeStr(TreeNode &treeNode)
       ksplitStats.numRWPtrCondVar++;
       ret += "cond|";
     }
-    if (pdgutils::hasPtrArith(treeNode, true))
+    if (pdgutils::isTreeNodeValUsedAsOffset(treeNode))
     {
       ksplitStats.numRWPtrInPtrArith++;
       ret += "ptrari|";
@@ -803,7 +803,7 @@ std::string pdg::SharedDataAnalysis::getFieldTypeStr(TreeNode &treeNode)
       ksplitStats.numRWNonPtrCondVar++;
       ret += "cond|";
     }
-    if (pdgutils::hasPtrArith(treeNode, true))
+    if (pdgutils::isTreeNodeValUsedAsOffset(treeNode))
     {
       ksplitStats.numRWNonPtrInPtrArith++;
       ret += "ptrari|";

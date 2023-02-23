@@ -12,7 +12,7 @@ index 9889041..86b60cd 100644
 --- a/src/KSplitStatsCollector.cpp
 +++ b/src/KSplitStatsCollector.cpp
 @@ -154,9 +154,9 @@ void pdg::KSplitStats::printTable2Raw()
-   _stats_file << _total_ptr_num << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
+   _stats_file << _totalPtrNum << "/" << (_shared_ptr_num + _sized_arr_num) << "\n";
    _stats_file << (_total_union_num - _shared_union_num) << "/" << _shared_union_num  << "\n";
    _stats_file << (_total_CS - _shared_CS) << "/" << _shared_CS  << "\n";
 +  _stats_file << (_total_atomic_op - _shared_atomic_op) << "/" << _shared_atomic_op  << "\n";

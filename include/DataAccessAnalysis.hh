@@ -2,6 +2,7 @@
 #define DATAACCESSANALYSIS_H_
 #include "SharedDataAnalysis.hh"
 #include "llvm/Analysis/CaptureTracking.h"
+#include "json.hpp"
 #include <fstream>
 #include <sstream>
 
@@ -17,10 +18,11 @@ namespace pdg
     void generateSyncStubsForGlobalVars();
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     llvm::StringRef getPassName() const override { return "Data Access Analysis"; }
-    std::set<AccessTag> computeDataAccessTagsForVal(llvm::Value &val);
-    std::set<pdg::Node *> findCrossDomainParamNode(Node &n, bool is_backward = false);
-    void readDriverDefinedGlobalVarNames(std::string file_name);
-    void readDriverExportedFuncSymbols(std::string file_name);
+    void computeDataAccessTagsForVal(llvm::Value &val, std::set<AccessTag> &accTags);
+    void computeDataAccessTagsForArrayVal(llvm::Value &val, std::set<AccessTag> &accTags);
+    std::set<pdg::Node *> findCrossDomainParamNode(Node &n, bool isBackward = false);
+    void readDriverDefinedGlobalVarNames(std::string fileName);
+    void readDriverExportedFuncSymbols(std::string fileName);
     bool isSharedAllocator(llvm::Value &allocator);
     std::unordered_set<pdg::Node *> computeSharedAllocators();
     void propagateAllocSizeAnno(llvm::Value &allocator);
@@ -28,48 +30,54 @@ namespace pdg
     void computeAllocSizeAnnos(llvm::Module &M);
     void computeDeallocAnnos(llvm::Module &M);
     void computeCollocatedAllocsite(llvm::Module &M);
-    void checkCollocatedAllocsite(llvm::Value &alloc_site);
+    void checkCollocatedAllocsite(llvm::Value &allocSite);
     void computeExportedFuncsPtrNameMap();
-    void computeDataAccessForTree(Tree *tree, bool is_ret = false);
+    void computeDataAccessForTree(Tree *tree, bool isRet = false);
     void computeDataAccessForGlobalTree(Tree *tree);
-    void computeDataAccessForTreeNode(TreeNode &tree_node, bool is_global_tree_node = false, bool is_ret = false);
+    void computeDataAccessForTreeNode(TreeNode &treeNode, bool isGlobalTreeNode = false, bool isRet = false);
     void computeDataAccessForFuncArgs(llvm::Function &F);
-    void checkCrossDomainRAWforFormalTreeNode(TreeNode &tree_node);
+    void checkCrossDomainRAWforFormalTreeNode(TreeNode &treeNode);
     void computeKernelReadDriverUpdateFields(llvm::Module &M);
     void computeFieldReadWriteForTree(Tree *argTree, bool isKernelFunc = true);
     void computeKernelReadSharedFields(llvm::Function &F);
     void computeDriverUpdateSharedFields(llvm::Function &F);
-    void generateIDLForFunc(llvm::Function &F, bool process_exported_func = false);
-    void generateRpcForFunc(llvm::Function &F, bool process_exported_func = false);
+    void generateIDLForFunc(llvm::Function &F, bool processExportedFunc = false);
+    void generateRpcForFunc(llvm::Function &F, bool processExportedFunc = false);
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
-    void generateIDLFromArgTree(Tree *arg_tree, std::ofstream &output_file, bool is_ret = false, bool is_global = false);
-    void generateIDLFromTreeNode(TreeNode &tree_node, llvm::raw_string_ostream &fields_projection_str, llvm::raw_string_ostream &nested_struct_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level, std::string parent_struct_type_name, bool is_ret = false);
+    void generateIDLFromArgTree(Tree *argTree, std::ofstream &outputFile, bool isRet = false, bool isGlobal = false);
+    void generateIDLFromTreeNode(TreeNode &treeNode, llvm::raw_string_ostream &fieldsProjectionStr, llvm::raw_string_ostream &nestedStructProjStr, std::queue<TreeNode *> &nodeQueue, std::string indentLevel, std::string parentStructTypeName, bool isRet = false);
+    void generateJSONObjectForFunc(llvm::Function &F, std::ofstream &jsonFile);
+    nlohmann::json generateJSONObjectFromArgTree(Tree *argTree, unsigned argIdx);
+    unsigned computeAccCapForNode(TreeNode &treeNode);
+    nlohmann::json createJSONObjectForNode(TreeNode &treeNode);
     void constructGlobalOpStructStr();
     void computeContainerOfLocs(llvm::Function &F);
-    std::set<std::string> inferTreeNodeAnnotations(TreeNode &tree_node, bool is_ret = false);
+    std::set<std::string> inferTreeNodeAnnotations(TreeNode &treeNode, bool isRet = false);
     // void inferAllocStackForKernelToDriverCalls();
-    std::string inferAllocStackAnnotation(TreeNode &tree_node);
-    void inferUserAnnotation(TreeNode &tree_node, std::set<std::string> &annotations);
-    void inferMayWithin(TreeNode &tree_node, std::set<std::string> &anno_str);
+    std::string inferAllocStackAnnotation(TreeNode &treeNode);
+    void inferUserAnnotation(TreeNode &treeNode, std::set<std::string> &annotations);
+    void inferMayWithin(TreeNode &treeNode, std::set<std::string> &annoStr);
     bool globalVarHasAccessInDriver(llvm::GlobalVariable &gv);
     bool isDriverDefinedGlobal(llvm::GlobalVariable &gv);
-    bool containerHasSharedFieldsAccessed(llvm::BitCastInst &bci, std::string struct_type_name);
+    bool containerHasSharedFieldsAccessed(llvm::BitCastInst &bci, std::string structTyName);
     bool isExportedFunc(llvm::Function &F);
     bool passedToLibrary(Node &paramNode); // TODO: finish implementing the function summary
-    std::string computeAllocCallerAnnotation(TreeNode &tree_node);
-    std::string computeAllocCalleeAnnotation(TreeNode &tree_node);
-    std::string getExportedFuncPtrName(std::string func_name);
-    std::set<Node *> findAllocator(TreeNode &tree_node, bool is_forward = false);
+    std::string computeAllocCallerAnnotation(TreeNode &treeNode);
+    std::string computeAllocCalleeAnnotation(TreeNode &treeNode);
+    std::string getExportedFuncPtrName(std::string funcName);
+    std::set<Node *> findAllocator(TreeNode &treeNode, bool isForward = false);
     FunctionWrapper *getNescheckFuncWrapper(llvm::Function &F); // F's signature is rewrittern by nescheck
-    std::set<llvm::Function *> getPointedFuncAtArgIdx(llvm::Function &F, unsigned arg_idx);
+    std::set<llvm::Function *> getPointedFuncAtArgIdx(llvm::Function &F, unsigned argIdx);
+    std::map<unsigned, unsigned> getFieldOffsetAccessMap(TreeNode &paramRootNode);
+    void dumpFieldOffsetAccessMapToFile(TreeNode &paramRootNode, std::string fileName);
     // logging related functions
     void printContainerOfStats();
     void logSkbFieldStats(TreeNode &skb_root_node);
-    void logSkbNode(TreeNode &tree_node);
-    void countControlData(TreeNode &tree_node);
-    bool isUsedInBranchStat(Node &val_node);
+    void logSkbNode(TreeNode &treeNode);
+    void countControlData(TreeNode &treeNode);
+    bool isUsedInBranchStat(Node &valNode);
     DomainTag computeFuncDomainTag(llvm::Function &F);
-    KSplitStats *getKSplitStats() { return _ksplit_stats; }
+    KSplitStats *getKSplitStats() { return _ksplitStats; }
     SharedDataAnalysis *getSDA() { return _SDA; }
     ProgramGraph *getPDG() { return _PDG; }
     // shared fields analysis
@@ -80,24 +88,24 @@ namespace pdg
     llvm::Module *_module;
     SharedDataAnalysis *_SDA;
     ProgramGraph *_PDG;
-    PDGCallGraph *_call_graph;
-    std::ofstream _idl_file;
-    std::ofstream _global_var_access_info;
+    PDGCallGraph *_callGraph;
+    std::ofstream _idlFile;
+    std::ofstream _globalVarAccessInfo;
     std::ofstream _sync_stub_file;
-    std::set<std::string> _seen_func_ops;
-    std::string _ops_struct_proj_str;
-    std::map<std::string, std::string> _exported_funcs_ptr_name_map;
-    std::set<std::string> _exist_func_defs;
-    std::map<std::string, std::set<std::string>> _global_ops_fields_map;
-    std::set<llvm::Instruction *> _container_of_insts;
-    KSplitStats *_ksplit_stats;
-    std::string _current_processing_func = "";
-    std::set<std::string> _driver_defined_globalvar_names;
-    std::set<std::string> _driver_exported_func_symbols;
-    std::set<Node *> _funcs_reachable_from_boundary;
-    std::set<llvm::Function *> _kernel_funcs_regsitered_with_indirect_ptr;
-    std::set<llvm::Function *> _transitive_boundary_funcs;
-    bool _generating_idl_for_global = false;
+    std::set<std::string> _seenFuncOps;
+    std::string _opsStructProjStr;
+    std::map<std::string, std::string> _exportedFuncsPtrNameMap;
+    std::set<std::string> _existFuncDefs;
+    std::map<std::string, std::set<std::string>> _globalOpsFieldsMap;
+    std::set<llvm::Instruction *> _containerofInsts;
+    KSplitStats *_ksplitStats;
+    std::string _currentProcessingFunc = "";
+    std::set<std::string> _driverDefGlobalVarNames;
+    std::set<std::string> _driverExportedFuncSymbols;
+    std::set<Node *> _funcsReachableFromBoundary;
+    std::set<llvm::Function *> _kernelFuncsRegisteredWithFuncPtr;
+    std::set<llvm::Function *> _transitiveBoundaryFuncs;
+    bool _generateingIDLforGlobal = false;
     std::set<std::string> _visitedSharedFieldIDInRAWAna;
     unsigned int _kernelRAWDriverFields = 0;
   };

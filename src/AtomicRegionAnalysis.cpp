@@ -14,9 +14,9 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
 {
   _DAA = &getAnalysis<DataAccessAnalysis>();
   _SDA = _DAA->getSDA();
-  _ksplit_stats = _DAA->getKSplitStats();
+  _ksplitStats = _DAA->getKSplitStats();
   _funcs_need_sync_stub_gen = _SDA->computeBoundaryTransitiveClosure();
-  _call_graph = &PDGCallGraph::getInstance();
+  _callGraph = &PDGCallGraph::getInstance();
 
   _warning_cs_count = 0;
   _warning_atomic_op_count = 0;
@@ -48,8 +48,8 @@ void pdg::AtomicRegionAnalysis::generateSyncStubsForAtomicRegions()
     std::string lock_call_name = pdgutils::getCalledFunc(*lock_call_inst)->getName();
     lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
     std::string unlock_call_name = _lock_map[lock_call_name];
-    auto root_node = tree->getRootNode();
-    auto di_type = root_node->getDIType();
+    auto rootNode = tree->getRootNode();
+    auto di_type = rootNode->getDIType();
     auto di_type_name = dbgutils::getSourceLevelTypeName(*di_type, true);
     while (!di_type_name.empty() && di_type_name.back() == '*')
     {
@@ -125,12 +125,12 @@ void pdg::AtomicRegionAnalysis::computeBoundaryObjects(Module &M)
     {
       if (arg.getType()->isPointerTy())
       {
-        auto arg_tree = func_w->getArgFormalInTree(arg);
-        if (!arg_tree)
+        auto argTree = func_w->getArgFormalInTree(arg);
+        if (!argTree)
           continue;
-        auto root_node = arg_tree->getRootNode();
-        if (root_node != nullptr)
-          _boundary_arg_nodes.insert(root_node);
+        auto rootNode = argTree->getRootNode();
+        if (rootNode != nullptr)
+          _boundary_arg_nodes.insert(rootNode);
       }
     }
   }
@@ -187,13 +187,13 @@ void pdg::AtomicRegionAnalysis::computeCriticalSections(Module &M)
     {
       for (auto cs : cs_in_func)
       {
-        // _ksplit_stats->increaseTotalCS();
-        _ksplit_stats->_total_CS += 1;
+        // _ksplitStats->increaseTotalCS();
+        _ksplitStats->_total_CS += 1;
         auto cs_lock_inst = cast<CallInst>(cs.first);
         if (isRcuLockInst(*cs_lock_inst))
-          _ksplit_stats->_total_rcu += 1;
+          _ksplitStats->_total_rcu += 1;
         if (isSeqLockInst(*cs_lock_inst))
-          _ksplit_stats->_total_seqlock += 1;
+          _ksplitStats->_total_seqlock += 1;
       }
     }
   }
@@ -211,8 +211,8 @@ void pdg::AtomicRegionAnalysis::computeAtomicOperations(Module &M)
       {
         _atomic_operations.insert(&*inst_iter);
         if (EnableAnalysisStats)
-          _ksplit_stats->_total_atomic_op += 1;
-        // _ksplit_stats->increaseTotalAtomicOps();
+          _ksplitStats->_total_atomic_op += 1;
+        // _ksplitStats->increaseTotalAtomicOps();
       }
     }
   }
@@ -264,8 +264,8 @@ bool pdg::AtomicRegionAnalysis::isRcuLock(CallInst &lock_call_inst)
   auto called_func = pdgutils::getCalledFunc(lock_call_inst);
   if (called_func == nullptr)
     return false;
-  auto func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
-  if (func_name == "rcu_read_lock")
+  auto funcName = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+  if (funcName == "rcu_read_lock")
     return true;
   return false;
 }
@@ -329,16 +329,16 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         auto used_lock_node = G->getNode(*used_lock);
         if (used_lock_node == nullptr)
           continue;
-        std::set<EdgeType> edge_types;
-        edge_types.insert(EdgeType::DATA_ALIAS);
-        auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edge_types);
+        std::set<EdgeType> edgeTypes;
+        edgeTypes.insert(EdgeType::DATA_ALIAS);
+        auto lock_node_alias = used_lock_node->getNeighborsWithDepType(edgeTypes);
         for (auto alias_node : lock_node_alias)
         {
           if (alias_node->isAddrVarNode())
           {
-            TreeNode *abstract_tree_node = (TreeNode *)alias_node->getAbstractTreeNode();
-            auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
-            if (_SDA->isSharedFieldID(field_id) && isKernelLockInstance(field_id))
+            TreeNode *abstract_treeNode = (TreeNode *)alias_node->getAbstractTreeNode();
+            auto fieldId = pdgutils::computeTreeNodeID(*abstract_treeNode);
+            if (_SDA->isSharedFieldID(fieldId) && isKernelLockInstance(fieldId))
             {
               is_shared_lock = true;
               break;
@@ -363,7 +363,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       {
         if (isLockInst(*inst))
         {
-          _ksplit_stats->_total_nest_lock += 1;
+          _ksplitStats->_total_nest_lock += 1;
           has_nested_lock = true;
         }
       }
@@ -384,9 +384,9 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       // if shared fields is accessed
       if (accessed_node->isAddrVarNode())
       {
-        TreeNode *abstract_tree_node = (TreeNode *)accessed_node->getAbstractTreeNode();
-        auto field_id = pdgutils::computeTreeNodeID(*abstract_tree_node);
-        if (_SDA->isSharedFieldID(field_id))
+        TreeNode *abstract_treeNode = (TreeNode *)accessed_node->getAbstractTreeNode();
+        auto fieldId = pdgutils::computeTreeNodeID(*abstract_treeNode);
+        if (_SDA->isSharedFieldID(fieldId))
         {
           cs_warning = true;
           inst_access_shared_state = true;
@@ -426,19 +426,19 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       if (cs_warning)
       {
         _warning_cs_count++;
-        // _ksplit_stats->increaseSharedCS();
-        _ksplit_stats->_shared_CS += 1;
+        // _ksplitStats->increaseSharedCS();
+        _ksplitStats->_shared_CS += 1;
         if (isRcuLockInst(*cs_pair.first))
         {
-          _ksplit_stats->_shared_rcu += 1;
+          _ksplitStats->_shared_rcu += 1;
         }
         if (isSeqLockInst(*cs_pair.first))
         {
-          _ksplit_stats->_shared_seqlock += 1;
+          _ksplitStats->_shared_seqlock += 1;
         }
         if (has_nested_lock)
         {
-          _ksplit_stats->_shared_nest_lock += 1;
+          _ksplitStats->_shared_nest_lock += 1;
           // errs() << "nested lock: " << lock_inst->getFunction()->getName() << "\n";
         }
       }
@@ -452,11 +452,11 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
   for (auto atomic_op : _atomic_operations)
   {
     auto modified_var = atomic_op->getOperand(0);
-    Node *val_node = PDG->getNode(*modified_var);
-    if (val_node == nullptr)
+    Node *valNode = PDG->getNode(*modified_var);
+    if (valNode == nullptr)
       continue;
     std::set<std::string> modified_names;
-    computeModifedNames(*val_node, modified_names);
+    computeModifedNames(*valNode, modified_names);
     if (modified_names.size() >= 2 && modified_names.find("counter") != modified_names.end())
       continue;
 
@@ -471,12 +471,12 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
     // else
     // {
     // scenerio 2: check if the accessed var is a shared data
-    std::string parent_struct_type_name;
+    std::string parentStructTypeName;
     std::string modified_field_name;
-    bool is_shared = false;
-    auto alias_nodes = val_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
-    auto in_alias = val_node->getInNeighborsWithDepType(EdgeType::DATA_ALIAS);
-    alias_nodes.insert(val_node);
+    bool isShared = false;
+    auto alias_nodes = valNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+    auto in_alias = valNode->getInNeighborsWithDepType(EdgeType::DATA_ALIAS);
+    alias_nodes.insert(valNode);
     alias_nodes.insert(in_alias.begin(), in_alias.end());
     for (auto alias_node : alias_nodes)
     {
@@ -486,41 +486,41 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
       {
         if (in_edge->getEdgeType() != EdgeType::VAL_DEP)
           continue;
-        TreeNode *tree_node = static_cast<TreeNode *>(in_edge->getSrcNode());
+        TreeNode *treeNode = static_cast<TreeNode *>(in_edge->getSrcNode());
         // only consider struct field access cases
-        if (!tree_node->isStructMember())
+        if (!treeNode->isStructMember())
           continue;
-        auto field_id = pdgutils::computeTreeNodeID(*tree_node);
-        if (_SDA->isSharedFieldID(field_id))
+        auto fieldId = pdgutils::computeTreeNodeID(*treeNode);
+        if (_SDA->isSharedFieldID(fieldId))
         {
-          is_shared = true;
+          isShared = true;
           break;
         }
       }
 
-      if (is_shared)
+      if (isShared)
       {
-        auto func_name = atomic_op->getFunction()->getName().str();
-        func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-        // if (_processed_func_names.find(func_name) == _processed_func_names.end())
+        auto funcName = atomic_op->getFunction()->getName().str();
+        funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+        // if (_processed_func_names.find(funcName) == _processed_func_names.end())
         // {
-        //   _processed_func_names.insert(func_name);
+        //   _processed_func_names.insert(funcName);
         _warning_atomic_op_count++;
 
         if (DEBUG)
         {
           printWarningAtomicOp(*atomic_op, modified_names, "TYPE");
-          // auto dst_func_node = _call_graph->getNode(*atomic_op->getFunction());
+          // auto dst_func_node = _callGraph->getNode(*atomic_op->getFunction());
           // for (auto boundary_f : _SDA->getBoundaryFuncs())
           // {
-          //   auto boundary_func_node = _call_graph->getNode(*boundary_f);
-          //   _call_graph->printPaths(*boundary_func_node, *dst_func_node);
+          //   auto boundary_func_node = _callGraph->getNode(*boundary_f);
+          //   _callGraph->printPaths(*boundary_func_node, *dst_func_node);
           // }
         }
 
         // if (EnableAnalysisStats)
         // {
-        //   _ksplit_stats->_shared_atomic_op += 1;
+        //   _ksplitStats->_shared_atomic_op += 1;
         //   errs() << "shared atomic op: " << atomic_op->getFunction()->getName() << " - " << *atomic_op << "\n";
         //   for (auto name : modified_names)
         //   {
@@ -547,11 +547,11 @@ void pdg::AtomicRegionAnalysis::computeModifedNames(pdg::Node &node, std::set<st
     {
       if (in_edge->getEdgeType() == EdgeType::VAL_DEP) // check if connected with shared filed
       {
-        TreeNode *tree_node = static_cast<TreeNode *>(in_edge->getSrcNode());
-        if (!tree_node->getDIType())
+        TreeNode *treeNode = static_cast<TreeNode *>(in_edge->getSrcNode());
+        if (!treeNode->getDIType())
           continue;
-        std::string field_id = pdgutils::computeTreeNodeID(*tree_node);
-        modified_names.insert(field_id);
+        std::string fieldId = pdgutils::computeTreeNodeID(*treeNode);
+        modified_names.insert(fieldId);
       }
     }
   }
@@ -667,8 +667,8 @@ bool pdg::AtomicRegionAnalysis::isAtomicOperation(Instruction &i)
     {
       auto asm_str = ia->getAsmString();
       if (isAtomicFenceString(asm_str))
-        _ksplit_stats->_total_barrier += 1;
-      // _ksplit_stats->increaseTotalBarrier();
+        _ksplitStats->_total_barrier += 1;
+      // _ksplitStats->increaseTotalBarrier();
       if (isAtomicAsmString(asm_str))
         return true;
     }
@@ -687,24 +687,24 @@ bool pdg::AtomicRegionAnalysis::isAliasOfBoundaryPtrs(Value &v)
   return false;
 }
 
-bool pdg::AtomicRegionAnalysis::isKernelLockInstance(std::string field_id)
+bool pdg::AtomicRegionAnalysis::isKernelLockInstance(std::string fieldId)
 {
-  return (_lock_instance_map.find(field_id) != _lock_instance_map.end());
+  return (_lock_instance_map.find(fieldId) != _lock_instance_map.end());
 }
 
 bool pdg::AtomicRegionAnalysis::hasBoundaryAliasNodes(llvm::Value &v)
 {
   std::set<Node *> ret;
   auto PDG = _SDA->getPDG();
-  auto val_node = PDG->getNode(v);
-  if (val_node == nullptr)
+  auto valNode = PDG->getNode(v);
+  if (valNode == nullptr)
     return false;
-  std::set<EdgeType> edge_types = {
+  std::set<EdgeType> edgeTypes = {
       EdgeType::DATA_ALIAS,
       EdgeType::PARAMETER_IN};
   for (auto n : _boundary_arg_nodes)
   {
-    if (PDG->canReach(*n, *val_node, edge_types))
+    if (PDG->canReach(*n, *valNode, edgeTypes))
       return true;
   }
   return false;
@@ -717,9 +717,9 @@ void pdg::AtomicRegionAnalysis::printWarningCS(pdg::AtomicRegionAnalysis::CSPair
   errs() << "cs begin: " << *cs_pair.first << "\n";
   errs() << "cs end: " << *cs_pair.second << "\n";
   errs() << "modified var: " << v << "\n";
-  for (auto field_name : modified_names)
+  for (auto fieldName : modified_names)
   {
-    errs() << "modified name: " << field_name << "\n";
+    errs() << "modified name: " << fieldName << "\n";
   }
   errs() << source_type << "\n";
   errs() << " =====================================\n";
@@ -731,9 +731,9 @@ void pdg::AtomicRegionAnalysis::printWarningAtomicOp(llvm::Instruction &i, std::
   errs() << " ============  Atomic Ops Warning [ " << _warning_atomic_op_count << " ] ============\n";
   errs() << "Function: " << f->getName() << "\n";
   errs() << "modified var: " << i << "\n";
-  for (auto field_name : modified_names)
+  for (auto fieldName : modified_names)
   {
-    errs() << "modified name: " << field_name << "\n";
+    errs() << "modified name: " << fieldName << "\n";
   }
   errs() << source_type << "\n";
   errs() << " =====================================\n";
@@ -765,79 +765,79 @@ void pdg::AtomicRegionAnalysis::generateSyncStubForTree(Tree *tree, raw_string_o
 {
   if (!tree)
     return;
-  TreeNode *root_node = tree->getRootNode();
-  DIType *root_node_di_type = root_node->getDIType();
-  DIType *root_node_lowest_di_type = dbgutils::getLowestDIType(*root_node_di_type);
-  if (!root_node_lowest_di_type || !dbgutils::isProjectableType(*root_node_lowest_di_type))
+  TreeNode *rootNode = tree->getRootNode();
+  DIType *rootNodeDt = rootNode->getDIType();
+  DIType *rootNodeLowestDt = dbgutils::getLowestDIType(*rootNodeDt);
+  if (!rootNodeLowestDt || !dbgutils::isProjectableType(*rootNodeLowestDt))
     return;
-  std::queue<TreeNode *> node_queue;
+  std::queue<TreeNode *> nodeQueue;
   // generate root projection
-  node_queue.push(root_node);
-  while (!node_queue.empty())
+  nodeQueue.push(rootNode);
+  while (!nodeQueue.empty())
   {
-    TreeNode *current_node = node_queue.front();
-    node_queue.pop();
-    DIType *node_di_type = current_node->getDIType();
-    DIType *node_lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
+    TreeNode *currentNode = nodeQueue.front();
+    nodeQueue.pop();
+    DIType *nodeDt = currentNode->getDIType();
+    DIType *nodeLowestDt = dbgutils::getLowestDIType(*nodeDt);
     // check if node needs projection
-    if (!node_lowest_di_type || !dbgutils::isProjectableType(*node_lowest_di_type))
+    if (!nodeLowestDt || !dbgutils::isProjectableType(*nodeLowestDt))
       continue;
     // get the type / variable name for the pointer field
-    auto proj_type_name = dbgutils::getSourceLevelTypeName(*node_di_type, true);
-    while (proj_type_name.back() == '*')
+    auto projTyName = dbgutils::getSourceLevelTypeName(*nodeDt, true);
+    while (projTyName.back() == '*')
     {
-      proj_type_name.pop_back();
+      projTyName.pop_back();
     }
-    auto proj_var_name = dbgutils::getSourceLevelVariableName(*node_di_type);
-    if (current_node->isRootNode())
+    auto projVarName = dbgutils::getSourceLevelVariableName(*nodeDt);
+    if (currentNode->isRootNode())
     {
-      if (current_node->getDILocalVar() != nullptr)
-        proj_var_name = dbgutils::getSourceLevelVariableName(*current_node->getDILocalVar());
+      if (currentNode->getDILocalVar() != nullptr)
+        projVarName = dbgutils::getSourceLevelVariableName(*currentNode->getDILocalVar());
     }
 
     // for pointer to aggregate type, retrive the child node(pointed object), and generate projection
-    if (dbgutils::isPointerType(*dbgutils::stripMemberTag(*node_di_type)) && !current_node->getChildNodes().empty())
-      current_node = current_node->getChildNodes()[0];
-    // errs() << "generate idl for node: " << proj_type_name << "\n";
+    if (dbgutils::isPointerType(*dbgutils::stripMemberTag(*nodeDt)) && !currentNode->getChildNodes().empty())
+      currentNode = currentNode->getChildNodes()[0];
+    // errs() << "generate idl for node: " << projTyName << "\n";
 
     std::string nested_read_fields_ss;
     std::string nested_write_fields_ss;
     raw_string_ostream nested_read_proj_str(nested_read_fields_ss);
     raw_string_ostream nested_write_proj_str(nested_write_fields_ss);
-    generateSyncStubProjFromTreeNode(*current_node, nested_read_proj_str, nested_write_proj_str, node_queue, "\t\t\t");
+    generateSyncStubProjFromTreeNode(*currentNode, nested_read_proj_str, nested_write_proj_str, nodeQueue, "\t\t\t");
     // handle funcptr ops struct specifically
-    if (proj_var_name.empty())
-      proj_var_name = proj_type_name;
+    if (projVarName.empty())
+      projVarName = projTyName;
     // concat ret preifx
     read_proj_str << "\t\tprojection_begin < struct "
-                  << proj_type_name
+                  << projTyName
                   << " > "
-                  << proj_var_name
+                  << projVarName
                   << " {\n"
                   << nested_read_proj_str.str()
                   << "\t\t}\n";
 
     write_proj_str << "\t\t\tprojection_end < struct "
-                   << proj_type_name
+                   << projTyName
                    << " > "
-                   << proj_var_name
+                   << projVarName
                    << " {\n"
                    << nested_write_proj_str.str()
                    << "\t\t}\n";
   }
 }
 
-void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_node, raw_string_ostream &read_proj_str, raw_string_ostream &write_proj_str, std::queue<TreeNode *> &node_queue, std::string indent_level)
+void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &treeNode, raw_string_ostream &read_proj_str, raw_string_ostream &write_proj_str, std::queue<TreeNode *> &nodeQueue, std::string indentLevel)
 {
-  DIType *node_di_type = tree_node.getDIType();
-  assert(node_di_type != nullptr && "cannot generate IDL for node with null DIType\n");
-  std::string root_di_type_name = dbgutils::getSourceLevelTypeName(*node_di_type);
-  std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*node_di_type, true);
-  DIType *node_lowest_di_type = dbgutils::getLowestDIType(*node_di_type);
-  if (!node_lowest_di_type || !dbgutils::isProjectableType(*node_lowest_di_type))
+  DIType *nodeDt = treeNode.getDIType();
+  assert(nodeDt != nullptr && "cannot generate IDL for node with null DIType\n");
+  std::string root_di_type_name = dbgutils::getSourceLevelTypeName(*nodeDt);
+  std::string root_di_type_name_raw = dbgutils::getSourceLevelTypeName(*nodeDt, true);
+  DIType *nodeLowestDt = dbgutils::getLowestDIType(*nodeDt);
+  if (!nodeLowestDt || !dbgutils::isProjectableType(*nodeLowestDt))
     return;
   // generate idl for each field
-  for (auto child_node : tree_node.getChildNodes())
+  for (auto child_node : treeNode.getChildNodes())
   {
     DIType *field_di_type = child_node->getDIType();
     auto field_var_name = dbgutils::getSourceLevelVariableName(*field_di_type);
@@ -846,40 +846,40 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
     if (acc_tags.size() == 0 && !dbgutils::isFuncPointerType(*field_di_type))
       continue;
     // check for shared fields
-    std::string field_id = pdgutils::computeTreeNodeID(*child_node);
+    std::string fieldId = pdgutils::computeTreeNodeID(*child_node);
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
     bool isGlobalStructField = (global_struct_di_type_names.find(root_di_type_name) != global_struct_di_type_names.end());
 
     bool is_sentinel_field = _SDA->isSentinelField(field_var_name);
-    if (!_SDA->isSharedFieldID(field_id) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField && !is_sentinel_field)
+    if (!_SDA->isSharedFieldID(fieldId) && !dbgutils::isFuncPointerType(*field_di_type) && !isGlobalStructField && !is_sentinel_field)
       continue;
 
-    if (!tree_node.isAccessedInAtomicRegion())
+    if (!treeNode.isAccessedInAtomicRegion())
       continue;
 
     auto field_type_name = dbgutils::getSourceLevelTypeName(*field_di_type, true);
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     // compute access attributes
-    auto annotations = _DAA->inferTreeNodeAnnotations(tree_node);
-    std::string anno_str = "";
+    auto annotations = _DAA->inferTreeNodeAnnotations(treeNode);
+    std::string annoStr = "";
     for (auto anno : annotations)
-      anno_str += anno;
+      annoStr += anno;
 
     if (is_sentinel_field)
     {
       if (acc_tags.find(AccessTag::DATA_READ) != acc_tags.end())
-        read_proj_str << indent_level << "array<" << field_type_name << ", "
+        read_proj_str << indentLevel << "array<" << field_type_name << ", "
                       << "null> " << field_var_name << ";\n";
       if (acc_tags.find(AccessTag::DATA_WRITE) != acc_tags.end())
-        write_proj_str << indent_level << "array<" << field_type_name << ", "
+        write_proj_str << indentLevel << "array<" << field_type_name << ", "
                        << "null> " << field_var_name << ";\n";
-      node_queue.push(child_node);
+      nodeQueue.push(child_node);
     }
     else if (dbgutils::isStructPointerType(*field_di_type))
     {
 
       if (acc_tags.find(AccessTag::DATA_READ) != acc_tags.end())
-        read_proj_str << indent_level
+        read_proj_str << indentLevel
                       << "projection "
                       << field_type_name
                       << (field_type_name.back() == '*' ? "*" : " ")
@@ -887,30 +887,30 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
                       << field_var_name
                       << ";\n";
       if (acc_tags.find(AccessTag::DATA_WRITE) != acc_tags.end())
-        write_proj_str << indent_level
+        write_proj_str << indentLevel
                        << "projection "
                        << field_type_name
                        << (field_type_name.back() == '*' ? "*" : " ")
                        << " "
                        << field_var_name
                        << ";\n";
-      node_queue.push(child_node);
+      nodeQueue.push(child_node);
     }
     else if (dbgutils::isFuncPointerType(*field_di_type))
     {
-      std::string func_ptr_name = field_var_name;
+      std::string funcPtrName = field_var_name;
       if (acc_tags.find(AccessTag::DATA_READ) != acc_tags.end())
         // TODO: correct format later
-        read_proj_str << indent_level << "rpc_ptr " << func_ptr_name << " " << field_var_name << ";\n";
+        read_proj_str << indentLevel << "rpc_ptr " << funcPtrName << " " << field_var_name << ";\n";
       if (acc_tags.find(AccessTag::DATA_WRITE) != acc_tags.end())
-        write_proj_str << indent_level << "rpc_ptr " << func_ptr_name << " " << field_var_name << ";\n";
+        write_proj_str << indentLevel << "rpc_ptr " << funcPtrName << " " << field_var_name << ";\n";
     }
     else
     {
       if (acc_tags.find(AccessTag::DATA_READ) != acc_tags.end())
-        read_proj_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name << ";\n";
+        read_proj_str << indentLevel << field_type_name << " " << annoStr << " " << field_var_name << ";\n";
       if (acc_tags.find(AccessTag::DATA_WRITE) != acc_tags.end())
-        write_proj_str << indent_level << field_type_name << " " << anno_str << " " << field_var_name << ";\n";
+        write_proj_str << indentLevel << field_type_name << " " << annoStr << " " << field_var_name << ";\n";
     }
   }
 }
@@ -925,11 +925,11 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &tree_
 //     auto called_func = pdgutils::getCalledFunc(*ci);
 //     if (called_func != nullptr && called_func->isDeclaration())
 //     {
-//       std::string called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
-//       if (_lock_map.find(called_func_name) != _lock_map.end())
+//       std::string calleeName = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+//       if (_lock_map.find(calleeName) != _lock_map.end())
 //       {
 //         is_lock_inst = true;
-//         auto unlock_inst_name = _lock_map[called_func_name];
+//         auto unlock_inst_name = _lock_map[calleeName];
 //         return _ksplit_cfg->searchCallNodes(*cur_inst_cfg_node, unlock_inst_name);
 //       }
 //     }
@@ -1005,8 +1005,8 @@ Instruction *pdg::AtomicRegionAnalysis::findRcuDereferenceInst(std::set<Instruct
       auto called_func = pdgutils::getCalledFunc(*ci);
       if (called_func == nullptr)
         continue;
-      std::string called_func_name = pdgutils::getSourceFuncName(called_func->getName().str());
-      if (called_func_name == "rcu_dereference_lvds")
+      std::string calleeName = pdgutils::getSourceFuncName(called_func->getName().str());
+      if (calleeName == "rcu_dereference_lvds")
         return ci;
     }
   }

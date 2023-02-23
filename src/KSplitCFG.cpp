@@ -7,7 +7,7 @@ void pdg::KSplitCFG::connectControlFlowEdges(Module &M)
   if (!call_graph.isBuild())
     call_graph.build(M);
 
-  for (auto it = _val_node_map.begin(); it != _val_node_map.end(); ++it)
+  for (auto it = _valNodeMap.begin(); it != _valNodeMap.end(); ++it)
   {
     auto val = it->first;
     auto inst_node = it->second;
@@ -26,13 +26,13 @@ void pdg::KSplitCFG::connectControlFlowEdges(Module &M)
           continue;
         auto inst_iter = inst_begin(*func);
         auto first_inst = &*inst_iter;
-        auto first_inst_node = _val_node_map[first_inst];
+        auto first_inst_node = _valNodeMap[first_inst];
         inst_node->addNeighbor(*first_inst_node, EdgeType::CONTROL_FLOW);
         while (inst_iter != inst_end(*func))
         {
           if (isa<ReturnInst>(&*inst_iter))
           {
-            auto return_inst_node = _val_node_map[&*inst_iter];
+            auto return_inst_node = _valNodeMap[&*inst_iter];
             return_inst_node->addNeighbor(*inst_node, EdgeType::CONTROL_FLOW);
           }
           inst_iter++;
@@ -48,7 +48,7 @@ void pdg::KSplitCFG::connectControlFlowEdges(Module &M)
       for (auto successor : bi->successors())
       {
         auto next_inst = &successor->front();
-        auto next_inst_node = _val_node_map[next_inst];
+        auto next_inst_node = _valNodeMap[next_inst];
         inst_node->addNeighbor(*next_inst_node, EdgeType::CONTROL_FLOW);
       }
     }
@@ -56,7 +56,7 @@ void pdg::KSplitCFG::connectControlFlowEdges(Module &M)
     {
       // handle normal case
       auto next_inst = bi->getNextNonDebugInstruction();
-      auto next_inst_node = _val_node_map[next_inst];
+      auto next_inst_node = _valNodeMap[next_inst];
       inst_node->addNeighbor(*next_inst_node, EdgeType::CONTROL_FLOW);
     }
   }
@@ -73,13 +73,13 @@ void pdg::KSplitCFG::build(Module &M)
     {
       // add nodes
       Node *n = new Node(*inst_iter, GraphNodeType::INST);
-      _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
+      _valNodeMap.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       addNode(*n);
     }
   }
 
   connectControlFlowEdges(M);
-  _is_build = true;
+  _isBuild = true;
 }
 
 std::set<pdg::Node *> pdg::KSplitCFG::searchCallNodes(pdg::Node &start_node, std::string target_func_name)
@@ -101,8 +101,8 @@ std::set<pdg::Node *> pdg::KSplitCFG::searchCallNodes(pdg::Node &start_node, std
         auto called_func = pdgutils::getCalledFunc(*ci);
         if (called_func == nullptr)
           continue;
-        std::string called_func_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
-        if (called_func_name == target_func_name)
+        std::string calleeName = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
+        if (calleeName == target_func_name)
           ret.insert(neighbor);
       }
       else
@@ -121,7 +121,7 @@ std::set<Instruction *> pdg::KSplitCFG::computeNodesBetweenPoints(Instruction &s
 {
   std::queue<Node*> node_q;
   std::set<Node*> seen_nodes;
-  auto start_node = _val_node_map[&start];
+  auto start_node = _valNodeMap[&start];
   node_q.push(start_node);
   seen_nodes.insert(start_node);
   while (!node_q.empty())

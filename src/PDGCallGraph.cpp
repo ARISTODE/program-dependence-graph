@@ -13,7 +13,7 @@ void pdg::PDGCallGraph::build(Module &M)
     if (F.isDeclaration() || F.empty())
       continue;
     Node* n = new Node(F, GraphNodeType::FUNC);
-    _val_node_map.insert(std::make_pair(&F, n));
+    _valNodeMap.insert(std::make_pair(&F, n));
     addNode(*n);
   }
 
@@ -50,7 +50,7 @@ void pdg::PDGCallGraph::build(Module &M)
     }
   }
 
-  _is_build = true;
+  _isBuild = true;
 }
 
 bool pdg::PDGCallGraph::isFuncSignatureMatch(CallInst &ci, llvm::Function &f)
@@ -120,15 +120,15 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
 
 bool pdg::PDGCallGraph::canReach(Node &src, Node &sink)
 {
-  std::queue<Node *> node_queue;
+  std::queue<Node *> nodeQueue;
   std::unordered_set<Node *> seen_node;
-  node_queue.push(&src);
-  while (!node_queue.empty())
+  nodeQueue.push(&src);
+  while (!nodeQueue.empty())
   {
-    Node *n = node_queue.front();
+    Node *n = nodeQueue.front();
     if (n == nullptr)
       continue;
-    node_queue.pop();
+    nodeQueue.pop();
     if (n == &sink)
       return true;
     if (seen_node.find(n) != seen_node.end())
@@ -137,7 +137,7 @@ bool pdg::PDGCallGraph::canReach(Node &src, Node &sink)
 
     for (auto out_neighbor : n->getOutNeighbors())
     {
-      node_queue.push(out_neighbor);
+      nodeQueue.push(out_neighbor);
     }
   }
   return false;
@@ -145,7 +145,7 @@ bool pdg::PDGCallGraph::canReach(Node &src, Node &sink)
 
 void pdg::PDGCallGraph::dump()
 {
-  for (auto pair : _val_node_map)
+  for (auto pair : _valNodeMap)
   {
     if (Function *f = dyn_cast<Function>(pair.first))
     {
@@ -217,14 +217,14 @@ void pdg::PDGCallGraph::computePathsHelper(PathVecs &path_vecs, Node &src, Node 
 // compute the functions that can be transitively reached from F through function calls
 std::vector<pdg::Node *> pdg::PDGCallGraph::computeTransitiveClosure(pdg::Node &src)
 {
-  std::queue<Node *> node_queue;
+  std::queue<Node *> nodeQueue;
   std::unordered_set<Node *> seen_node;
   std::vector<Node *> ret;
-  node_queue.push(&src);
-  while (!node_queue.empty())
+  nodeQueue.push(&src);
+  while (!nodeQueue.empty())
   {
-    Node *n = node_queue.front();
-    node_queue.pop();
+    Node *n = nodeQueue.front();
+    nodeQueue.pop();
     if (seen_node.find(n) != seen_node.end())
       continue;
     seen_node.insert(n);
@@ -238,7 +238,7 @@ std::vector<pdg::Node *> pdg::PDGCallGraph::computeTransitiveClosure(pdg::Node &
         if (isExcludeFunc(*f))
           continue;
       }
-      node_queue.push(out_neighbor);
+      nodeQueue.push(out_neighbor);
     }
   }
   return ret;
@@ -278,21 +278,21 @@ void pdg::PDGCallGraph::setupDriverFuncs()
 
 bool pdg::PDGCallGraph::isExcludeFunc(Function &F)
 {
-  auto func_name = F.getName().str();
-  func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-  return (_exclude_func_names.find(func_name) != _exclude_func_names.end());
+  auto funcName = F.getName().str();
+  funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+  return (_exclude_func_names.find(funcName) != _exclude_func_names.end());
 }
 
 bool pdg::PDGCallGraph::isExportedFunc(Function &F)
 {
-  auto func_name = F.getName().str();
-  func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-  return (_exported_func_names.find(func_name) != _exported_func_names.end());
+  auto funcName = F.getName().str();
+  funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+  return (_exported_func_names.find(funcName) != _exported_func_names.end());
 }
 
 bool pdg::PDGCallGraph::isDriverFunc(Function &F)
 {
-  auto func_name = F.getName().str();
-  func_name = pdgutils::stripFuncNameVersionNumber(func_name);
-  return (_driver_func_names.find(func_name) != _driver_func_names.end());
+  auto funcName = F.getName().str();
+  funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+  return (_driver_func_names.find(funcName) != _driver_func_names.end());
 }

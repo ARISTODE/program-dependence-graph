@@ -72,8 +72,8 @@ namespace llvm
 
     std::string getEdgeAttributes(pdg::Node *Node, pdg::Node::iterator edge_iter, pdg::ProgramDependencyGraph *PDG)
     {
-      pdg::EdgeType edge_type = edge_iter.getEdgeType();
-      switch (edge_type)
+      pdg::EdgeType edgeTy = edge_iter.getEdgeType();
+      switch (edgeTy)
       {
       case pdg::EdgeType::CONTROL:
         return "";

@@ -51,18 +51,18 @@ namespace pdg
     llvm::Value *getValue() { return _val; }
     llvm::DIType *getDIType() const { return _node_di_type; }
     void setDIType(llvm::DIType &di_type) { _node_di_type = &di_type; }
-    void addNeighbor(Node &neighbor, EdgeType edge_type);
+    void addNeighbor(Node &neighbor, EdgeType edgeTy);
     EdgeSet::iterator begin() { return _out_edge_set.begin(); }
     EdgeSet::iterator end() { return _out_edge_set.end(); }
     EdgeSet::const_iterator begin() const { return _out_edge_set.begin(); }
     EdgeSet::const_iterator end() const { return _out_edge_set.end(); }
     std::set<Node *> getInNeighbors();
-    std::set<Node *> getInNeighborsWithDepType(EdgeType edge_type);
+    std::set<Node *> getInNeighborsWithDepType(EdgeType edgeTy);
     std::set<Node *> getOutNeighbors();
-    std::set<Node *> getOutNeighborsWithDepType(EdgeType edge_type);
-    bool hasInNeighborWithEdgeType(Node &n, EdgeType edge_type);
-    bool hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type);
-    std::set<Node *> getNeighborsWithDepType(std::set<EdgeType> edge_types);
+    std::set<Node *> getOutNeighborsWithDepType(EdgeType edgeTy);
+    bool hasInNeighborWithEdgeType(Node &n, EdgeType edgeTy);
+    bool hasOutNeighborWithEdgeType(Node &n, EdgeType edgeTy);
+    std::set<Node *> getNeighborsWithDepType(std::set<EdgeType> edgeTypes);
     bool isAddrVarNode();
     Node* getAbstractTreeNode();
     virtual ~Node() = default;

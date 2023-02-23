@@ -24,9 +24,9 @@ namespace pdg
       return ks;
     }
     void collectTotalPointerStats(llvm::DIType &dt);
-    // void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string func_name);
-    void collectDataStats(TreeNode &tree_node, std::string nescheck_ptr_type, llvm::Function &func, int paramIdx = -1, bool is_driver_func = false);
-    void collectSharedPointerStats(TreeNode &tree_node, std::string nescheck_ptr_type);
+    // void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string funcName);
+    void collectDataStats(TreeNode &treeNode, std::string nescheck_ptr_type, llvm::Function &func, int paramIdx = -1, bool is_driver_func = false);
+    void collectSharedPointerStats(TreeNode &treeNode, std::string nescheck_ptr_type);
     void collectInferredStringStats(std::set<std::string> &annotations);
     void printStats();
     void printDataStats();
@@ -44,7 +44,7 @@ namespace pdg
     unsigned _kernel_to_driver_func_call = 0;
     unsigned _total_func_size = 0;
     // 1.b fields analysis stats
-    int _fields_deep_copy = 0;
+    int _fieldsDeepCopyNum = 0;
     int _fields_field_analysis = 0;
     int _fields_shared_analysis = 0;
     int _fields_removed_boundary_opt = 0;
@@ -54,7 +54,7 @@ namespace pdg
     // unsigned _total_bitfield = 0;
     unsigned _shared_bitfield = 0;
     // pointers
-    unsigned _total_ptr_num = 0;
+    unsigned _totalPtrNum = 0;
     unsigned _shared_ptr_num = 0;
     // safe pointers (singleton)
     unsigned _safe_ptr_num = 0;

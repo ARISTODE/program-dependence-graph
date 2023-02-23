@@ -21,14 +21,14 @@ static std::set<std::string> KernelDeAllocators = {
 // Generic Graph
 bool pdg::GenericGraph::hasNode(Value &v)
 {
-  return (_val_node_map.find(&v) != _val_node_map.end());
+  return (_valNodeMap.find(&v) != _valNodeMap.end());
 }
 
 pdg::Node *pdg::GenericGraph::getNode(Value &v)
 {
   if (!hasNode(v))
     return nullptr;
-  return _val_node_map[&v];
+  return _valNodeMap[&v];
 }
 
 // ===== Graph Traversal =====
@@ -36,8 +36,8 @@ pdg::Node *pdg::GenericGraph::getNode(Value &v)
 // DFS search
 bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
 {
-  std::set<EdgeType> edge_types;
-  if (canReach(src, dst, edge_types))
+  std::set<EdgeType> edgeTypes;
+  if (canReach(src, dst, edgeTypes))
     return true;
   return false;
 }
@@ -49,82 +49,82 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeTy
     return true;
 
   std::set<Node *> visited;
-  std::stack<Node *> node_queue;
-  node_queue.push(&src);
+  std::stack<Node *> nodeQueue;
+  nodeQueue.push(&src);
 
-  while (!node_queue.empty())
+  while (!nodeQueue.empty())
   {
-    auto current_node = node_queue.top();
-    node_queue.pop();
-    if (current_node == nullptr)
+    auto currentNode = nodeQueue.top();
+    nodeQueue.pop();
+    if (currentNode == nullptr)
       continue;
-    if (visited.find(current_node) != visited.end())
+    if (visited.find(currentNode) != visited.end())
       continue;
-    visited.insert(current_node);
-    if (current_node == &dst)
+    visited.insert(currentNode);
+    if (currentNode == &dst)
       return true;
-    for (auto out_edge : current_node->getOutEdgeSet())
+    for (auto out_edge : currentNode->getOutEdgeSet())
     {
       // exclude path
       if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
         continue;
-      node_queue.push(out_edge->getDstNode());
+      nodeQueue.push(out_edge->getDstNode());
     }
   }
   return false;
 }
 
-std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edge_type)
+std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edgeTy)
 {
   std::set<Node *> ret;
-  std::queue<Node *> node_queue;
-  node_queue.push(&src);
+  std::queue<Node *> nodeQueue;
+  nodeQueue.push(&src);
   std::set<Node*> visited;
-  while (!node_queue.empty())
+  while (!nodeQueue.empty())
   {
-    Node *current_node = node_queue.front();
-    node_queue.pop();
-    if (visited.find(current_node) != visited.end())
+    Node *currentNode = nodeQueue.front();
+    nodeQueue.pop();
+    if (visited.find(currentNode) != visited.end())
       continue;
-    visited.insert(current_node);
-    ret.insert(current_node);
-    for (auto out_edge : current_node->getOutEdgeSet())
+    visited.insert(currentNode);
+    ret.insert(currentNode);
+    for (auto out_edge : currentNode->getOutEdgeSet())
     {
-      if (edge_type != out_edge->getEdgeType())
+      if (edgeTy != out_edge->getEdgeType())
         continue;
-      node_queue.push(out_edge->getDstNode());
+      nodeQueue.push(out_edge->getDstNode());
     }
   }
   return ret;
 }
 
-std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src, std::set<EdgeType> &edge_types, bool is_backward)
+std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src, std::set<EdgeType> &edgeTypes, bool isBackward)
 {
   std::set<Node *> ret;
-  std::queue<Node *> node_queue;
-  node_queue.push(&src);
+  std::queue<Node *> nodeQueue;
+  nodeQueue.push(&src);
   std::set<Node *> visited;
-  while (!node_queue.empty())
+  while (!nodeQueue.empty())
   {
-    Node *current_node = node_queue.front();
-    node_queue.pop();
-    if (visited.find(current_node) != visited.end())
+    Node *currentNode = nodeQueue.front();
+    nodeQueue.pop();
+    if (visited.find(currentNode) != visited.end())
       continue;
-    visited.insert(current_node);
-    ret.insert(current_node);
+    visited.insert(currentNode);
+    ret.insert(currentNode);
     Node::EdgeSet edge_set;
-    if (is_backward)
-      edge_set = current_node->getInEdgeSet();
+    if (isBackward)
+      edge_set = currentNode->getInEdgeSet();
     else 
-      edge_set = current_node->getOutEdgeSet();
+      edge_set = currentNode->getOutEdgeSet();
     for (auto edge : edge_set)
     {
-      if (edge_types.find(edge->getEdgeType()) == edge_types.end())
+      if (edgeTypes.find(edge->getEdgeType()) == edgeTypes.end())
         continue;
-      if (is_backward)
-        node_queue.push(edge->getSrcNode());
+      if (isBackward)
+        nodeQueue.push(edge->getSrcNode());
       else
-        node_queue.push(edge->getDstNode());
+        nodeQueue.push(edge->getDstNode());
     }
   }
   return ret;
@@ -148,7 +148,7 @@ void pdg::ProgramGraph::build(Module &M)
     // add addr var for global
     n->addAddrVar(global_var);
 
-    _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
+    _valNodeMap.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
     Tree* global_tree = new Tree(global_var);
     global_tree->setRootNode(*n);
@@ -164,7 +164,7 @@ void pdg::ProgramGraph::build(Module &M)
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
       Node *n = new Node(*inst_iter, GraphNodeType::INST);
-      _val_node_map.insert(std::pair<Value *, Node *>(&*inst_iter, n));
+      _valNodeMap.insert(std::pair<Value *, Node *>(&*inst_iter, n));
       func_w->addInst(*inst_iter);
       addNode(*n);
       if (CallInst *ci = dyn_cast<CallInst>(&*inst_iter))
@@ -172,8 +172,8 @@ void pdg::ProgramGraph::build(Module &M)
         auto called_func = pdgutils::getCalledFunc(*ci);
         if (called_func != nullptr)
         {
-          std::string called_func_name = called_func->getName().str();
-          called_func_name = pdgutils::stripFuncNameVersionNumber(called_func_name);
+          std::string calleeName = called_func->getName().str();
+          calleeName = pdgutils::stripFuncNameVersionNumber(calleeName);
         }
       }
     }
@@ -218,7 +218,7 @@ void pdg::ProgramGraph::build(Module &M)
       _call_wrapper_map.insert(std::make_pair(ci, cw));
     }
   }
-  _is_build = true;
+  _isBuild = true;
 }
 
 void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
@@ -249,8 +249,8 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
       Instruction &i = *inst_iter;
       Node* n = getNode(i);
       assert(n != nullptr && "cannot compute node di type for null node!\n");
-      DIType* node_di_type = computeNodeDIType(*n);
-      n->setDIType(*node_di_type);
+      DIType* nodeDt = computeNodeDIType(*n);
+      n->setDIType(*nodeDt);
     }
   }
 
@@ -402,18 +402,18 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 
 void pdg::ProgramGraph::addTreeNodesToGraph(pdg::Tree &tree)
 {
-  TreeNode* root_node = tree.getRootNode();
-  assert(root_node && "cannot add tree nodes to graph, nullptr root node\n");
-  std::queue<TreeNode*> node_queue;
-  node_queue.push(root_node);
-  while (!node_queue.empty())
+  TreeNode* rootNode = tree.getRootNode();
+  assert(rootNode && "cannot add tree nodes to graph, nullptr root node\n");
+  std::queue<TreeNode*> nodeQueue;
+  nodeQueue.push(rootNode);
+  while (!nodeQueue.empty())
   {
-    TreeNode* current_node = node_queue.front();
-    node_queue.pop();
-    addNode(*current_node);
-    for (auto child_node : current_node->getChildNodes())
+    TreeNode* currentNode = nodeQueue.front();
+    nodeQueue.pop();
+    addNode(*currentNode);
+    for (auto child_node : currentNode->getChildNodes())
     {
-      node_queue.push(child_node);
+      nodeQueue.push(child_node);
     }
   }
 }
@@ -422,11 +422,11 @@ void pdg::ProgramGraph::addFormalTreeNodesToGraph(FunctionWrapper &func_w)
 {
   for (auto arg : func_w.getArgList())
   {
-    Tree* formal_in_tree = func_w.getArgFormalInTree(*arg);
-    Tree* formal_out_tree = func_w.getArgFormalOutTree(*arg);
-    if (!formal_in_tree || !formal_out_tree)
+    Tree* formalInTree = func_w.getArgFormalInTree(*arg);
+    Tree* formalOutTree = func_w.getArgFormalOutTree(*arg);
+    if (!formalInTree || !formalOutTree)
       return;
-    addTreeNodesToGraph(*formal_in_tree);
-    addTreeNodesToGraph(*formal_out_tree);
+    addTreeNodesToGraph(*formalInTree);
+    addTreeNodesToGraph(*formalOutTree);
   }
 }

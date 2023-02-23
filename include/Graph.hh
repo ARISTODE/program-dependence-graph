@@ -25,33 +25,33 @@ namespace pdg
     typedef std::unordered_map<llvm::Value *, Node *> ValueNodeMap;
     typedef std::set<Edge *> EdgeSet;
     typedef std::set<Node *> NodeSet;
-    ValueNodeMap::iterator val_node_map_begin() { return _val_node_map.begin(); }
-    ValueNodeMap::iterator val_node_map_end() { return _val_node_map.end(); }
+    ValueNodeMap::iterator val_node_map_begin() { return _valNodeMap.begin(); }
+    ValueNodeMap::iterator val_node_map_end() { return _valNodeMap.end(); }
     GenericGraph() = default;
-    NodeSet::iterator begin() { return _node_set.begin(); }
-    NodeSet::iterator end() { return _node_set.end(); }
-    NodeSet::iterator begin() const { return _node_set.begin(); }
-    NodeSet::iterator end() const { return _node_set.end(); }
+    NodeSet::iterator begin() { return _nodeSet.begin(); }
+    NodeSet::iterator end() { return _nodeSet.end(); }
+    NodeSet::iterator begin() const { return _nodeSet.begin(); }
+    NodeSet::iterator end() const { return _nodeSet.end(); }
     virtual void build(llvm::Module &M) = 0;
-    void addEdge(Edge &e) { _edge_set.insert(&e); }
-    void addNode(Node &n) { _node_set.insert(&n); }
+    void addEdge(Edge &e) { _edgeSet.insert(&e); }
+    void addNode(Node &n) { _nodeSet.insert(&n); }
     Node *getNode(llvm::Value &v);
     bool hasNode(llvm::Value &v);
-    int numEdge() { return _edge_set.size(); }
-    int numNode() { return _val_node_map.size(); }
-    void setIsBuild() { _is_build = true; }
-    bool isBuild() { return _is_build; }
+    int numEdge() { return _edgeSet.size(); }
+    int numNode() { return _valNodeMap.size(); }
+    void setIsBuild() { _isBuild = true; }
+    bool isBuild() { return _isBuild; }
     bool canReach(pdg::Node &src, pdg::Node &dst);
     bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> &exclude_edge_types);
-    std::set<Node *> findNodesReachedByEdge(Node &src, EdgeType edge_type);
-    std::set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edge_types, bool is_backward = false);
-    ValueNodeMap &getValueNodeMap() { return _val_node_map; }
+    std::set<Node *> findNodesReachedByEdge(Node &src, EdgeType edgeTy);
+    std::set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edgeTypes, bool isBackward = false);
+    ValueNodeMap &getValueNodeMap() { return _valNodeMap; }
 
   protected:
-    ValueNodeMap _val_node_map;
-    EdgeSet _edge_set;
-    NodeSet _node_set;
-    bool _is_build = false;
+    ValueNodeMap _valNodeMap;
+    EdgeSet _edgeSet;
+    NodeSet _nodeSet;
+    bool _isBuild = false;
   };
 
   class ProgramGraph : public GenericGraph

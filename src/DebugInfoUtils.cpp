@@ -285,7 +285,7 @@ std::string pdg::dbgutils::getSourceLevelVariableName(DINode &di_node)
   return "";
 }
 
-std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
+std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool isRaw)
 {
   auto type_tag = dt.getTag();
   if (!type_tag)
@@ -297,15 +297,15 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
     auto base_type = getBaseDIType(dt);
     if (!base_type)
       return "void*";
-    return getSourceLevelTypeName(*base_type, is_raw) + "*";
+    return getSourceLevelTypeName(*base_type, isRaw) + "*";
   }
   case dwarf::DW_TAG_member:
   {
     auto base_type = getBaseDIType(dt);
     if (!base_type)
       return "void";
-    std::string base_type_name = getSourceLevelTypeName(*base_type, is_raw);
-    if (base_type_name == "struct" || base_type_name == "union" && !is_raw)
+    std::string base_type_name = getSourceLevelTypeName(*base_type, isRaw);
+    if (base_type_name == "struct" || (base_type_name == "union" && !isRaw))
       base_type_name = base_type_name + dt.getName().str();
     return base_type_name;
   }
@@ -313,8 +313,8 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
   case dwarf::DW_TAG_structure_type:
   {
     if (dt.getName().empty())
-      return is_raw ? "" : "struct";
-    return is_raw ? dt.getName().str() : "struct " + dt.getName().str();
+      return isRaw ? "" : "struct";
+    return isRaw ? dt.getName().str() : "struct " + dt.getName().str();
   }
   case dwarf::DW_TAG_array_type:
   {
@@ -326,10 +326,10 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
     if (!base_type)
       // return "const nullptr";
       return "const void";
-    if (is_raw)
-      return getSourceLevelTypeName(*base_type, is_raw);
+    if (isRaw)
+      return getSourceLevelTypeName(*base_type, isRaw);
     else
-      return "const " + getSourceLevelTypeName(*base_type, is_raw);
+      return "const " + getSourceLevelTypeName(*base_type, isRaw);
   }
   case dwarf::DW_TAG_typedef:
   {
@@ -338,20 +338,20 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool is_raw)
       return "";
     if (base_type->getName().str().empty())
       return dt.getName().str();
-    return getSourceLevelTypeName(*getBaseDIType(dt), is_raw);
+    return getSourceLevelTypeName(*getBaseDIType(dt), isRaw);
   }
   case dwarf::DW_TAG_enumeration_type:
   {
     auto base_type = getBaseDIType(dt);
     if (!base_type)
       return "s32";
-    return getSourceLevelTypeName(*getBaseDIType(dt), is_raw);
+    return getSourceLevelTypeName(*getBaseDIType(dt), isRaw);
   }
   case dwarf::DW_TAG_union_type:
   {
     if (dt.getName().empty())
-      return is_raw ? "" : "union";
-    return is_raw ? dt.getName().str() : "union " + dt.getName().str();
+      return isRaw ? "" : "union";
+    return isRaw ? dt.getName().str() : "union " + dt.getName().str();
   }
   default:
   {
@@ -477,7 +477,7 @@ std::set<DIType *> pdg::dbgutils::computeContainedStructTypes(DIType &dt)
   return contained_struct_di_types;
 }
 
-std::string pdg::dbgutils::getFuncSigName(DIType &dt, Function &F, std::string func_ptr_name)
+std::string pdg::dbgutils::getFuncSigName(DIType &dt, Function &F, std::string funcPtrName)
 {
   std::string func_type_str = "";
   auto lowest_di_type = getLowestDIType(dt);
@@ -495,9 +495,9 @@ std::string pdg::dbgutils::getFuncSigName(DIType &dt, Function &F, std::string f
 
     // generate name string for function pointer 
     func_type_str += " (";
-    if (!func_ptr_name.empty())
+    if (!funcPtrName.empty())
       func_type_str += "*";
-    func_type_str += func_ptr_name;
+    func_type_str += funcPtrName;
     // if (!funcName.empty())
     //   func_type_str = func_type_str + "_" + funcName;
     func_type_str += ")";
@@ -536,20 +536,20 @@ std::string pdg::dbgutils::getFuncSigName(DIType &dt, Function &F, std::string f
           }
           else if (baseType->getTag() == dwarf::DW_TAG_structure_type)
           {
-            std::string arg_type_name = getSourceLevelTypeName(*d);
+            std::string argTyName = getSourceLevelTypeName(*d);
             // if (F != nullptr && actualArgHasAllocator(*F, i - 1))
-            //   arg_type_name = "alloc[callee] " + arg_type_name;
-            if (arg_type_name.back() == '*')
+            //   argTyName = "alloc[callee] " + argTyName;
+            if (argTyName.back() == '*')
             {
-              arg_type_name.pop_back();
-              arg_type_name = arg_type_name + "_" + func_ptr_name + "*";
+              argTyName.pop_back();
+              argTyName = argTyName + "_" + funcPtrName + "*";
             }
             else
             {
-              arg_type_name = arg_type_name + "_" + func_ptr_name;
+              argTyName = argTyName + "_" + funcPtrName;
             }
 
-            std::string struct_name = arg_type_name + " " + arg_name;
+            std::string struct_name = argTyName + " " + arg_name;
             if (struct_name != " ")
               func_type_str = func_type_str + "projection " + struct_name;
           }
@@ -591,6 +591,11 @@ std::string pdg::dbgutils::getArgumentName(llvm::Argument &arg)
   return "";
 }
 
+unsigned pdg::dbgutils::computeFieldOffsetInBytes(DIType &dt)
+{
+  return dt.getOffsetInBits() / 8;
+}
+
 std::set<DbgInfoIntrinsic *> pdg::dbgutils::collectDbgInstInFunc(Function &F)
 {
   std::set<DbgInfoIntrinsic *> ret;
@@ -602,7 +607,7 @@ std::set<DbgInfoIntrinsic *> pdg::dbgutils::collectDbgInstInFunc(Function &F)
   return ret;
 }
 
-unsigned pdg::dbgutils::computeDeepCopyFields(DIType &dt, bool only_count_pointer)
+unsigned pdg::dbgutils::computeDeepCopyFields(DIType &dt, bool onlyCountPointer)
 {
   std::queue<DIType*> type_queue;
   std::set<DIType*> seen_types;
@@ -626,7 +631,7 @@ unsigned pdg::dbgutils::computeDeepCopyFields(DIType &dt, bool only_count_pointe
       DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
       DIType *field_lowest_di_type = getLowestDIType(*field_di_type);
 
-      if (only_count_pointer)
+      if (onlyCountPointer)
       {
         if (isPointerType(*field_di_type))
           field_num++;
