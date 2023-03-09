@@ -555,9 +555,9 @@ namespace NesCheck
     //       {
     //         auto front_node = queue.front();
     //         queue.pop();
-    //         for (auto child_node : front_node->getChildNodes())
+    //         for (auto childNode : front_node->getChildNodes())
     //         {
-    //           queue.push(child_node);
+    //           queue.push(childNode);
     //         }
     //         auto fieldId = pdg::pdgutils::computeTreeNodeID(*front_node);
     //         fieldId = pdg::pdgutils::trimStr(fieldId);
@@ -709,9 +709,9 @@ namespace NesCheck
             pdg::TreeNode *front = queue.front();
             queue.pop();
             // push child nodes
-            for (auto child_node : front->getChildNodes())
+            for (auto childNode : front->getChildNodes())
             {
-              queue.push(child_node);
+              queue.push(childNode);
             }
             // ignore fields without DItypes (rare case)
             if (!front->getDIType())

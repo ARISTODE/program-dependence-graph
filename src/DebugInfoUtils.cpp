@@ -89,9 +89,7 @@ bool pdg::dbgutils::isUnionPointerType(DIType& dt)
 
 bool pdg::dbgutils::isUnionType(DIType& dt)
 {
-  auto d = stripMemberTag(dt);
-  d = stripAttributes(*d);
-  return (d->getTag() == dwarf::DW_TAG_union_type);
+  return (dt.getTag() == dwarf::DW_TAG_union_type);
 }
 
 bool pdg::dbgutils::isStructPointerType(DIType &dt)
@@ -122,10 +120,10 @@ bool pdg::dbgutils::isFuncPointerType(DIType &dt)
 
 bool pdg::dbgutils::isProjectableType(DIType &dt)
 {
-  DIType *di = stripMemberTag(*stripAttributes(dt));
-  if (di == nullptr)
-    return false;
-  return (isStructType(*di) || isUnionType(*di));
+  // DIType *di = stripMemberTag(*stripAttributes(dt));
+  // if (di == nullptr)
+  //   return false;
+  return (isStructType(dt) || isUnionType(dt));
 }
 
 bool pdg::dbgutils::isVoidPointerType(DIType &dt)
@@ -147,6 +145,7 @@ bool pdg::dbgutils::isArrayType(DIType &dt)
   if (d != nullptr)
     return (d->getTag() == dwarf::DW_TAG_array_type);
   return false;
+  // return (dt.getTag() == dwarf::DW_TAG_array_type);
 }
 
 bool pdg::dbgutils::isRecursiveType(DIType &dt)
@@ -187,10 +186,12 @@ bool pdg::dbgutils::isCharPointer(DIType &dt)
   return (base_type->getName() == "char");
 }
 
-bool pdg::dbgutils::hasSameDIName(DIType &d1, DIType &d2)
+bool pdg::dbgutils::hasSameDITypeName(DIType &d1, DIType &d2)
 {
   std::string d1_name = dbgutils::getSourceLevelTypeName(d1);
   std::string d2_name = dbgutils::getSourceLevelTypeName(d2);
+  if (d1_name.empty()  || d2_name.empty())
+    return false;
   return (d1_name == d2_name);
 }
 

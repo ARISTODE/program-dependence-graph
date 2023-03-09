@@ -294,37 +294,37 @@ void pdg::ProgramDependencyGraph::connectGlobalTreeWithAddrVars(Tree &globalVarT
     TreeNode *currentNode = nodeQueue.front();
     nodeQueue.pop();
     TreeNode *parentNode = currentNode->getParentNode();
-    std::unordered_set<Value *> parent_node_addr_vars;
+    std::unordered_set<Value *> parentNodeAddrVars;
     if (parentNode != nullptr)
-      parent_node_addr_vars = parentNode->getAddrVars();
+      parentNodeAddrVars = parentNode->getAddrVars();
 
     for (auto addrVar : currentNode->getAddrVars())
     {
       if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addrVar);
-      currentNode->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
-      auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
-      for (auto alias_node : alias_nodes)
+      auto addrVarNode = _PDG->getNode(*addrVar);
+      currentNode->addNeighbor(*addrVarNode, EdgeType::PARAMETER_IN);
+      auto aliasNodes = addrVarNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+      for (auto aliasNode : aliasNodes)
       {
-        Value *alias_node_val = alias_node->getValue();
-        if (alias_node_val == nullptr)
+        Value *aliasNodeVal = aliasNode->getValue();
+        if (aliasNodeVal == nullptr)
           continue;
-        if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
+        if (parentNodeAddrVars.find(aliasNodeVal) != parentNodeAddrVars.end())
           continue;
-        if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(alias_node_val))
+        if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(aliasNodeVal))
         {
           if (!gep->hasAllZeroIndices())
             continue;
         }
-        currentNode->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
-        currentNode->addAddrVar(*alias_node_val);
+        currentNode->addNeighbor(*aliasNode, EdgeType::PARAMETER_IN);
+        currentNode->addAddrVar(*aliasNodeVal);
       }
     }
 
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -342,47 +342,45 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formalIn
     nodeQueue.pop();
     currentNode->computeDerivedAddrVarsFromParent();
     TreeNode *parentNode = currentNode->getParentNode();
-    std::unordered_set<Value *> parent_node_addr_vars;
+    std::unordered_set<Value *> parentNodeAddrVars;
     if (parentNode != nullptr)
-      parent_node_addr_vars = parentNode->getAddrVars();
+      parentNodeAddrVars = parentNode->getAddrVars();
+
+    // stop connecting rest nodes with addr vars if not field sensitive
+    // if (!FieldSensitive)
+    //   break;
+    for (auto childNode : currentNode->getChildNodes())
+    {
+      nodeQueue.push(childNode);
+    }
 
     for (auto addrVar : currentNode->getAddrVars())
     {
       if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addrVar);
-      currentNode->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
+      auto addrVarNode = _PDG->getNode(*addrVar);
+      currentNode->addNeighbor(*addrVarNode, EdgeType::PARAMETER_IN);
       // adding alias vars to tree's address var set
-      auto alias_nodes = getAliasNodes(*addr_var_node);
-      for (auto alias_node : alias_nodes)
+      auto aliasNodes = getAliasNodes(*addrVarNode);
+      for (auto aliasNode : aliasNodes)
       {
-        Value *alias_node_val = alias_node->getValue();
-        if (alias_node_val == nullptr)
+        Value *aliasNodeVal = aliasNode->getValue();
+        if (aliasNodeVal == nullptr)
           continue;
-        if (parent_node_addr_vars.find(alias_node_val) != parent_node_addr_vars.end())
-          continue;
-        if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(alias_node_val))
+        if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(aliasNodeVal))
         {
           if (!currentNode->isStructMember())
           {
-            // when finding alias for non-sturct member field, if a gep instruction is found with (0,0) indices,
-            // it means the first element in the object/buffer. We need to skip this because it will confuse
-            // access analysis and causing false positives for the accesses on the container object.
+            // when finding alias for non-sturct member field, a gep instruction with (0,0) indices are
+            // considered as alias, it means the first element in the object/buffer. 
+            // We need to skip this because this could confuse the access to the first field and the container object
             if (gep->hasAllZeroIndices())
               continue;
           }
         }
-        currentNode->addAddrVar(*alias_node_val);
-        currentNode->addNeighbor(*alias_node, EdgeType::PARAMETER_IN);
+        currentNode->addAddrVar(*aliasNodeVal);
+        currentNode->addNeighbor(*aliasNode, EdgeType::PARAMETER_IN);
       }
-    }
-
-    // stop connecting rest nodes with addr vars if not field sensitive
-    if (!FieldSensitive)
-      break;
-    for (auto child_node : currentNode->getChildNodes())
-    {
-      nodeQueue.push(child_node);
     }
   }
 }
@@ -400,20 +398,20 @@ void pdg::ProgramDependencyGraph::connectFormalOutTreeWithAddrVars(Tree &formalO
     {
       if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addrVar);
+      auto addrVarNode = _PDG->getNode(*addrVar);
       // TODO: add addr variables for formal out tree
       if (pdgutils::hasWriteAccess(*addrVar))
       {
-        addr_var_node->addNeighbor(*currentNode, EdgeType::PARAMETER_OUT);
+        addrVarNode->addNeighbor(*currentNode, EdgeType::PARAMETER_OUT);
         currentNode->addAccessTag(AccessTag::DATA_WRITE);
       }
     }
 
     if (!FieldSensitive)
       break;
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -441,24 +439,24 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actualIn
       }
       if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addrVar);
-      auto alias_nodes = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+      auto addrVarNode = _PDG->getNode(*addrVar);
+      auto aliasNodes = addrVarNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
       // connect addr var node with parameter_in node
-      addr_var_node->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
-      for (auto alias_node : alias_nodes)
+      addrVarNode->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
+      for (auto aliasNode : aliasNodes)
       {
-        auto alias_node_val = alias_node->getValue();
-        if (alias_node_val != nullptr)
+        auto aliasNodeVal = aliasNode->getValue();
+        if (aliasNodeVal != nullptr)
         {
-          alias_node->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
-          currentNode->addAddrVar(*alias_node_val);
+          aliasNode->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
+          currentNode->addAddrVar(*aliasNodeVal);
         }
       }
     }
 
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -483,13 +481,13 @@ void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actualO
       }
       if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addrVar);
-      currentNode->addNeighbor(*addr_var_node, EdgeType::PARAMETER_OUT);
+      auto addrVarNode = _PDG->getNode(*addrVar);
+      currentNode->addNeighbor(*addrVarNode, EdgeType::PARAMETER_OUT);
     }
 
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -542,17 +540,17 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
     TreeNode *currentNode = nodeQueue.front();
     nodeQueue.pop();
     TreeNode *parentNode = currentNode->getParentNode();
-    std::unordered_set<Value *> parent_node_addr_vars;
+    std::unordered_set<Value *> parentNodeAddrVars;
     if (parentNode != nullptr)
-      parent_node_addr_vars = parentNode->getAddrVars();
+      parentNodeAddrVars = parentNode->getAddrVars();
     for (auto addrVar : currentNode->getAddrVars())
     {
       if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addrVar);
+      auto addrVarNode = _PDG->getNode(*addrVar);
       // check if the addrVar is used in call instruction
       // if so, connect the tree node with the actual tree of the call
-      auto call_out_neighbors_cand = addr_var_node->getOutNeighborsWithDepType(EdgeType::DATA_DEF_USE);
+      auto call_out_neighbors_cand = addrVarNode->getOutNeighborsWithDepType(EdgeType::DATA_DEF_USE);
       for (auto call_node : call_out_neighbors_cand)
       {
         if (call_node->getValue() != nullptr)
@@ -578,9 +576,9 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
     // stop connecting rest nodes with addr vars if not field sensitive
     if (!FieldSensitive)
       break;
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -634,9 +632,9 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
       }
     }
 
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -644,24 +642,24 @@ void pdg::ProgramDependencyGraph::conntectFormalInTreeWithInterprocReachableAddr
 std::set<pdg::Node *> pdg::ProgramDependencyGraph::getAliasNodes(pdg::Node &n)
 {
   std::queue<Node *> nodeQueue;
-  std::set<Node *> seen_nodes;
-  std::set<Node *> alias_nodes;
+  std::set<Node *> seenNodes;
+  std::set<Node *> aliasNodes;
   nodeQueue.push(&n);
   while (!nodeQueue.empty())
   {
     auto currentNode = nodeQueue.front();
     nodeQueue.pop();
-    auto out_alias_neighbors = currentNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
-    for (auto alias_node : out_alias_neighbors)
+    auto outAliasNodes = currentNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+    for (auto aliasNode : outAliasNodes)
     {
-      if (seen_nodes.find(alias_node) != seen_nodes.end())
+      if (seenNodes.find(aliasNode) != seenNodes.end())
         continue;
-      seen_nodes.insert(alias_node);
-      nodeQueue.push(alias_node);
-      alias_nodes.insert(alias_node);
+      seenNodes.insert(aliasNode);
+      nodeQueue.push(aliasNode);
+      aliasNodes.insert(aliasNode);
     }
   }
-  return alias_nodes;
+  return aliasNodes;
 }
 
 static RegisterPass<pdg::ProgramDependencyGraph>

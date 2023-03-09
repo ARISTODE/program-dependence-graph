@@ -1,5 +1,4 @@
 #include "MemInstrument.hh"
-#include "llvm/Demangle/Demangle.h"
 
 
 using namespace llvm;
@@ -27,7 +26,9 @@ bool pdg::MemInstrumentPass::runOnModule(Module &M)
             continue;
         auto mangledFuncName =  F.getName().str();
         errs() << "mangledName: " <<  mangledFuncName << "\n";
-        auto demangledFuncName = getDemangledName(mangledFuncName.data());
+        auto demangledFuncName = pdgutils::getDemangledName(mangledFuncName.data());
+        if (demangledFuncName.empty())
+            demangledFuncName = mangledFuncName;
         errs() << "demangledName: " << demangledFuncName << "\n";
         if (demangledFuncName == TargetFuncName)
         {
@@ -283,30 +284,6 @@ void pdg::MemInstrumentPass::insertMockAttack(Function &F)
             Builder.CreateStore(li, loadAddr);
         }
     }
-}
-
-std::string pdg::MemInstrumentPass::getDemangledName(const char* mangledName)
-{
-  int status = 0;
-  char* demangledName = llvm::itaniumDemangle(mangledName, nullptr, nullptr, &status);
-  if (!demangledName)
-    return "";
-  std::string ret(demangledName);
-  free(demangledName);
-  // Find the beginning of the function name.
- 
-  size_t startPos = ret.find_first_not_of(" \t\n\r");
-  if (startPos == std::string::npos) {
-    return "";
-  }
-  // Find the end of the function name.
-  size_t endPos = ret.find_first_of(" \t\n\r(", startPos);
-  if (endPos == std::string::npos) {
-    return "";
-  }
-  // Extract the function name and return it.
-  return ret.substr(startPos, endPos - startPos);
-  return ret;
 }
 
 static RegisterPass<pdg::MemInstrumentPass> X("mem-instrument", "memory read/write instrument pass");

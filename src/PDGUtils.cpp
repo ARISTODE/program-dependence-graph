@@ -186,10 +186,10 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
 inst_iterator pdg::pdgutils::getInstIter(Instruction &i)
 {
   Function *f = i.getFunction();
-  for (auto inst_iter = inst_begin(f); inst_iter != inst_end(f); inst_iter++)
+  for (auto instIter = inst_begin(f); instIter != inst_end(f); instIter++)
   {
-    if (&*inst_iter == &i)
-      return inst_iter;
+    if (&*instIter == &i)
+      return instIter;
   }
   return inst_end(f);
 }
@@ -199,11 +199,11 @@ std::set<Instruction *> pdg::pdgutils::getInstructionBeforeInst(Instruction &i)
   Function *f = i.getFunction();
   auto stop = getInstIter(i);
   std::set<Instruction *> insts_before;
-  for (auto inst_iter = inst_begin(f); inst_iter != inst_end(f); inst_iter++)
+  for (auto instIter = inst_begin(f); instIter != inst_end(f); instIter++)
   {
-    if (inst_iter == stop)
+    if (instIter == stop)
       return insts_before;
-    insts_before.insert(&*inst_iter);
+    insts_before.insert(&*instIter);
   }
   return insts_before;
 }
@@ -216,9 +216,9 @@ std::set<Instruction *> pdg::pdgutils::getInstructionAfterInst(Instruction &i)
   if (start == inst_end(f))
     return insts_after;
   start++;
-  for (auto inst_iter = start; inst_iter != inst_end(f); inst_iter++)
+  for (auto instIter = start; instIter != inst_end(f); instIter++)
   {
-    insts_after.insert(&*inst_iter);
+    insts_after.insert(&*instIter);
   }
   return insts_after;
 }
@@ -622,6 +622,18 @@ bool pdg::pdgutils::isStructPointerType(Type &ty)
   return false;
 }
 
+bool pdg::pdgutils::isDoublePointer(Value &ptr)
+{
+  if (PointerType *PT = dyn_cast<PointerType>(ptr.getType()))
+  {
+    if (PointerType *ET = dyn_cast<PointerType>(PT->getElementType()))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool pdg::pdgutils::isFileExist(std::string fileName)
 {
   std::ifstream in_file(fileName);
@@ -640,9 +652,9 @@ bool pdg::pdgutils::isSkbNode(TreeNode &treeNode)
 // check if i1 is precede of i2
 bool pdg::pdgutils::isPrecedeInst(Instruction &i1, Instruction &i2, Function &F)
 {
-  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+  for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
   {
-    auto &curInst = *inst_iter;
+    auto &curInst = *instIter;
     if (&curInst == &i1)
       return true;
     if (&curInst == &i2)
@@ -659,4 +671,28 @@ void pdg::pdgutils::printTreeNodeAddrVars(TreeNode &treeNode)
     if (auto inst = dyn_cast<Instruction>(addrVar))
     errs() << "\tfunc name: " << inst->getFunction()->getName()  << *inst <<  "\n";
   }
+}
+
+std::string pdg::pdgutils::getDemangledName(const char* mangledName)
+{
+  int status = 0;
+  char* demangledName = llvm::itaniumDemangle(mangledName, nullptr, nullptr, &status);
+  if (!demangledName)
+    return std::string(mangledName);
+  std::string ret(demangledName);
+  free(demangledName);
+  // Find the beginning of the function name.
+ 
+  size_t startPos = ret.find_first_not_of(" \t\n\r");
+  if (startPos == std::string::npos) {
+    return "";
+  }
+  // Find the end of the function name.
+  size_t endPos = ret.find_first_of(" \t\n\r(", startPos);
+  if (endPos == std::string::npos) {
+    return "";
+  }
+  // Extract the function name and return it.
+  return ret.substr(startPos, endPos - startPos);
+  return ret;
 }

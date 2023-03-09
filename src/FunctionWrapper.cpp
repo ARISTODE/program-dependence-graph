@@ -167,9 +167,9 @@ std::set<Value *> pdg::FunctionWrapper::computeAddrVarDerivedFromArg(Argument &a
     {
       ret.insert(addrVar);
     }
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
   return ret;

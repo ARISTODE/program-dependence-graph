@@ -100,7 +100,7 @@ void pdg::SharedDataAnalysis::setupKernelFuncs(Module &M)
       continue;
     if (_driverDomainFuncs.find(func) == _driverDomainFuncs.end())
     {
-      _kernel_domain_funcs.insert(func);
+      _kernelDomainFuncs.insert(func);
       _kernel_domain_func_names.insert(func->getName().str());
     }
   }
@@ -212,7 +212,7 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
   //   errs() << "\t" << t << "\n";
   // }
   std::set<std::string> processed_struct_names;
-  for (auto func : _kernel_domain_funcs)
+  for (auto func : _kernelDomainFuncs)
   {
     if (func->isDeclaration())
       continue;
@@ -306,8 +306,8 @@ void pdg::SharedDataAnalysis::buildTreesForSharedStructDIType(Module &M)
       _shared_struct_type_names.insert(shared_struct_type_name);
     // this finds all the variable (global/local) in the code that have the struct type.
     // we will analylze the accesses to these variables to determine shared fields.
-    auto vars_with_di_type = computeVarsWithDITypeInModule(*shared_struct_di_type, M);
-    for (auto var : vars_with_di_type)
+    auto vars = computeVarsWithStructDITypeInModule(*shared_struct_di_type, M);
+    for (auto var : vars)
     {
       rootNode->addAddrVar(*var);
     }
@@ -331,52 +331,52 @@ void pdg::SharedDataAnalysis::connectTypeTreeToAddrVars(Tree &type_tree)
     {
       if (!_PDG->hasNode(*addrVar))
         continue;
-      auto addr_var_node = _PDG->getNode(*addrVar);
-      currentNode->addNeighbor(*addr_var_node, EdgeType::VAL_DEP);
+      auto addrVarNode = _PDG->getNode(*addrVar);
+      currentNode->addNeighbor(*addrVarNode, EdgeType::VAL_DEP);
       // consider aliasing
-      auto aliasNodes = _PDG->findNodesReachedByEdge(*addr_var_node, EdgeType::DATA_ALIAS);
+      auto aliasNodes = _PDG->findNodesReachedByEdge(*addrVarNode, EdgeType::DATA_ALIAS);
       for (auto aliasNode : aliasNodes)
       {
         currentNode->addAddrVar(*aliasNode->getValue());
         currentNode->addNeighbor(*aliasNode, EdgeType::VAL_DEP);
       }
     }
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
 
-void pdg::SharedDataAnalysis::computeVarsWithDITypeInFunc(DIType &dt, Function &F, std::set<Value *> &vars)
+void pdg::SharedDataAnalysis::computeVarsWithStructDITypeInFunc(DIType &dt, Function &F, std::set<Value *> &vars)
 {
-  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+  for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
   {
-    Node *inst_node = _PDG->getNode(*inst_iter);
-    if (!inst_node)
+    Node *instNode = _PDG->getNode(*instIter);
+    if (!instNode)
       continue;
-    DIType *inst_di_type = inst_node->getDIType();
-    if (inst_di_type == nullptr)
+    DIType *instDt = instNode->getDIType();
+    if (instDt == nullptr)
       continue;
     // should also consider the pointer to the struct.
-    DIType *inst_lowest_di_type = dbgutils::getLowestDIType(*inst_di_type);
-    if (inst_lowest_di_type == nullptr)
+    DIType *instLowestDt = dbgutils::getLowestDIType(*instDt);
+    if (!instLowestDt || !dbgutils::isProjectableType(*instLowestDt))
       continue;
-    if (dbgutils::hasSameDIName(dt, *inst_lowest_di_type))
+    if (dbgutils::hasSameDITypeName(dt, *instLowestDt))
     {
-      vars.insert(&*inst_iter);
+      vars.insert(&*instIter);
     }
   }
 }
 
-std::set<Value *> pdg::SharedDataAnalysis::computeVarsWithDITypeInModule(DIType &dt, Module &M)
+std::set<Value *> pdg::SharedDataAnalysis::computeVarsWithStructDITypeInModule(DIType &dt, Module &M)
 {
   std::set<Value *> vars;
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
-    computeVarsWithDITypeInFunc(dt, F, vars);
+    computeVarsWithStructDITypeInFunc(dt, F, vars);
   }
   return vars;
 }
@@ -386,10 +386,10 @@ bool pdg::SharedDataAnalysis::isStructFieldNode(TreeNode &treeNode)
   auto parentNode = treeNode.getParentNode();
   if (!parentNode)
     return false;
-  auto parent_node_di_type = parentNode->getDIType();
-  if (!parent_node_di_type)
+  auto parentNodeDt = parentNode->getDIType();
+  if (!parentNodeDt)
     return false;
-  return dbgutils::isStructType(*parent_node_di_type);
+  return dbgutils::isStructType(*parentNodeDt);
 }
 
 bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode, bool &hasReadByKernel, bool &hasUpdateByDriver)
@@ -397,11 +397,11 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode, bool &hasRead
   auto dt = treeNode.getDIType();
   if (dt && dbgutils::isFuncPointerType(*dt))
     return true;
-  auto addr_vars = treeNode.getAddrVars();
+  auto addrVars = treeNode.getAddrVars();
   bool accessed_in_driver = false;
   bool accessed_in_kernel = false;
 
-  for (auto addrVar : addr_vars)
+  for (auto addrVar : addrVars)
   {
     if (Instruction *i = dyn_cast<Instruction>(addrVar))
     {
@@ -413,7 +413,7 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode, bool &hasRead
         if (pdgutils::hasWriteAccess(*i))
           hasUpdateByDriver = true;
       }
-      if (_kernel_domain_funcs.find(f) != _kernel_domain_funcs.end())
+      if (_kernelDomainFuncs.find(f) != _kernelDomainFuncs.end())
       {
         accessed_in_kernel = true;
         if (pdgutils::hasReadAccess(*i))
@@ -484,9 +484,9 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
 
     while (!nodeQueue.empty())
     {
-      TreeNode *current_treeNode = nodeQueue.front();
+      TreeNode *currentTreeNode = nodeQueue.front();
       nodeQueue.pop();
-      DIType *nodeDIType = current_treeNode->getDIType();
+      DIType *nodeDIType = currentTreeNode->getDIType();
       if (nodeDIType == nullptr)
         continue;
 
@@ -494,35 +494,37 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       bool isFuncPtrType = dbgutils::isFuncPointerType(*nodeDIType);
       bool hasReadByKernel = false;
       bool hasUpdateByDriver = false;
-      if (current_treeNode->isStructField())
+      // counting for shared struct fields
+      if (currentTreeNode->isStructField())
       {
+        // assume function pointer type fields are shared
         if (dbgutils::isFuncPointerType(*nodeDIType))
         {
-          _shared_field_id.insert(pdgutils::computeTreeNodeID(*current_treeNode));
-          countReadWriteAccessTimes(*current_treeNode);
+          _shared_field_id.insert(pdgutils::computeTreeNodeID(*currentTreeNode));
+          countReadWriteAccessTimes(*currentTreeNode);
         }
-        else if (isTreeNodeShared(*current_treeNode, hasReadByKernel, hasUpdateByDriver))
+        else if (isTreeNodeShared(*currentTreeNode, hasReadByKernel, hasUpdateByDriver))
         {
-          auto fieldID = pdgutils::computeTreeNodeID(*current_treeNode);
+          auto fieldID = pdgutils::computeTreeNodeID(*currentTreeNode);
           if (!fieldID.empty())
             _shared_field_id.insert(fieldID);
           // check whether a shared field is used in string operation.
-          if (isFieldUsedInStringOps(*current_treeNode))
+          if (isFieldUsedInStringOps(*currentTreeNode))
             _string_field_id.insert(fieldID);
           // check whether a field is used in pointer arithmetic
           if (DEBUG)
           {
-            if (pdgutils::hasPtrArith(*current_treeNode, true))
+            if (pdgutils::hasPtrArith(*currentTreeNode, true))
               errs() << "find ptr arith in sd: " << fieldID << "\n";
           }
           // insert an entry for shared field access stat
           sharedStructTypeFieldsAccessMap[sharedStructName].insert(std::make_tuple(fieldID, isPtrType, isFuncPtrType, hasReadByKernel, hasUpdateByDriver));
           // collect read/write accesses in driver/kernel domain
-          countReadWriteAccessTimes(*current_treeNode);
+          countReadWriteAccessTimes(*currentTreeNode);
         }
       }
 
-      for (auto child : current_treeNode->getChildNodes())
+      for (auto child : currentTreeNode->getChildNodes())
       {
         nodeQueue.push(child);
       }
@@ -544,7 +546,7 @@ void pdg::SharedDataAnalysis::computeSharedGlobalVars()
       if (Instruction *i = dyn_cast<Instruction>(user))
       {
         auto func = i->getFunction();
-        if (_kernel_domain_funcs.find(func) != _kernel_domain_funcs.end())
+        if (_kernelDomainFuncs.find(func) != _kernelDomainFuncs.end())
           used_in_kernel = true;
         else
           used_in_driver = true;
@@ -602,7 +604,7 @@ void pdg::SharedDataAnalysis::printPingPongCalls(Module &M)
 
     std::set<Function *> opposite_domain_funcs = _driverDomainFuncs;
     if (_driverDomainFuncs.find(f) != _driverDomainFuncs.end())
-      opposite_domain_funcs = _kernel_domain_funcs;
+      opposite_domain_funcs = _kernelDomainFuncs;
 
     // check if this func can be called from the other domain.
     bool is_called = false;
@@ -735,6 +737,8 @@ void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
   unsigned kernelReadTimes = 0;
   unsigned kernelWriteTimes = 0;
 
+  // TODO: this is a temporary optimization, should find the function that are
+  // exported from driver and only mark those as written by driver
   if (isFuncPtr(treeNode))
     driverWriteTimes += 1;
 
@@ -748,24 +752,26 @@ void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
       {
         if (pdgutils::hasWriteAccess(*i))
           driverWriteTimes++;
-        else if (pdgutils::hasReadAccess(*i))
+        if (pdgutils::hasReadAccess(*i))
           driverReadTimes++;
       }
       // count kernel read write times
-      else if (_kernel_domain_funcs.find(f) != _kernel_domain_funcs.end())
+      else if (_kernelDomainFuncs.find(f) != _kernelDomainFuncs.end())
       {
         if (pdgutils::hasReadAccess(*i))
           kernelReadTimes++;
-        else if (pdgutils::hasWriteAccess(*i))
+        if (pdgutils::hasWriteAccess(*i))
           kernelWriteTimes++;
       }
     }
   }
 
   auto fieldName = treeNode.getSrcHierarchyName(false);
+  // detect fields only updated by driver and read by the kernel
   if (kernelReadTimes != 0 && driverWriteTimes != 0) {
     std::string fieldTypeStr = getFieldTypeStr(treeNode);
     fieldStatsFile << fieldTypeStr << fieldName << "," << kernelReadTimes << "," << driverWriteTimes << "\n";
+    detectDrvAttacksOnField(treeNode);
   }
 }
 
@@ -824,7 +830,6 @@ bool pdg::SharedDataAnalysis::isFuncPtr(TreeNode &treeNode)
 
 bool pdg::SharedDataAnalysis::isDriverCallBackFuncPtrFieldNode(TreeNode &treeNode)
 {
-  auto dt = treeNode.getDIType();
   auto fieldName = treeNode.getSrcName();
   if (exportedFuncPtrFieldNames.find(fieldName) != exportedFuncPtrFieldNames.end())
     return true;
@@ -839,6 +844,124 @@ bool pdg::SharedDataAnalysis::usedInBranch(TreeNode &treeNode)
     {
       if (isa<BranchInst>(user))
         return true;
+    }
+  }
+  return false;
+}
+
+
+// ----- detect attacks ------
+// the tree node is already detected to be updated in driver and read in kernel
+void pdg::SharedDataAnalysis::detectDrvAttacksOnField(TreeNode &treeNode)
+{
+  auto addrVars = treeNode.getAddrVars();
+  for (auto addrVar : addrVars)
+  {
+    // 1. finds all the reads in the kernel domain
+    if (auto inst = dyn_cast<Instruction>(addrVar))
+    {
+      auto func = inst->getFunction();
+      auto funcNode = _callGraph->getNode(*func);
+      // only check for kernel functions
+      if (isDriverFunc(*func))
+        continue;
+      auto addrVarNode = _PDG->getNode(*addrVar);
+      // if variable is in a kernel function
+      if (detectIsAddrVarUsedAsIndex(*addrVar))
+      {
+        errs().changeColor(raw_ostream::RED);
+        errs() << "[Risky Bound Field]: ";
+        errs().resetColor();
+        errs() << treeNode.getSrcHierarchyName(false) << " in func " << func->getName()
+               << "\n";
+        if (checkRAWDriverUpdate(*addrVarNode))
+        {
+          errs() << "find driver RAW shared bound field: " << treeNode.getSrcHierarchyName(false) << "\n";
+        }
+      }
+
+      if (detectIsAddrVarUsedInCond(*addrVar))
+      {
+        errs().changeColor(raw_ostream::RED);
+        errs() << "[Risky Cond Field]: ";
+        errs().resetColor();
+        errs() << treeNode.getSrcHierarchyName(false) << " in func " << func->getName()
+               << "\n";
+        if (checkRAWDriverUpdate(*addrVarNode))
+        {
+          errs() << "find driver RAW shared cond field: " << treeNode.getSrcHierarchyName(false) << "\n";
+        }
+      }
+    }
+  }
+}
+
+/*
+Check if a driver updated field used to index buffer in the kernel domain
+*/
+bool pdg::SharedDataAnalysis::detectIsAddrVarUsedAsIndex(Value &addrVar)
+{
+  for (auto user : addrVar.users())
+  {
+    // check the load instruction that reads from the address,
+    // determine if the loaded value is used as index in array etc.
+    // gep (addr) -> load gep -> used as index (used as the offset operand ) 
+    if (auto li = dyn_cast<LoadInst>(user))
+    {
+      for (auto u : li->users())
+      {
+        if (auto gep = dyn_cast<GetElementPtrInst>(u))
+        {
+          auto ptrOperand = gep->getPointerOperand();
+          auto ptrValNode = _PDG->getNode(*ptrOperand);
+          // this eliminate cases where pointer arith is used to compute struct field address
+          if (u == ptrOperand && ptrValNode->getDIType() && !dbgutils::isStructPointerType(*ptrValNode->getDIType()))
+            return true;
+
+          // check it is used as the offset operand, instead of pointer operand, this found the array indexing cases
+          if (li != ptrOperand)
+            return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+bool pdg::SharedDataAnalysis::detectIsAddrVarUsedInCond(Value &addrVar)
+{
+  for (auto user : addrVar.users())
+  {
+    if (auto li = dyn_cast<LoadInst>(user))
+    {
+      // check if the loaded value is used in branch
+      for (auto u : li->users())
+      {
+        if (isa<ICmpInst>(u) || isa<SwitchInst>(u))
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool pdg::SharedDataAnalysis::checkRAWDriverUpdate(Node &node)
+{
+  std::set<EdgeType> edgeTypes = {EdgeType::PARAMETER_IN,
+                                  EdgeType::DATA_ALIAS};
+  auto nodes = _PDG->findNodesReachedByEdges(node, edgeTypes, true);
+  for (auto node : nodes)
+  {
+    if (!node->getValue())
+      continue;
+    if (isa<Instruction>(node->getValue()))
+    {
+      auto func = node->getFunc();
+      if (isDriverFunc(*func))
+      {
+        if (pdgutils::hasWriteAccess(*node->getValue()))
+          return true;
+      }
     }
   }
   return false;

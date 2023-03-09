@@ -27,17 +27,17 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
     if (F.isDeclaration() || F.empty())
       continue;
     _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
-    for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+    for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
     {
       // auto t1 = std::chrono::high_resolution_clock::now();
-      addDefUseEdges(*inst_iter);
+      addDefUseEdges(*instIter);
       // auto t2 = std::chrono::high_resolution_clock::now();
       // defuse += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
-      addRAWEdges(*inst_iter);
-      addRAWEdgesUnderapproximate(*inst_iter);
+      addRAWEdges(*instIter);
+      addRAWEdgesUnderapproximate(*instIter);
       // auto t3 = std::chrono::high_resolution_clock::now();
       // raw += std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2);
-      addAliasEdges(*inst_iter);
+      addAliasEdges(*instIter);
       // auto t4 = std::chrono::high_resolution_clock::now();
       // alias += std::chrono::duration_cast<std::chrono::milliseconds>(t4 - t3);
     }
@@ -53,25 +53,25 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
   ProgramGraph &g = ProgramGraph::getInstance();
   PTAWrapper &ptaw = PTAWrapper::getInstance();
   Function* func = inst.getFunction();
-  for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); inst_iter++)
+  for (auto instIter = inst_begin(func); instIter != inst_end(func); instIter++)
   {
-    if (&inst == &*inst_iter)
+    if (&inst == &*instIter)
       continue;
     if (!inst.getType()->isPointerTy())
       continue;
-    // auto anders_aa_result = ptaw.queryAlias(inst, *inst_iter);
-    auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
-    // if (anders_aa_result != NoAlias || alias_result != NoAlias)
-    if (alias_result != NoAlias)
+    // auto andersAAresult = ptaw.queryAlias(inst, *instIter);
+    auto mustAliasRes = queryMustAlias(inst, *instIter);
+    // if (andersAAresult != NoAlias || mustAliasRes != NoAlias)
+    if (mustAliasRes != NoAlias)
     {
       Node* src = g.getNode(inst);
-      Node* dst = g.getNode(*inst_iter);
+      Node* dst = g.getNode(*instIter);
       if (src == nullptr || dst == nullptr)
         continue;
       // use type info to eliminate dubious gep
-      if (!isa<BitCastInst>(*inst_iter) && !isa<BitCastInst>(&inst))
+      if (!isa<BitCastInst>(*instIter) && !isa<BitCastInst>(&inst))
       {
-        if (inst.getType() != inst_iter->getType())
+        if (inst.getType() != instIter->getType())
           continue;
       }
       src->addNeighbor(*dst, EdgeType::DATA_ALIAS);
@@ -153,7 +153,8 @@ void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst) {
   }
 }
 
-AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Value &v2)
+// this function query the must alias relation for intra-function analysis
+AliasResult pdg::DataDependencyGraph::queryMustAlias(Value &v1, Value &v2)
 {
   if (!v1.getType()->isPointerTy() || !v2.getType()->isPointerTy())
     return NoAlias;

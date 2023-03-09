@@ -19,7 +19,7 @@ namespace pdg
     bool isStructArrayType(llvm::DIType &dt);
     bool isFuncPointerType(llvm::DIType &dt);
     bool isProjectableType(llvm::DIType &dt);
-    bool hasSameDIName(llvm::DIType& d1, llvm::DIType &d2);
+    bool hasSameDITypeName(llvm::DIType& d1, llvm::DIType &d2);
     bool isVoidPointerType(llvm::DIType &dt);
     bool isArrayType(llvm::DIType &dt);
     bool isAllocableObjType(llvm::DIType &dt);

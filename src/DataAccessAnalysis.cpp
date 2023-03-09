@@ -51,7 +51,6 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   {
     if (F.isDeclaration())
       continue;
-
     // create an entry for driver API fields and ptr fields access, this is purely for
     // stats collection
     if (_SDA->isDriverFunc(F))
@@ -85,17 +84,16 @@ void pdg::DataAccessAnalysis::generateSyncStubsForBoundaryFunctions(Module &M)
   _idlFile.open("kernel.idl");
   _idlFile << "// Sync stubs for boundary functions\n";
   _idlFile << "module kernel {\n";
-  std::vector<std::string> boundary_func_names(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
+  std::vector<std::string> boundaryFuncNames(_SDA->getBoundaryFuncNames().begin(), _SDA->getBoundaryFuncNames().end());
   _transitiveBoundaryFuncs = _SDA->computeBoundaryTransitiveClosure();
-  std::sort(boundary_func_names.begin(), boundary_func_names.end());
-  for (auto funcName : boundary_func_names)
+  std::sort(boundaryFuncNames.begin(), boundaryFuncNames.end());
+  for (auto funcName : boundaryFuncNames)
   {
     // need to concate the _nesCheck postfix, because nescheck change the signature
     Function *nescheck_func = pdgutils::getNescheckVersionFunc(M, funcName);
     if (nescheck_func == nullptr || nescheck_func->isDeclaration())
       continue;
     generateIDLForFunc(*nescheck_func);
-    errs() << "finish generating IDL for " << nescheck_func->getName() << "\n";
   }
 
   // genereate additional func call stubs for kernel funcs registered on the driver side
@@ -149,42 +147,42 @@ void pdg::DataAccessAnalysis::generateSyncStubsForGlobalVars()
 std::set<pdg::Node *> pdg::DataAccessAnalysis::findCrossDomainParamNode(Node &n, bool isBackward)
 {
   std::queue<Node *> nodeQueue;
-  std::set<EdgeType> search_edge_types = {
+  std::set<EdgeType> searchEdgeTypes = {
       EdgeType::PARAMETER_IN,
       EdgeType::DATA_ALIAS,
       EdgeType::DATA_RET};
   nodeQueue.push(&n);
-  std::set<Node *> seen_nodes;
-  std::set<Node *> cross_domain_nodes;
+  std::set<Node *> seenNodes;
+  std::set<Node *> crossDomainNodes;
   while (!nodeQueue.empty())
   {
     auto currentNode = nodeQueue.front();
     nodeQueue.pop();
-    if (seen_nodes.find(currentNode) != seen_nodes.end())
+    if (seenNodes.find(currentNode) != seenNodes.end())
       continue;
-    seen_nodes.insert(currentNode);
-    Node::EdgeSet edge_set;
+    seenNodes.insert(currentNode);
+    Node::EdgeSet edgeSet;
     if (isBackward)
-      edge_set = currentNode->getInEdgeSet();
+      edgeSet = currentNode->getInEdgeSet();
     else
-      edge_set = currentNode->getOutEdgeSet();
+      edgeSet = currentNode->getOutEdgeSet();
 
-    for (auto edge : edge_set)
+    for (auto edge : edgeSet)
     {
-      if (search_edge_types.find(edge->getEdgeType()) == search_edge_types.end())
+      if (searchEdgeTypes.find(edge->getEdgeType()) == searchEdgeTypes.end())
         continue;
-      Node *target_node = nullptr;
+      Node *targetNode = nullptr;
       if (isBackward)
-        target_node = edge->getSrcNode();
+        targetNode = edge->getSrcNode();
       else
-        target_node = edge->getDstNode();
-      if (target_node->getNodeType() == GraphNodeType::FORMAL_IN)
-        cross_domain_nodes.insert(target_node);
+        targetNode = edge->getDstNode();
+      if (targetNode->getNodeType() == GraphNodeType::FORMAL_IN)
+        crossDomainNodes.insert(targetNode);
       else
-        nodeQueue.push(target_node);
+        nodeQueue.push(targetNode);
     }
   }
-  return cross_domain_nodes;
+  return crossDomainNodes;
 }
 
 void pdg::DataAccessAnalysis::readDriverDefinedGlobalVarNames(std::string fileName)
@@ -231,11 +229,11 @@ bool pdg::DataAccessAnalysis::isSharedAllocator(Value &allocator)
   // step 2: check whether the allocator is propagated to the kernel domain
   auto valNode = _PDG->getNode(allocator);
   assert(valNode != nullptr && "cannot generate size anno str for null node\n");
-  std::set<EdgeType> search_edge_types = {
+  std::set<EdgeType> searchEdgeTypes = {
       EdgeType::PARAMETER_IN,
       EdgeType::DATA_ALIAS,
       EdgeType::DATA_RET};
-  auto reachableNodes = _PDG->findNodesReachedByEdges(*valNode, search_edge_types);
+  auto reachableNodes = _PDG->findNodesReachedByEdges(*valNode, searchEdgeTypes);
   if (ixgbeProbeFlag)
     errs() << "allocator " << allocator << " reachable node num " << reachableNodes.size() << "\n";
   for (auto node : reachableNodes)
@@ -319,17 +317,17 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
   assert(valNode != nullptr && "cannot generate size anno str for null node\n");
   alloc_str += size_str;
   // in this case, the allocated object escaped.
-  auto alias_nodes = _PDG->findNodesReachedByEdge(*valNode, EdgeType::DATA_ALIAS);
-  alias_nodes.insert(valNode);
+  auto aliasNodes = _PDG->findNodesReachedByEdge(*valNode, EdgeType::DATA_ALIAS);
+  aliasNodes.insert(valNode);
   // if any alias is address variable of the parameter tree, then we consider the allocated
   // object need to be allocated at the caller side.
   bool passAcrossBoundary = false;
-  for (auto alias_node : alias_nodes)
+  for (auto aliasNode : aliasNodes)
   {
-    // alias_node->dump();
-    if (alias_node->isAddrVarNode())
+    // aliasNode->dump();
+    if (aliasNode->isAddrVarNode())
     {
-      auto param_treeNode = alias_node->getAbstractTreeNode();
+      auto param_treeNode = aliasNode->getAbstractTreeNode();
       TreeNode *tn = (TreeNode *)param_treeNode;
       tn->setAllocStr(alloc_str + "(caller)");
       passAcrossBoundary = true;
@@ -338,7 +336,7 @@ void pdg::DataAccessAnalysis::propagateAllocSizeAnno(Value &allocator)
     {
       // in this case, the allocated object is passed across isolation boundary.
       // the tracking is path insensitive. If two functions are called in different branches, both function would have the alloc attributes created for the received parameter
-      auto cross_domain_param_nodes = findCrossDomainParamNode(*alias_node);
+      auto cross_domain_param_nodes = findCrossDomainParamNode(*aliasNode);
       for (auto n : cross_domain_param_nodes)
       {
         if (n != nullptr)
@@ -451,15 +449,24 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
   auto func = treeNode.getFunc();
   // if (_transitiveBoundaryFuncs.find(func) == _transitiveBoundaryFuncs.end())
   //   return;
+  if (!treeNode.getDIType())
+  {
+    // errs() << "[Warning]: processing tree node with null DIType in func " << 
+    // func->getName() << " - depth " << treeNode.getDepth() 
+    // << " - isRet " << isRet 
+    // << " parent var name " << treeNode.getParentNode()->getSrcHierarchyName() << "\n";
+    return;
+  }
+
   DomainTag boundary_func_domain_tag = DomainTag::NO_DOMAIN;
 
   if (func != nullptr)
     boundary_func_domain_tag = computeFuncDomainTag(*func);
 
-  std::string parent_node_type_name = "";
+  std::string parentNodtTypeName = "";
   TreeNode *parentNode = treeNode.getParentNode();
   if (parentNode != nullptr)
-    parent_node_type_name = dbgutils::getSourceLevelTypeName(*(parentNode->getDIType()), true);
+    parentNodtTypeName = dbgutils::getSourceLevelTypeName(*(parentNode->getDIType()), true);
 
   std::string field_var_name = dbgutils::getSourceLevelVariableName(*treeNode.getDIType());
   bool is_sentinel_type = _SDA->isSentinelField(field_var_name);
@@ -491,9 +498,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
         // here the strategy is mark all the fields
         if (isa<GlobalVariable>(val_op))
         {
-          for (auto child_node : treeNode.getChildNodes())
+          for (auto childNode : treeNode.getChildNodes())
           {
-            child_node->addAccessTag(AccessTag::DATA_READ);
+            childNode->addAccessTag(AccessTag::DATA_READ);
           }
           // stop processing since we find a new object stored to this address
           break;
@@ -542,8 +549,8 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
   // }
 
   // intra proc access tags
-  // auto addr_vars = treeNode.getAddrVars();
-  // for (auto addrVar : addr_vars)
+  // auto addrVars = treeNode.getAddrVars();
+  // for (auto addrVar : addrVars)
   // {
   //   // skip gep with 0 indices, this could cause false aliasing
   //   if (!treeNode.isStructMember())
@@ -582,8 +589,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
       EdgeType::DATA_ALIAS,
       // EdgeType::DATA_RET
   };
-  auto parameter_in_nodes = _PDG->findNodesReachedByEdges(treeNode, edgeTypes);
-  for (auto n : parameter_in_nodes)
+
+  auto parameterInNodes = _PDG->findNodesReachedByEdges(treeNode, edgeTypes);
+  for (auto n : parameterInNodes)
   {
     // compute r/w to the node
     if (n->getValue() != nullptr)
@@ -601,15 +609,15 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
       {
         // errs() << "\t" << *i << " - " << i->getFunction()->getName() << " - " << treeNode.getDepth() << "\n";
         auto inst_func = i->getFunction();
-        DomainTag func_domain_tag = computeFuncDomainTag(*inst_func);
+        // DomainTag func_domain_tag = computeFuncDomainTag(*inst_func);
         // optimize by connecting all the nodes in the same isolation domain with the parameter tree node.
         // this avoid frequent query of address variable nodes
-        if (func_domain_tag == boundary_func_domain_tag)
-        {
+        // if (func_domain_tag == boundary_func_domain_tag)
+        // {
           treeNode.addAddrVar(*i);
-          auto inst_node = _PDG->getNode(*i);
-          treeNode.addNeighbor(*inst_node, EdgeType::PARAMETER_IN);
-        }
+          auto instNode = _PDG->getNode(*i);
+          treeNode.addNeighbor(*instNode, EdgeType::PARAMETER_IN);
+        // }
         // assumption when computing access for driver side global variables
         if (isGlobalTreeNode && !_SDA->isDriverFunc(*(i->getFunction())))
           continue;
@@ -618,7 +626,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
         //   continue;
         only_has_cross_domain_access = false;
         std::set<AccessTag> acc_tags;
-        bool isArrayType = dbgutils::isArrayType(*treeNode.getDIType());
+        bool isArrayType = (dbgutils::isArrayType(*treeNode.getDIType()));
         if (isArrayType)
           computeDataAccessTagsForArrayVal(*n->getValue(), acc_tags);
         else
@@ -636,14 +644,14 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
   }
 
   // reconnecting address nodes found by inter procedural call
-  for (auto child_node : treeNode.getChildNodes())
+  for (auto childNode : treeNode.getChildNodes())
   {
-    child_node->computeDerivedAddrVarsFromParent();
-    for (auto addrVar : child_node->getAddrVars())
+    childNode->computeDerivedAddrVarsFromParent();
+    for (auto addrVar : childNode->getAddrVars())
     {
-      auto addr_var_node = _PDG->getNode(*addrVar);
-      if (addr_var_node != nullptr)
-        child_node->addNeighbor(*addr_var_node, EdgeType::PARAMETER_IN);
+      auto addrVarNode = _PDG->getNode(*addrVar);
+      if (addrVarNode != nullptr)
+        childNode->addNeighbor(*addrVarNode, EdgeType::PARAMETER_IN);
     }
   }
 
@@ -924,9 +932,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTree(Tree *tree, bool isRet)
     TreeNode *currentNode = nodeQueue.front();
     nodeQueue.pop();
     computeDataAccessForTreeNode(*currentNode, false, isRet);
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -959,9 +967,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForGlobalTree(Tree *tree)
       continue;
 
     computeDataAccessForTreeNode(*currentNode, true);
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
@@ -974,8 +982,8 @@ void pdg::DataAccessAnalysis::computeDataAccessForFuncArgs(Function &F)
     return;
   FunctionWrapper *fw = func_wrapper_map[&F];
   // compute for return value access info
-  auto arg_ret_tree = fw->getRetFormalInTree();
-  computeDataAccessForTree(arg_ret_tree, true);
+  auto argRetTree = fw->getRetFormalInTree();
+  computeDataAccessForTree(argRetTree, true);
   // compute arg access info
   auto argTreeMap = fw->getArgFormalInTreeMap();
   for (auto iter = argTreeMap.begin(); iter != argTreeMap.end(); iter++)
@@ -1010,9 +1018,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
   auto func = treeNode.getFunc();
   auto funcWrapper = _PDG->getFuncWrapper(*func);
   // generate idl for each field
-  for (auto child_node : treeNode.getChildNodes())
+  for (auto childNode : treeNode.getChildNodes())
   {
-    DIType *field_di_type = child_node->getDIType();
+    DIType *field_di_type = childNode->getDIType();
     if (!field_di_type) // void retrun value etc
       continue;
     DIType *field_lowest_di_type = dbgutils::getLowestDIType(*field_di_type);
@@ -1025,10 +1033,10 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
 
     // check for access tags, if none, no need to put this field in projection
     bool is_func_ptr_type = dbgutils::isFuncPointerType(*field_di_type);
-    if (child_node->getAccessTags().size() == 0 && !is_func_ptr_type)
+    if (childNode->getAccessTags().size() == 0 && !is_func_ptr_type)
       continue;
 
-    std::string fieldId = pdgutils::computeTreeNodeID(*child_node);
+    std::string fieldId = pdgutils::computeTreeNodeID(*childNode);
     bool is_global_func_op_struct = (_SDA->isGlobalOpStruct(field_lowest_di_type_name));
     // check for shared fields
     auto global_struct_di_type_names = _SDA->getGlobalStructDITypeNames();
@@ -1039,28 +1047,28 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
        4. inferred sentiinel fields
        5. anonymous union (as shared fields only consider struct)
     */
-    // if (SharedDataFlag && !_SDA->isSharedFieldID(fieldId) && !is_func_ptr_type && !isGlobalStructField && child_node->is_sentinel && field_type_name == "union")
+    // if (SharedDataFlag && !_SDA->isSharedFieldID(fieldId) && !is_func_ptr_type && !isGlobalStructField && childNode->is_sentinel && field_type_name == "union")
     if (SharedDataFlag && !_SDA->isSharedFieldID(fieldId) && !is_func_ptr_type)
       continue;
 
     // collect shared field stat
-    child_node->isShared = true;
+    childNode->isShared = true;
     if (dbgutils::isPointerType(*field_di_type))
     {
-      if (child_node->getChildNodes().size() > 0)
-        child_node->getChildNodes()[0]->isShared = true;
+      if (childNode->getChildNodes().size() > 0)
+        childNode->getChildNodes()[0]->isShared = true;
     }
     // collect field access stats
     bool isDriverFunc = _SDA->isDriverFunc(*func);
-    _ksplitStats->collectDataStats(*child_node, "SAFE", *func, funcWrapper->getArgIdxByFormalInTree(child_node->getTree()), isDriverFunc);
+    _ksplitStats->collectDataStats(*childNode, "SAFE", *func, funcWrapper->getArgIdxByFormalInTree(childNode->getTree()), isDriverFunc);
     // check cross domain RAW
-    // checkCrossDomainRAWforFormalTreeNode(*child_node);
-    // countControlData(*child_node);
+    // checkCrossDomainRAWforFormalTreeNode(*childNode);
+    // countControlData(*childNode);
 
     // opt out field
     if (EnableAnalysisStats && !_generateingIDLforGlobal)
     {
-      if (child_node->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
+      if (childNode->getCanOptOut() == true && !is_global_func_op_struct && !is_func_ptr_type)
       {
         _ksplitStats->_fields_removed_boundary_opt += 1;
         continue;
@@ -1075,9 +1083,9 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
     field_di_type = dbgutils::stripMemberTag(*field_di_type);
     field_di_type = dbgutils::stripAttributes(*field_di_type);
     // compute access attributes
-    auto annotations = inferTreeNodeAnnotations(*child_node);
+    auto annotations = inferTreeNodeAnnotations(*childNode);
     // infer may_within attribute
-    // inferMayWithin(*child_node, annotations);
+    // inferMayWithin(*childNode, annotations);
     // count inferred string
     // if (EnableAnalysisStats && !_generateingIDLforGlobal)
     //   _ksplitStats->collectInferredStringStats(annotations);
@@ -1089,20 +1097,20 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
     }
 
     // construct annotation string
-    if (child_node->is_sentinel)
+    if (childNode->is_sentinel)
     {
       // null terminated arraies
       fieldsProjectionStr << indentLevel << "array<" << field_type_name << ", "
                             << "null> " << field_var_name << ";\n";
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
-    else if (child_node->isSeqPtr() && !dbgutils::isArrayType(*field_di_type)) // leave sized array to be handled by default generation
+    else if (childNode->isSeqPtr() && !dbgutils::isArrayType(*field_di_type)) // leave sized array to be handled by default generation
     {
       std::string element_proj_type_str = field_lowest_di_type_name;
       if (field_lowest_di_type && dbgutils::isStructType(*field_lowest_di_type))
       {
         element_proj_type_str = "projection " + field_lowest_di_type_name;
-        nodeQueue.push(child_node);
+        nodeQueue.push(childNode);
       }
       if (dbgutils::isStructPointerType(*field_di_type))
         element_proj_type_str += "*";
@@ -1148,7 +1156,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
                             << " "
                             << field_var_name
                             << ";\n";
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
     else if (dbgutils::isProjectableType(*field_di_type))
     {
@@ -1170,7 +1178,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
       else
       {
         // for struct, generate projection for the nested struct
-        generateIDLFromTreeNode(*child_node, nested_fields_proj, field_nested_struct_proj, nodeQueue, indentLevel + "\t", field_type_name, isRet);
+        generateIDLFromTreeNode(*childNode, nested_fields_proj, field_nested_struct_proj, nodeQueue, indentLevel + "\t", field_type_name, isRet);
       }
 
       // if (dbgutils::isUnionType(*field_di_type))
@@ -1325,7 +1333,9 @@ void pdg::DataAccessAnalysis::generateJSONObjectForFunc(Function &F, std::ofstre
     auto argTree = iter->second;
     // create json object for policy checking
     unsigned argIdx = fw->getArgIdxByFormalInTree(argTree);
-    if (argTree)
+    auto argDIType = argTree->getRootNode()->getDIType();
+    // only compute policy for pointer type parameters
+    if (argDIType && argTree && dbgutils::isPointerType(*argDIType))
     {
       auto jsonObj = generateJSONObjectFromArgTree(argTree, argIdx);
       rootJSONObj["args"].push_back(jsonObj);
@@ -1340,6 +1350,7 @@ for each field address.
 */
 nlohmann::json pdg::DataAccessAnalysis::generateJSONObjectFromArgTree(Tree *argTree, unsigned argIdx)
 {
+  // argTree->print();
   // obtain the root node 
   TreeNode *rootNode = argTree->getRootNode();
   DIType *rootNodeDt = rootNode->getDIType();
@@ -1356,31 +1367,33 @@ nlohmann::json pdg::DataAccessAnalysis::createJSONObjectForNode(TreeNode &treeNo
   // if the node represent a struct, and it has a pointer field which points to
   // other struct, recursively build JSON object for the pointer field
   nlohmann::json jsonObj;  
-  unsigned accCap = computeAccCapForNode(treeNode);
-  jsonObj["cap"] = accCap;
   // check if this is a struct field, if so, add the offset info to the json object
   auto nodeDt = treeNode.getDIType();
   if (!nodeDt)
     return jsonObj;
+
   if (treeNode.isStructField())
   {
     unsigned fieldOffset = dbgutils::computeFieldOffsetInBytes(*nodeDt);
     jsonObj["offset"] = fieldOffset;
   }
+  unsigned accCap = computeAccCapForNode(treeNode);
+  jsonObj["cap"] = accCap;
+
+  auto structPtrTreeNode = &treeNode;
+  if (treeNode.isStructField() && dbgutils::isPointerType(*nodeDt))
+    structPtrTreeNode = treeNode.getChildNodes()[0];
   // recursively build for fields if this is a struct pointer
   auto fieldLowestDt = dbgutils::getLowestDIType(*nodeDt);
-  if (fieldLowestDt)
+  if (fieldLowestDt && dbgutils::isStructType(*fieldLowestDt))
   {
-    if (dbgutils::isStructType(*fieldLowestDt))
+    if (structPtrTreeNode->getChildNodes().size() > 0)
     {
-      if (treeNode.getChildNodes().size() > 0)
+      auto structObjTreeNode = structPtrTreeNode->getChildNodes()[0];
+      for (auto childNode : structObjTreeNode->getChildNodes())
       {
-        auto structObjTreeNode = treeNode.getChildNodes()[0];
-        for (auto childNode : structObjTreeNode->getChildNodes())
-        {
-          if (childNode->getAccessTags().size() != 0)
-            jsonObj["fields"].push_back(createJSONObjectForNode(*childNode));
-        }
+        // if (childNode->getAccessTags().size() != 0)
+          jsonObj["fields"].push_back(createJSONObjectForNode(*childNode));
       }
     }
   }
@@ -1750,18 +1763,18 @@ void pdg::DataAccessAnalysis::inferMayWithin(TreeNode &treeNode, std::set<std::s
     return;
 
   auto currentNodeAddrVars = treeNode.getAddrVars();
-  for (auto child_node : parentNode->getChildNodes())
+  for (auto childNode : parentNode->getChildNodes())
   {
-    if (child_node == &treeNode)
+    if (childNode == &treeNode)
       continue;
-    auto fieldName = dbgutils::getSourceLevelVariableName(*child_node->getDIType());
-    auto childNodeDt = child_node->getDIType();
+    auto fieldName = dbgutils::getSourceLevelVariableName(*childNode->getDIType());
+    auto childNodeDt = childNode->getDIType();
     if (!dbgutils::isPointerType(*childNodeDt))
       continue;
-    auto fieldId = pdgutils::computeTreeNodeID(*child_node);
+    auto fieldId = pdgutils::computeTreeNodeID(*childNode);
     if (!_SDA->isSharedFieldID(fieldId))
       continue;
-    auto childNodeAddrVars = child_node->getAddrVars();
+    auto childNodeAddrVars = childNode->getAddrVars();
     // if the address variable overlap with each other, then print within warning
     for (auto currentNodeAddrVar : currentNodeAddrVars)
     {
@@ -1780,8 +1793,8 @@ void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &treeNode, std::set<s
 {
   // get all alias of the argument
   std::set<EdgeType> edgeTypes = {EdgeType::PARAMETER_IN, EdgeType::DATA_ALIAS};
-  auto alias_nodes = _PDG->findNodesReachedByEdges(treeNode, edgeTypes);
-  for (auto node : alias_nodes)
+  auto aliasNodes = _PDG->findNodesReachedByEdges(treeNode, edgeTypes);
+  for (auto node : aliasNodes)
   {
     auto outNeighborNodes = node->getOutNeighbors();
     for (auto neighborNode : outNeighborNodes)
@@ -1968,12 +1981,12 @@ pdg::FunctionWrapper *pdg::DataAccessAnalysis::getNescheckFuncWrapper(Function &
 // {
 //   auto bci_node = _PDG->getNode(bci);
 //   assert(bci_node != nullptr && "cannot find node for container_of bitcast inst\n");
-//   auto alias_nodes = bci_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
-//   alias_nodes.insert(bci_node);
-//   for (auto alias_node : alias_nodes)
+//   auto aliasNodes = bci_node->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+//   aliasNodes.insert(bci_node);
+//   for (auto aliasNode : aliasNodes)
 //   {
-//     auto alias_val = alias_node->getValue();
-//     for (auto out_neighbor : alias_node->getOutNeighbors())
+//     auto alias_val = aliasNode->getValue();
+//     for (auto out_neighbor : aliasNode->getOutNeighbors())
 //     {
 //       auto out_neighbor_val = out_neighbor->getValue();
 //       if (out_neighbor_val == nullptr)
@@ -2011,10 +2024,10 @@ void pdg::DataAccessAnalysis::constructGlobalOpStructStr()
 
 void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
 {
-  for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); ++inst_iter)
+  for (auto instIter = inst_begin(F); instIter != inst_end(F); ++instIter)
   {
     // find gep that has negative offset
-    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&*inst_iter))
+    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&*instIter))
     {
       int gep_access_offset = pdgutils::getGEPAccessFieldOffset(*gep);
       if (gep_access_offset >= 0)
@@ -2045,8 +2058,8 @@ void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
           }
         }
 
-        // auto inst_node = _PDG->getNode(*bci);
-        // if (inst_node != nullptr)
+        // auto instNode = _PDG->getNode(*bci);
+        // if (instNode != nullptr)
         // {
         //   if (isSharedType)
         //   {
@@ -2080,17 +2093,17 @@ void pdg::DataAccessAnalysis::logSkbFieldStats(TreeNode &skb_root_node)
   // don't process the tree node, start with all the fields
   unsigned accessed_fields = 0;
   unsigned accessed_shared_fields = 0;
-  for (auto child_node : skb_root_node.getChildNodes())
+  for (auto childNode : skb_root_node.getChildNodes())
   {
-    nodeQueue.push(child_node);
+    nodeQueue.push(childNode);
   }
   while (!nodeQueue.empty())
   {
     TreeNode *currentNode = nodeQueue.front();
     nodeQueue.pop();
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
     // accumulate stats for fields
     if (currentNode->isStructMember())

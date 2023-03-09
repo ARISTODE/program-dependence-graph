@@ -25,13 +25,13 @@ namespace llvm
 
     std::string getNodeLabel(pdg::Node *node, pdg::ProgramDependencyGraph *G)
     {
-      pdg::GraphNodeType node_type = node->getNodeType();
+      pdg::GraphNodeType nodeTy = node->getNodeType();
       Function* func = node->getFunc();
       Value* node_val = node->getValue();
       std::string str;
       raw_string_ostream OS(str);
 
-      switch (node_type)
+      switch (nodeTy)
       {
       case pdg::GraphNodeType::FUNC_ENTRY:
         return "<<ENTRY>> " + func->getName().str();

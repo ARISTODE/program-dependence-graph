@@ -20,37 +20,37 @@ namespace pdg
     using iterator = EdgeIterator<Node>;
     using const_iterator = EdgeIterator<Node>;
 
-    Node(GraphNodeType node_type)
+    Node(GraphNodeType nodeTy)
     {
       _val = nullptr;
-      _node_type = node_type;
+      _node_type = nodeTy;
       _is_visited = false;
       _func = nullptr;
-      _node_di_type = nullptr;
+      _nodeDt = nullptr;
     }
-    Node(llvm::Value &v, GraphNodeType node_type)
+    Node(llvm::Value &v, GraphNodeType nodeTy)
     {
       _val = &v;
       if (auto inst = llvm::dyn_cast<llvm::Instruction>(&v))
         _func = inst->getFunction();
       else
         _func = nullptr;
-      _node_type = node_type;
+      _node_type = nodeTy;
       _is_visited = false;
-      _node_di_type = nullptr;
+      _nodeDt = nullptr;
     }
     void addInEdge(Edge &e) { _in_edge_set.insert(&e); }
     void addOutEdge(Edge &e) { _out_edge_set.insert(&e); }
     EdgeSet &getInEdgeSet() { return _in_edge_set; }
     EdgeSet &getOutEdgeSet() { return _out_edge_set; }
-    void setNodeType(GraphNodeType node_type) { _node_type = node_type; }
+    void setNodeType(GraphNodeType nodeTy) { _node_type = nodeTy; }
     GraphNodeType getNodeType() const { return _node_type; }
     bool isVisited() { return _is_visited; }
     llvm::Function *getFunc() const { return _func; }
     void setFunc(llvm::Function &f) { _func = &f; }
     llvm::Value *getValue() { return _val; }
-    llvm::DIType *getDIType() const { return _node_di_type; }
-    void setDIType(llvm::DIType &di_type) { _node_di_type = &di_type; }
+    llvm::DIType *getDIType() const { return _nodeDt; }
+    void setDIType(llvm::DIType &di_type) { _nodeDt = &di_type; }
     void addNeighbor(Node &neighbor, EdgeType edgeTy);
     EdgeSet::iterator begin() { return _out_edge_set.begin(); }
     EdgeSet::iterator end() { return _out_edge_set.end(); }
@@ -75,7 +75,7 @@ namespace pdg
     EdgeSet _in_edge_set;
     EdgeSet _out_edge_set;
     GraphNodeType _node_type;
-    llvm::DIType *_node_di_type;
+    llvm::DIType *_nodeDt;
   };
 
   // used to iterate through all neighbors (used in dot pdg printer)

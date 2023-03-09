@@ -23,8 +23,8 @@ namespace pdg
     void setupKernelFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getDriverFuncs() { return _driverDomainFuncs; }
     bool isDriverFunc(llvm::Function &F) { return (_driverDomainFuncs.find(&F) != _driverDomainFuncs.end()); }
-    std::set<llvm::Function *> &getKernelFuncs() { return _kernel_domain_funcs; }
-    // bool isKernelFunc(llvm::Function &F) { return (_kernel_domain_funcs.find(&F) != _kernel_domain_funcs.end()); }
+    std::set<llvm::Function *> &getKernelFuncs() { return _kernelDomainFuncs; }
+    // bool isKernelFunc(llvm::Function &F) { return (_kernelDomainFuncs.find(&F) != _kernelDomainFuncs.end()); }
     bool isKernelFunc(std::string funcName) { return (_kernel_domain_func_names.find(funcName) != _kernel_domain_func_names.end()); }
     void setupBoundaryFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
@@ -41,8 +41,8 @@ namespace pdg
     void computeGlobalStructTypeNames();
     void buildTreesForSharedStructDIType(llvm::Module &M);
     void connectTypeTreeToAddrVars(Tree &tree);
-    void computeVarsWithDITypeInFunc(llvm::DIType &dt, llvm::Function &F, std::set<llvm::Value *> &vars);
-    std::set<llvm::Value *> computeVarsWithDITypeInModule(llvm::DIType &dt, llvm::Module &M);
+    void computeVarsWithStructDITypeInFunc(llvm::DIType &dt, llvm::Function &F, std::set<llvm::Value *> &vars);
+    std::set<llvm::Value *> computeVarsWithStructDITypeInModule(llvm::DIType &dt, llvm::Module &M);
     bool isStructFieldNode(TreeNode &treeNode);
     bool isTreeNodeShared(TreeNode &treeNode, bool &hasReadByKernel, bool &hasUpdateByDriver);
     bool isFieldUsedInStringOps(TreeNode &treeNode);
@@ -68,6 +68,12 @@ namespace pdg
     bool usedInBranch(TreeNode &treeNode);
     bool isFuncPtr(TreeNode &treeNode);
     bool isDriverCallBackFuncPtrFieldNode(TreeNode &treeNode);
+    // functions related to potential attacks search
+    void detectDrvAttacksOnField(TreeNode &treeNode);
+    bool detectIsAddrVarUsedAsIndex(llvm::Value &addrVar);
+    bool detectIsAddrVarUsedInCond(llvm::Value &addrVar);
+    void printPrecedeDriverUpdate(llvm::Value &addrVar);
+    bool checkRAWDriverUpdate(Node &node);
 
   private:
     ProgramGraph *_PDG;
@@ -76,7 +82,7 @@ namespace pdg
     std::set<llvm::GlobalVariable *> _shared_global_vars;
     std::set<llvm::DIType *> _shared_struct_di_types;
     std::set<llvm::Function *> _driverDomainFuncs;
-    std::set<llvm::Function *> _kernel_domain_funcs;
+    std::set<llvm::Function *> _kernelDomainFuncs;
     std::set<std::string> _kernel_domain_func_names;
     std::set<llvm::Function *> _boundary_funcs;
     std::set<std::string> _boundary_func_names;

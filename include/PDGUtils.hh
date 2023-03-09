@@ -1,6 +1,7 @@
 #ifndef PDGUTILS_H_
 #define PDGUTILS_H_
 #include "LLVMEssentials.hh"
+#include "llvm/Demangle/Demangle.h"
 #include "Tree.hh"
 #include <vector>
 #include <set>
@@ -32,6 +33,7 @@ namespace pdg
     bool isTreeNodeValUsedAsOffset(TreeNode &treeNode);
     bool isValueUsedAsOffset(llvm::Value &gep);
     bool isStructPointerType(llvm::Type &type);
+    bool isDoublePointer(llvm::Value &val);
     llvm::Instruction* getNextInst(llvm::Instruction &i);
     llvm::Function* getNescheckVersionFunc(llvm::Module& M, std::string funcName);
     llvm::inst_iterator getInstIter(llvm::Instruction &i);
@@ -57,6 +59,7 @@ namespace pdg
     bool isSkbNode(TreeNode& treeNode);
     bool isPrecedeInst(llvm::Instruction &i1, llvm::Instruction &i2, llvm::Function &F);
     void printTreeNodeAddrVars(TreeNode &treeNode);
+    std::string getDemangledName(const char *mangledName);
   } // namespace pdgutils
 } // namespace pdg
 #endif

@@ -112,12 +112,12 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src,
       continue;
     visited.insert(currentNode);
     ret.insert(currentNode);
-    Node::EdgeSet edge_set;
+    Node::EdgeSet edgeSet;
     if (isBackward)
-      edge_set = currentNode->getInEdgeSet();
+      edgeSet = currentNode->getInEdgeSet();
     else 
-      edge_set = currentNode->getOutEdgeSet();
-    for (auto edge : edge_set)
+      edgeSet = currentNode->getOutEdgeSet();
+    for (auto edge : edgeSet)
     {
       if (edgeTypes.find(edge->getEdgeType()) == edgeTypes.end())
         continue;
@@ -161,13 +161,13 @@ void pdg::ProgramGraph::build(Module &M)
     if (F.isDeclaration() || F.empty())
       continue;
     FunctionWrapper *func_w = new FunctionWrapper(&F);
-    for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+    for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
     {
-      Node *n = new Node(*inst_iter, GraphNodeType::INST);
-      _valNodeMap.insert(std::pair<Value *, Node *>(&*inst_iter, n));
-      func_w->addInst(*inst_iter);
+      Node *n = new Node(*instIter, GraphNodeType::INST);
+      _valNodeMap.insert(std::pair<Value *, Node *>(&*instIter, n));
+      func_w->addInst(*instIter);
       addNode(*n);
-      if (CallInst *ci = dyn_cast<CallInst>(&*inst_iter))
+      if (CallInst *ci = dyn_cast<CallInst>(&*instIter))
       {
         auto called_func = pdgutils::getCalledFunc(*ci);
         if (called_func != nullptr)
@@ -228,15 +228,15 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
     if (F.isDeclaration())
       continue;
     FunctionWrapper *fw = _func_wrapper_map[&F];
-    auto dbg_declare_insts = fw->getDbgDeclareInsts();
+    auto dbgDeclareInsts = fw->getDbgDeclareInsts();
     // bind ditype to the top-level pointer (alloca)
-    for (auto dbg_declare_inst : dbg_declare_insts)
+    for (auto dbgInst : dbgDeclareInsts)
     {
-      auto addr = dbg_declare_inst->getVariableLocation();
+      auto addr = dbgInst->getVariableLocation();
       Node *addr_node = getNode(*addr);
       if (!addr_node)
         continue;
-      auto DLV = dbg_declare_inst->getVariable(); // di local variable instance
+      auto DLV = dbgInst->getVariable(); // di local variable instance
       assert(DLV != nullptr && "cannot find DILocalVariable Node for computing DIType");
       DIType *var_di_type = DLV->getType();
       assert(var_di_type != nullptr && "cannot bind nullptr ditype to node!");
@@ -244,9 +244,9 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
       _node_di_type_map.insert(std::make_pair(addr_node, var_di_type));
     }
 
-    for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
+    for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
     {
-      Instruction &i = *inst_iter;
+      Instruction &i = *instIter;
       Node* n = getNode(i);
       assert(n != nullptr && "cannot compute node di type for null node!\n");
       DIType* nodeDt = computeNodeDIType(*n);
@@ -281,11 +281,11 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
     // this is used to borrow di type form other struct poiter types
     if (n.getDIType() == nullptr)
     {
-      for (auto inst_iter = inst_begin(func); inst_iter != inst_end(func); ++inst_iter)
+      for (auto instIter = inst_begin(func); instIter != inst_end(func); ++instIter)
       {
-        if (&*inst_iter == val)
+        if (&*instIter == val)
           continue;
-        if (AllocaInst *ai = dyn_cast<AllocaInst>(&*inst_iter))
+        if (AllocaInst *ai = dyn_cast<AllocaInst>(&*instIter))
         {
           if (ai->getType() == val->getType())
           {
@@ -357,43 +357,43 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
   // gep inst
   if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(val))
   {
-    Value* base_addr = gep->getPointerOperand();
-    Node* base_addr_node = getNode(*base_addr);
-    if (!base_addr_node)
+    Value* baseAddr = gep->getPointerOperand();
+    Node* baseAddrNode = getNode(*baseAddr);
+    if (!baseAddrNode)
       return nullptr;
-    DIType* base_addr_di_type = base_addr_node->getDIType();
-    if (!base_addr_di_type)
+    DIType* baseAddrDt = baseAddrNode->getDIType();
+    if (!baseAddrDt)
       return nullptr;
 
-    DIType* base_addr_lowest_di_type = dbgutils::getLowestDIType(*base_addr_di_type);
-    if (!base_addr_lowest_di_type)
+    DIType* baseAddrLowestDt = dbgutils::getLowestDIType(*baseAddrDt);
+    if (!baseAddrLowestDt)
       return nullptr;
-    if (!dbgutils::isStructType(*base_addr_lowest_di_type))
+    if (!dbgutils::isStructType(*baseAddrLowestDt))
       return nullptr;
     // TODO: here we assume negative offset always move to the parent structure, and no other unsafe use.
     // should verify this assumption is valid.
     // if (pdgutils::getGEPAccessFieldOffset(*gep) < 0)
-    //   return base_addr_lowest_di_type;
-    if (auto dict = dyn_cast<DICompositeType>(base_addr_lowest_di_type))
+    //   return baseAddrLowestDt;
+    if (auto dict = dyn_cast<DICompositeType>(baseAddrLowestDt))
     {
       auto di_node_arr = dict->getElements();
       for (unsigned i = 0; i < di_node_arr.size(); ++i)
       {
-        DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
-        assert(field_di_type != nullptr && "fail to retrive field di type (computeNodeDIType)");
-        if (pdgutils::isGEPOffsetMatchDIOffset(*field_di_type, *gep))
-          return field_di_type;
+        DIType *fieldDt = dyn_cast<DIType>(di_node_arr[i]);
+        assert(fieldDt != nullptr && "fail to retrive field di type (computeNodeDIType)");
+        if (pdgutils::isGEPOffsetMatchDIOffset(*fieldDt, *gep))
+          return fieldDt;
       }
     }
   }
   // cast inst
-  if (CastInst *cast_inst = dyn_cast<CastInst>(val))
+  if (CastInst *castInst = dyn_cast<CastInst>(val))
   {
-    Value *casted_val = cast_inst->getOperand(0);
-    Node* casted_val_node = getNode(*casted_val);
-    if (!casted_val_node)
+    Value *castedVal = castInst->getOperand(0);
+    Node* castedValNode = getNode(*castedVal);
+    if (!castedValNode)
       return nullptr;
-    return casted_val_node->getDIType();
+    return castedValNode->getDIType();
   }
 
   // default
@@ -411,9 +411,9 @@ void pdg::ProgramGraph::addTreeNodesToGraph(pdg::Tree &tree)
     TreeNode* currentNode = nodeQueue.front();
     nodeQueue.pop();
     addNode(*currentNode);
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }

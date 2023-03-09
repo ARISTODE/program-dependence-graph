@@ -33,7 +33,6 @@ namespace pdg
         void insertFieldAccCheckPolicy(llvm::Function &F);
         void insertMockAttack(llvm::Function &F);
         unsigned computeAccTagforAddr(llvm::Value &addr);
-        std::string getDemangledName(const char* mangledName);
 
     private:
         DataAccessAnalysis *DAA;

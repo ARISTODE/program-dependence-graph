@@ -13,27 +13,27 @@ namespace pdg
   class TreeNode : public Node
   {
     public:
-      TreeNode(llvm::Value &val, GraphNodeType node_type) : Node(val, node_type) {};
+      TreeNode(llvm::Value &val, GraphNodeType nodeTy) : Node(val, nodeTy) {};
       TreeNode(const TreeNode& treeNode); 
-      TreeNode(llvm::DIType *di_type, int depth, TreeNode* parentNode, Tree* tree, GraphNodeType node_type);
-      TreeNode(llvm::Function &f, llvm::DIType *di_type, int depth, TreeNode* parentNode, Tree* tree, GraphNodeType node_type);
+      TreeNode(llvm::DIType *di_type, int depth, TreeNode* parentNode, Tree* tree, GraphNodeType nodeTy);
+      TreeNode(llvm::Function &f, llvm::DIType *di_type, int depth, TreeNode* parentNode, Tree* tree, GraphNodeType nodeTy);
       int expandNode(); // build child nodes and connect with them
       llvm::DILocalVariable *getDILocalVar() { return _di_local_var; }
       void insertChildNode(TreeNode *new_child_node) { _children.push_back(new_child_node); }
-      void setParentTreeNode(TreeNode *parentNode) { _parent_node = parentNode; }
+      void setParentTreeNode(TreeNode *parentNode) { _parentNode = parentNode; }
       void setDILocalVariable(llvm::DILocalVariable &di_local_var) { _di_local_var = &di_local_var; }
-      void addAddrVar(llvm::Value &v) { _addr_vars.insert(&v); }
+      void addAddrVar(llvm::Value &v) { _addrVars.insert(&v); }
       void setCanOptOut(bool can_opt_out) { _can_opt_out = can_opt_out; }
       bool getCanOptOut() { return _can_opt_out; }
       std::vector<TreeNode *> &getChildNodes() { return _children; }
-      std::unordered_set<llvm::Value *> &getAddrVars() { return _addr_vars; }
+      std::unordered_set<llvm::Value *> &getAddrVars() { return _addrVars; }
       void computeDerivedAddrVarsFromParent();
-      TreeNode *getParentNode() { return _parent_node; }
+      TreeNode *getParentNode() { return _parentNode; }
       Tree *getTree() { return _tree; }
       int getDepth() { return _depth; }
       void addAccessTag(AccessTag acc_tag) { _acc_tag_set.insert(acc_tag); }
       std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
-      bool isRootNode() {return _parent_node == nullptr;}
+      bool isRootNode() {return _parentNode == nullptr;}
       bool isStructMember();
       bool isStructField();
       int numOfChild() { return _children.size(); }
@@ -64,11 +64,11 @@ namespace pdg
 
     private:
       Tree *_tree = nullptr;
-      TreeNode *_parent_node = nullptr;
+      TreeNode *_parentNode = nullptr;
       int _depth = 0;
       llvm::DILocalVariable *_di_local_var = nullptr;
       std::vector<TreeNode *> _children;
-      std::unordered_set<llvm::Value *> _addr_vars;
+      std::unordered_set<llvm::Value *> _addrVars;
       std::set<AccessTag> _acc_tag_set;
       bool _is_accessed_in_atomic_region = false;
       bool _can_opt_out = false;
@@ -81,24 +81,24 @@ namespace pdg
   {
   public:
     Tree() = default;
-    Tree(llvm::Value &v) { _base_val = &v; }
+    Tree(llvm::Value &v) { _baseVal = &v; }
     Tree(const Tree &src_tree);
-    void setRootNode(TreeNode &rootNode) { _root_node = &rootNode; }
-    void setTreeNodeType(GraphNodeType node_type) { _root_node->setNodeType(node_type); }
-    TreeNode *getRootNode() const { return _root_node; }
+    void setRootNode(TreeNode &rootNode) { _rootNode = &rootNode; }
+    void setTreeNodeType(GraphNodeType nodeTy) { _rootNode->setNodeType(nodeTy); }
+    TreeNode *getRootNode() const { return _rootNode; }
     int size() { return _size; }
     void setSize(int size) { _size = size; }
     void increaseTreeSize() { _size++; }
     void print();
-    void build(int max_tree_depth = 6);
-    llvm::Value *getBaseVal() { return _base_val; }
-    void setBaseVal(llvm::Value &v) { _base_val = &v; }
-    llvm::Function *getFunc() { return (_root_node == nullptr ? nullptr : _root_node->getFunc()); }
+    void build(int maxTreeDepth = 6);
+    llvm::Value *getBaseVal() { return _baseVal; }
+    void setBaseVal(llvm::Value &v) { _baseVal = &v; }
+    llvm::Function *getFunc() { return (_rootNode == nullptr ? nullptr : _rootNode->getFunc()); }
     void addAccessForAllNodes(AccessTag acc_tag);
 
   private:
-    llvm::Value *_base_val;
-    TreeNode *_root_node;
+    llvm::Value *_baseVal;
+    TreeNode *_rootNode;
     int _size;
   };
 } // namespace pdg

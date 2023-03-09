@@ -5,25 +5,25 @@ using namespace llvm;
 pdg::TreeNode::TreeNode(const TreeNode &treeNode) : Node(treeNode.getNodeType())
 {
   _func = treeNode.getFunc();
-  _node_di_type = treeNode.getDIType();
+  _nodeDt = treeNode.getDIType();
   _node_type = treeNode.getNodeType();
 }
 
-pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parentNode, Tree *tree, GraphNodeType node_type) : Node(node_type)
+pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parentNode, Tree *tree, GraphNodeType nodeTy) : Node(nodeTy)
 {
-  _node_di_type = di_type;
+  _nodeDt = di_type;
   _depth = depth;
-  _parent_node = parentNode;
+  _parentNode = parentNode;
   _tree = tree;
   if (parentNode != nullptr)
     _func = parentNode->getFunc();
 }
 
-pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parentNode, Tree *tree, GraphNodeType node_type) : Node(node_type)
+pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parentNode, Tree *tree, GraphNodeType nodeTy) : Node(nodeTy)
 {
-  _node_di_type = di_type;
+  _nodeDt = di_type;
   _depth = depth;
-  _parent_node = parentNode;
+  _parentNode = parentNode;
   _tree = tree;
   _func = &f;
 }
@@ -31,82 +31,89 @@ pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *paren
 int pdg::TreeNode::expandNode()
 {
   // expand debugging information here
-  if (_node_di_type == nullptr)
+  if (_nodeDt == nullptr)
     return 0;
-  DIType* dt = dbgutils::stripMemberTag(*_node_di_type);
-  dt = dbgutils::stripAttributes(*dt);
 
-  // iterate through all the child nodes, build a tree node for each of them.
-  if (!dbgutils::isPointerType(*dt) && !dbgutils::isProjectableType(*dt))
-    return 0;
+  // if the current node has tag MEMBER, then this is a struct field.
+  // construct a node representing the address of this field
+  if (isStructMember())
+  {
+    // skip attributes tags, e.g., const
+    DIType *fieldDt = dbgutils::stripMemberTag(*_nodeDt);
+    fieldDt = dbgutils::stripAttributes(*fieldDt);
+    TreeNode *newChildNode = new TreeNode(*_func, fieldDt, _depth + 1, this, _tree, getNodeType());
+    newChildNode->computeDerivedAddrVarsFromParent();
+    _children.push_back(newChildNode);
+    this->addNeighbor(*newChildNode, EdgeType::PARAMETER_FIELD);
+    return 1;
+  }
+
+  // if the current node is not of pointer type of any projectable type, it must be either primitive type
+  // or array. There is no need to go further because there is no base type.
+  // if (!dbgutils::isPointerType(*dt) && !dbgutils::isProjectableType(*dt))
+  //   return 0;
 
   // for pointer type, build a child node, connect the chlid node with parent node
-  if (dbgutils::isPointerType(*dt))
+  if (dbgutils::isPointerType(*_nodeDt))
   {
-    DIType* pointed_obj_dt = dbgutils::getLowestDIType(*dt);
-    TreeNode *new_child_node = new TreeNode(*_func, pointed_obj_dt, _depth + 1, this, _tree, getNodeType());
-    new_child_node->computeDerivedAddrVarsFromParent();
-    _children.push_back(new_child_node);
-    this->addNeighbor(*new_child_node, EdgeType::PARAMETER_FIELD);
+    DIType *pointedObjTy = dbgutils::getLowestDIType(*_nodeDt);
+    TreeNode *newChildNode = new TreeNode(*_func, pointedObjTy, _depth + 1, this, _tree, getNodeType());
+    newChildNode->computeDerivedAddrVarsFromParent();
+    _children.push_back(newChildNode);
+    this->addNeighbor(*newChildNode, EdgeType::PARAMETER_FIELD);
     return 1;
   }
   // TODO: should change to aggregate type later
   // for aggregate types, connect all the fields node with the parent struct node
-  if (dbgutils::isProjectableType(*dt))
+  if (dbgutils::isProjectableType(*_nodeDt))
   {
-    auto di_node_arr = dyn_cast<DICompositeType>(dt)->getElements();
-    for (unsigned i = 0; i < di_node_arr.size(); i++)
+    auto DINodeArr = dyn_cast<DICompositeType>(_nodeDt)->getElements();
+    for (unsigned i = 0; i < DINodeArr.size(); i++)
     {
-      DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
-      TreeNode *new_child_node = new TreeNode(*_func, field_di_type, _depth + 1, this, _tree, getNodeType());
-      new_child_node->computeDerivedAddrVarsFromParent();
-      _children.push_back(new_child_node);
-      this->addNeighbor(*new_child_node, EdgeType::PARAMETER_FIELD);
+      DIType *fieldDt = dyn_cast<DIType>(DINodeArr[i]);
+      TreeNode *newChildNode = new TreeNode(*_func, fieldDt, _depth + 1, this, _tree, getNodeType());
+      newChildNode->computeDerivedAddrVarsFromParent();
+      _children.push_back(newChildNode);
+      this->addNeighbor(*newChildNode, EdgeType::PARAMETER_FIELD);
     }
-    return di_node_arr.size();
+    return DINodeArr.size();
   }
-
   return 0;
 }
 
 void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 {
-  if (!_parent_node)
+  if (!_parentNode)
     return;
-  if (!_node_di_type)
+  if (!_nodeDt)
     return;
-  std::unordered_set<llvm::Value *> base_node_addr_vars;
+  std::unordered_set<llvm::Value *> baseNodeAddrVars;
   // handle struct pointer
-  auto grand_parent_node = _parent_node->getParentNode();
-  // TODO: now hanlde struct specifically, but should also verify on other aggregate pointer types
-  if (grand_parent_node != nullptr && dbgutils::isStructType(*_parent_node->getDIType()) && dbgutils::isStructPointerType(*grand_parent_node->getDIType()))
-  {
-    base_node_addr_vars = grand_parent_node->getAddrVars();
-  }
+  // if root node is pointer, the fields addresses are computed directly from the root node' addr vars
+  auto grandParentNode = _parentNode->getParentNode();
+  // hanlde struct specifically, because field's address could be computed from the base pointer, which is
+  if (grandParentNode != nullptr && dbgutils::isStructType(*_parentNode->getDIType()) && dbgutils::isStructPointerType(*grandParentNode->getDIType()))
+    baseNodeAddrVars = grandParentNode->getAddrVars();
   else
-    base_node_addr_vars = _parent_node->getAddrVars();
+    baseNodeAddrVars = _parentNode->getAddrVars();
 
-  bool is_struct_field = false;
-  if (dbgutils::isStructType(*_parent_node->getDIType()))
-    is_struct_field = true;
-
-  for (auto base_node_addr_var : base_node_addr_vars)
+  for (auto baseNodeAddrVar : baseNodeAddrVars)
   {
-    if (base_node_addr_var == nullptr)
+    if (baseNodeAddrVar == nullptr)
       continue;
-    for (auto user : base_node_addr_var->users())
+    for (auto user : baseNodeAddrVar->users())
     {
       // handle load instruction, field should not inherit the load inst from the sturct pointer.
       if (LoadInst *li = dyn_cast<LoadInst>(user))
       {
-        if (!is_struct_field)
-          _addr_vars.insert(li);
+        if (baseNodeAddrVars.find(li) == baseNodeAddrVars.end())
+          _addrVars.insert(li);
       }
       // handle gep instruction
       if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
       {
-        if (pdgutils::isGEPOffsetMatchDIOffset(*_node_di_type, *gep))
-          _addr_vars.insert(gep);
+        if (pdgutils::isGEPOffsetMatchDIOffset(*_nodeDt, *gep))
+          _addrVars.insert(gep);
       }
     }
   }
@@ -122,14 +129,16 @@ pdg::Tree::Tree(const Tree &src_tree)
 {
   TreeNode *src_tree_root_node = src_tree.getRootNode();
   TreeNode *new_root_node = new TreeNode(*src_tree_root_node);
-  _root_node = new_root_node;
+  _rootNode = new_root_node;
   _size = 0;
 }
 
 void pdg::Tree::print()
 {
+  if (getFunc())
+    errs() << "func: " << getFunc()->getName() << "\n";
   std::queue<TreeNode *> nodeQueue;
-  nodeQueue.push(_root_node);
+  nodeQueue.push(_rootNode);
   while (!nodeQueue.empty())
   {
     int queue_size = nodeQueue.size();
@@ -138,14 +147,11 @@ void pdg::Tree::print()
       TreeNode *currentNode = nodeQueue.front();
       nodeQueue.pop();
       queue_size--;
-      if (currentNode == _root_node)
-        errs() << dbgutils::getSourceLevelVariableName(*currentNode->getDILocalVar()) << ", ";
-      else
-      {
-        if (currentNode->getDIType() != nullptr)
-          errs() << dbgutils::getSourceLevelVariableName(*currentNode->getDIType()) << "(" << currentNode->getAddrVars().size() << ")"
-                 << ", ";
-      }
+      if (currentNode->getDIType() != nullptr)
+        errs() << currentNode->getTypeName() << " - " << currentNode->getSrcHierarchyName(false) << "(" << currentNode->getAddrVars().size() << ")"
+               << ", ";
+      for (auto addrVar : currentNode->getAddrVars())
+        errs() << "\t" << *addrVar << "\n";
       for (auto child : currentNode->getChildNodes())
       {
         nodeQueue.push(child);
@@ -155,15 +161,15 @@ void pdg::Tree::print()
   }
 }
 
-void pdg::Tree::build(int max_tree_depth)
+void pdg::Tree::build(int maxTreeDepth)
 {
   int current_tree_depth = 0;
   std::queue<TreeNode *> nodeQueue;
-  nodeQueue.push(_root_node);
+  nodeQueue.push(_rootNode);
   while (!nodeQueue.empty()) // have more child to expand
   {
     current_tree_depth++;
-    if (current_tree_depth > max_tree_depth)
+    if (current_tree_depth > maxTreeDepth)
       break;
     int queue_size = nodeQueue.size();
     while (queue_size > 0)
@@ -174,9 +180,9 @@ void pdg::Tree::build(int max_tree_depth)
       _size++;
       if (currentNode->expandNode() > 0)
       {
-        for (auto child_node : currentNode->getChildNodes())
+        for (auto childNode : currentNode->getChildNodes())
         {
-          nodeQueue.push(child_node);
+          nodeQueue.push(childNode);
         }
       }
     }
@@ -186,31 +192,31 @@ void pdg::Tree::build(int max_tree_depth)
 void pdg::Tree::addAccessForAllNodes(AccessTag acc_tag)
 {
   std::queue<TreeNode *> nodeQueue;
-  nodeQueue.push(_root_node);
+  nodeQueue.push(_rootNode);
   while (!nodeQueue.empty()) // have more child to expand
   {
     auto currentNode = nodeQueue.front();
     nodeQueue.pop();
     currentNode->addAccessTag(acc_tag);
-    for (auto child_node : currentNode->getChildNodes())
+    for (auto childNode : currentNode->getChildNodes())
     {
-      nodeQueue.push(child_node);
+      nodeQueue.push(childNode);
     }
   }
 }
 
 bool pdg::TreeNode::isStructMember()
 {
-  if (_node_di_type != nullptr)
-    return (_node_di_type->getTag() == llvm::dwarf::DW_TAG_member);
+  if (_nodeDt != nullptr)
+    return (_nodeDt->getTag() == llvm::dwarf::DW_TAG_member);
   return false;
 }
 
 bool pdg::TreeNode::isStructField()
 {
-  if (_node_di_type != nullptr)
+  if (_nodeDt != nullptr)
   {
-    auto dt = dbgutils::stripAttributes(*_node_di_type);
+    auto dt = dbgutils::stripAttributes(*_nodeDt);
     return (dt->getTag() == llvm::dwarf::DW_TAG_member);
   }
   return false;
@@ -227,7 +233,7 @@ std::string pdg::TreeNode::getSrcName()
 
 std::string pdg::TreeNode::getTypeName()
 {
-  if (getDIType()) 
+  if (getDIType())
     return dbgutils::getSourceLevelTypeName(*getDIType());
   return "";
 }

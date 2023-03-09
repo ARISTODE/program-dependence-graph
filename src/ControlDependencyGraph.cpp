@@ -16,11 +16,11 @@ void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock 
   ProgramGraph &g = ProgramGraph::getInstance();
   for (auto &inst : BB)
   {
-    Node* inst_node = g.getNode(inst);
+    Node* instNode = g.getNode(inst);
     // TODO: a special case when gep is used as a operand in load. Fix later
-    if (inst_node != nullptr)
-      n.addNeighbor(*inst_node, EdgeType::CONTROL);
-    // assert(inst_node != nullptr && "cannot find node for inst\n");
+    if (instNode != nullptr)
+      n.addNeighbor(*instNode, EdgeType::CONTROL);
+    // assert(instNode != nullptr && "cannot find node for inst\n");
   }
 }
 
