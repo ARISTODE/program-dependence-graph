@@ -55,11 +55,13 @@ namespace pdg
     std::string rtrim(std::string str);
     std::string trimStr(std::string str);
     std::string constructAnnoStr(std::set<std::string> &annotations);
+    bool isMainFunc(llvm::Function &F);
     bool isFileExist(std::string fileName);
     bool isSkbNode(TreeNode& treeNode);
     bool isPrecedeInst(llvm::Instruction &i1, llvm::Instruction &i2, llvm::Function &F);
     void printTreeNodeAddrVars(TreeNode &treeNode);
     std::string getDemangledName(const char *mangledName);
+    void readLinesFromFile(std::set<std::string> &lines, std::string fileName);
   } // namespace pdgutils
 } // namespace pdg
 #endif

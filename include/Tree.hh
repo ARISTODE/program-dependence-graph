@@ -31,7 +31,7 @@ namespace pdg
       TreeNode *getParentNode() { return _parentNode; }
       Tree *getTree() { return _tree; }
       int getDepth() { return _depth; }
-      void addAccessTag(AccessTag acc_tag) { _acc_tag_set.insert(acc_tag); }
+      void addAccessTag(AccessTag accTag) { _acc_tag_set.insert(accTag); }
       std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
       bool isRootNode() {return _parentNode == nullptr;}
       bool isStructMember();
@@ -94,7 +94,7 @@ namespace pdg
     llvm::Value *getBaseVal() { return _baseVal; }
     void setBaseVal(llvm::Value &v) { _baseVal = &v; }
     llvm::Function *getFunc() { return (_rootNode == nullptr ? nullptr : _rootNode->getFunc()); }
-    void addAccessForAllNodes(AccessTag acc_tag);
+    void addAccessForAllNodes(AccessTag accTag);
 
   private:
     llvm::Value *_baseVal;

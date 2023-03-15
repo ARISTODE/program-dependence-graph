@@ -572,9 +572,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
   //   // compute access to the addr represented by the treenode
   //   std::set<AccessTag> acc_tags;
   //   computeDataAccessTagsForVal(*addrVar, acc_tags);
-  //   for (auto acc_tag : acc_tags)
+  //   for (auto accTag : acc_tags)
   //   {
-  //     treeNode.addAccessTag(acc_tag);
+  //     treeNode.addAccessTag(accTag);
   //   }
   // }
 
@@ -631,13 +631,13 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
           computeDataAccessTagsForArrayVal(*n->getValue(), acc_tags);
         else
           computeDataAccessTagsForVal(*n->getValue(), acc_tags);
-        for (auto acc_tag : acc_tags)
+        for (auto accTag : acc_tags)
         {
-          treeNode.addAccessTag(acc_tag);
+          treeNode.addAccessTag(accTag);
           // TODO: this is a temporary fix, because Parameter tree don't have node representing
           // the value of the field address. Need to add this kind of node soon.
           if (parentNode && parentNode->isStructField())
-            parentNode->addAccessTag(acc_tag);
+            parentNode->addAccessTag(accTag);
         }
       }
     }
@@ -1306,11 +1306,11 @@ void pdg::DataAccessAnalysis::generateIDLFromGlobalVarTree(GlobalVariable &gv, T
       }
     }
     // compute get/set attribute
-    for (auto acc_tag : acc_tags)
+    for (auto accTag : acc_tags)
     {
-      if (acc_tag == AccessTag::DATA_READ)
+      if (accTag == AccessTag::DATA_READ)
         anno += "[get]";
-      if (acc_tag == AccessTag::DATA_WRITE)
+      if (accTag == AccessTag::DATA_WRITE)
         anno += "[set]";
     }
     _idlFile << "global " << anno << " " << type_name << " " << var_name << ";\n";
@@ -1322,10 +1322,11 @@ void pdg::DataAccessAnalysis::generateIDLFromGlobalVarTree(GlobalVariable &gv, T
 /*
 for function F, generaete JSON object that represent the accesses to its parameters
 */
-void pdg::DataAccessAnalysis::generateJSONObjectForFunc(Function &F, std::ofstream &jsonFile)
+void pdg::DataAccessAnalysis::generateJSONObjectForFunc(Function &F, nlohmann::json &moduleJSONObj)
 {
   FunctionWrapper *fw = getNescheckFuncWrapper(F);
   nlohmann::json rootJSONObj;
+  rootJSONObj["fname"] = F.getName().str();
   // generate projection for each argument
   auto argTreeMap = fw->getArgFormalInTreeMap();
   for (auto iter = argTreeMap.begin(); iter != argTreeMap.end(); iter++)
@@ -1341,7 +1342,8 @@ void pdg::DataAccessAnalysis::generateJSONObjectForFunc(Function &F, std::ofstre
       rootJSONObj["args"].push_back(jsonObj);
     }
   }
-  jsonFile << rootJSONObj.dump();
+  // store the policy for function
+  moduleJSONObj["policy"].push_back(rootJSONObj);
 }
 
 /*
@@ -1371,11 +1373,12 @@ nlohmann::json pdg::DataAccessAnalysis::createJSONObjectForNode(TreeNode &treeNo
   auto nodeDt = treeNode.getDIType();
   if (!nodeDt)
     return jsonObj;
-
+  auto funcName = treeNode.getFunc()->getName().str();
   if (treeNode.isStructField())
   {
     unsigned fieldOffset = dbgutils::computeFieldOffsetInBytes(*nodeDt);
     jsonObj["offset"] = fieldOffset;
+    jsonObj["dbg"] =  funcName + "::" + treeNode.getSrcHierarchyName();
   }
   unsigned accCap = computeAccCapForNode(treeNode);
   jsonObj["cap"] = accCap;
@@ -1392,8 +1395,8 @@ nlohmann::json pdg::DataAccessAnalysis::createJSONObjectForNode(TreeNode &treeNo
       auto structObjTreeNode = structPtrTreeNode->getChildNodes()[0];
       for (auto childNode : structObjTreeNode->getChildNodes())
       {
-        // if (childNode->getAccessTags().size() != 0)
-          jsonObj["fields"].push_back(createJSONObjectForNode(*childNode));
+        // we instrument for all fields. Even the fields has violation access
+        jsonObj["fields"].push_back(createJSONObjectForNode(*childNode));
       }
     }
   }
@@ -1904,11 +1907,11 @@ std::set<std::string> pdg::DataAccessAnalysis::inferTreeNodeAnnotations(TreeNode
   if (!isRet)
   {
     auto acc_tags = treeNode.getAccessTags();
-    for (auto acc_tag : acc_tags)
+    for (auto accTag : acc_tags)
     {
-      if (acc_tag == AccessTag::DATA_READ)
+      if (accTag == AccessTag::DATA_READ)
         annotations.insert("in");
-      else if (acc_tag == AccessTag::DATA_WRITE)
+      else if (accTag == AccessTag::DATA_WRITE)
         annotations.insert("out");
     }
   }

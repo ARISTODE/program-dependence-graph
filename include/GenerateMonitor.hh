@@ -3,8 +3,9 @@
 #include "LLVMEssentials.hh"
 #include "DebugInfoUtils.hh"
 #include "PDGUtils.hh"
-#include <unordered_set>
+#include <unordered_map>
 #include <fstream>
+#include <functional>
 
 namespace pdg
 {
@@ -16,14 +17,15 @@ namespace pdg
     bool runOnModule(llvm::Module &M) override;
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     void generateHeaders();
-    void generateStructDefinitionHeaders();
     void generateInstrumentFuncDefinitions();
-    void generateTypeCastFunc(llvm::Function &F);
-    void collectFuncParamsStructTys(std::unordered_set<llvm::DIType *> &structTypes, llvm::Function &F);
+    void collectFuncParamsStructTys(std::unordered_map<llvm::DIType *, std::string> &structTypes, llvm::Function &F);
     llvm::DIType *getDebugTypeForParameter(llvm::Function &F, unsigned paramIndex);
-    void collectStructTypes(llvm::DIType *rootTy, std::unordered_set<llvm::DIType *> &structTypes);
+    void collectStructTypes(llvm::DIType *rootTy, std::unordered_map<llvm::DIType *, std::string> &structTypes, std::string offsetStr, std::string &funcName);
     std::string getStructTypeName(llvm::DIType *Ty);
-    void generateCastFunction(std::unordered_set<llvm::DIType*>& structTypes);
+    void generateTypeCastFuncBody(llvm::Function &F);
+    void generateTypeCastFuncTop();
+    void generateTypeCasts(std::unordered_map<llvm::DIType *, std::string> &structTypes);
+    void generateTypeCastFuncBottom();
 
   private:
     std::ofstream MonitorFile;

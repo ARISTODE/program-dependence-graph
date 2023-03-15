@@ -12,10 +12,10 @@ void pdg::ExtractFuncWithPtrParamsPass::getAnalysisUsage(AnalysisUsage &AU) cons
 
 bool pdg::ExtractFuncWithPtrParamsPass::runOnModule(Module &M)
 {
-    std::ofstream outFile("ptrParamNames.txt");
+    std::ofstream outFile("boundaryAPI");
     for (auto &F : M)
     {
-        if (F.isDeclaration())
+        if (F.isDeclaration() || pdgutils::isMainFunc(F))
             continue;
 
         for (auto argIter = F.arg_begin(); argIter != F.arg_end(); argIter++)

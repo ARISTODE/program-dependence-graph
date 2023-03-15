@@ -914,8 +914,9 @@ bool pdg::SharedDataAnalysis::detectIsAddrVarUsedAsIndex(Value &addrVar)
         {
           auto ptrOperand = gep->getPointerOperand();
           auto ptrValNode = _PDG->getNode(*ptrOperand);
-          // this eliminate cases where pointer arith is used to compute struct field address
-          if (u == ptrOperand && ptrValNode->getDIType() && !dbgutils::isStructPointerType(*ptrValNode->getDIType()))
+          // this check whether the field is is used in pointer arithmetic, excluding the cases in which the field is a 
+          // struct pointer.
+          if (li == ptrOperand && ptrValNode->getDIType() && !dbgutils::isStructPointerType(*ptrValNode->getDIType()))
             return true;
 
           // check it is used as the offset operand, instead of pointer operand, this found the array indexing cases

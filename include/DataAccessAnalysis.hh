@@ -46,7 +46,7 @@ namespace pdg
     void generateIDLFromGlobalVarTree(llvm::GlobalVariable &gv, Tree *tree);
     void generateIDLFromArgTree(Tree *argTree, std::ofstream &outputFile, bool isRet = false, bool isGlobal = false);
     void generateIDLFromTreeNode(TreeNode &treeNode, llvm::raw_string_ostream &fieldsProjectionStr, llvm::raw_string_ostream &nestedStructProjStr, std::queue<TreeNode *> &nodeQueue, std::string indentLevel, std::string parentStructTypeName, bool isRet = false);
-    void generateJSONObjectForFunc(llvm::Function &F, std::ofstream &jsonFile);
+    void generateJSONObjectForFunc(llvm::Function &F, nlohmann::json &moduleJSONObj);
     nlohmann::json generateJSONObjectFromArgTree(Tree *argTree, unsigned argIdx);
     unsigned computeAccCapForNode(TreeNode &treeNode);
     nlohmann::json createJSONObjectForNode(TreeNode &treeNode);

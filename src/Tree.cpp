@@ -189,7 +189,7 @@ void pdg::Tree::build(int maxTreeDepth)
   }
 }
 
-void pdg::Tree::addAccessForAllNodes(AccessTag acc_tag)
+void pdg::Tree::addAccessForAllNodes(AccessTag accTag)
 {
   std::queue<TreeNode *> nodeQueue;
   nodeQueue.push(_rootNode);
@@ -197,7 +197,7 @@ void pdg::Tree::addAccessForAllNodes(AccessTag acc_tag)
   {
     auto currentNode = nodeQueue.front();
     nodeQueue.pop();
-    currentNode->addAccessTag(acc_tag);
+    currentNode->addAccessTag(accTag);
     for (auto childNode : currentNode->getChildNodes())
     {
       nodeQueue.push(childNode);

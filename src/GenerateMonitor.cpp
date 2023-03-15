@@ -7,8 +7,6 @@ using namespace llvm;
 
 char pdg::GenerateMonitorPass::ID = 0;
 
-extern cl::opt<std::string> TargetFuncName;
-
 void pdg::GenerateMonitorPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
 }
@@ -17,15 +15,23 @@ bool pdg::GenerateMonitorPass::runOnModule(Module &M)
 {
   MonitorFile.open("Monitor.cpp");
   generateHeaders();
+  // get the boundary API names
+  std::set<std::string> boundaryAPINames;
+  pdgutils::readLinesFromFile(boundaryAPINames, "boundaryAPI");
+  generateTypeCastFuncTop();
   for (auto &F : M)
   {
       if (F.isDeclaration())
           continue;
-      auto funcName = pdgutils::getDemangledName(F.getName().str().data());
-      if (funcName != TargetFuncName)
+      auto mangledFuncName = F.getName().str();
+      auto demangledFuncName = pdgutils::getDemangledName(mangledFuncName.data());
+      if (demangledFuncName.empty())
+          demangledFuncName = mangledFuncName;
+      if (boundaryAPINames.find(demangledFuncName) == boundaryAPINames.end())
           continue;
-      generateTypeCastFunc(F);
+      generateTypeCastFuncBody(F);
   }
+  generateTypeCastFuncBottom();
   generateInstrumentFuncDefinitions();
   MonitorFile.close();
   return false;
@@ -39,16 +45,13 @@ void pdg::GenerateMonitorPass::generateHeaders()
               << "#include <map>\n"
               << "#include <assert.h>\n"
               << "#include <fstream>\n"
+              << "#include <string>\n"
+              << "#include <functional>\n"
               << "#include \"json.hpp\"\n";
-  generateStructDefinitionHeaders();
 
   MonitorFile << "using json = nlohmann::json;\n";
   MonitorFile << "using namespace std;\n";
-}
-
-void pdg::GenerateMonitorPass::generateStructDefinitionHeaders()
-{
-  MonitorFile << "#include \"struct_def.h\"\n";
+  MonitorFile << "std::set<std::string> checkID;\n";
 }
 
 llvm::DIType *pdg::GenerateMonitorPass::getDebugTypeForParameter(Function &F, unsigned paramIndex)
@@ -74,7 +77,7 @@ llvm::DIType *pdg::GenerateMonitorPass::getDebugTypeForParameter(Function &F, un
   return paramType;
 }
 
-void pdg::GenerateMonitorPass::collectStructTypes(DIType *rootTy, std::unordered_set<DIType *> &structTypes)
+void pdg::GenerateMonitorPass::collectStructTypes(DIType *rootTy, std::unordered_map<DIType *, std::string> &structTypes, std::string offsetStr, std::string &funcName)
 {
   if (!rootTy || structTypes.count(rootTy))
     return;
@@ -84,20 +87,27 @@ void pdg::GenerateMonitorPass::collectStructTypes(DIType *rootTy, std::unordered
     if (structTy->getTag() == dwarf::DW_TAG_structure_type ||
         structTy->getTag() == dwarf::DW_TAG_class_type)
     {
-          structTypes.insert(structTy);
+          structTypes.insert(std::make_pair(structTy, (funcName + "." + offsetStr)));
           for (auto *elemTy : structTy->getElements())
           {
-              collectStructTypes(dyn_cast<DIType>(elemTy), structTypes);
+              collectStructTypes(dyn_cast<DIType>(elemTy), structTypes, offsetStr, funcName);
           }
     }
   }
+  else if (rootTy->getTag() == llvm::dwarf::DW_TAG_member)
+  {
+    auto *ptrTy = cast<DIDerivedType>(rootTy);
+    auto fieldOffset = rootTy->getOffsetInBits() / 8;
+    std::string newOffsetStr = offsetStr + "." + std::to_string(fieldOffset);
+    collectStructTypes(ptrTy->getBaseType(), structTypes, newOffsetStr, funcName);
+  }
   else if (auto *ptrTy = dyn_cast<DIDerivedType>(rootTy))
   {
-    collectStructTypes(ptrTy->getBaseType(), structTypes);
+    collectStructTypes(ptrTy->getBaseType(), structTypes, offsetStr, funcName);
   }
 }
 
-void pdg::GenerateMonitorPass::collectFuncParamsStructTys(std::unordered_set<DIType *> &structTypes, Function &F)
+void pdg::GenerateMonitorPass::collectFuncParamsStructTys(std::unordered_map<DIType *, std::string> &structTypes, Function &F)
 {
   for (auto argIter = F.arg_begin(); argIter != F.arg_end(); ++argIter)
   {
@@ -105,7 +115,8 @@ void pdg::GenerateMonitorPass::collectFuncParamsStructTys(std::unordered_set<DIT
     auto argDITy = getDebugTypeForParameter(F, argIdx);
     if (!argDITy)
           continue;
-    collectStructTypes(argDITy, structTypes);
+    auto funcName = F.getName().str();
+    collectStructTypes(argDITy, structTypes, std::to_string(argIdx), funcName);
   }
 }
 
@@ -123,17 +134,29 @@ std::string pdg::GenerateMonitorPass::getStructTypeName(DIType* Ty) {
   return "";
 }
 
-void pdg::GenerateMonitorPass::generateCastFunction(std::unordered_set<DIType *> &structTypes)
+void pdg::GenerateMonitorPass::generateTypeCastFuncTop()
 {
-  MonitorFile << "void* castToType(unsigned typeId, void* ptr) {\n";
-  MonitorFile << "  switch (typeId) {\n";
-  unsigned id = 0;
-  for (auto ty : structTypes)
+  MonitorFile << "void* castToType(std::string typeId, void* ptr) {\n";
+  MonitorFile << "  std::hash<std::string> hashFunc;\n";
+  MonitorFile << "  size_t strHash = hashFunc(typeId);\n";
+  MonitorFile << "  switch (strHash) {\n";
+}
+
+void pdg::GenerateMonitorPass::generateTypeCasts(std::unordered_map<DIType *, std::string> &structTypes)
+{
+  std::hash<std::string> hashFunc;
+  for (auto iter = structTypes.begin(); iter != structTypes.end(); iter++)
   {
-    MonitorFile << "    case " << id++ << ": {\n";
-    MonitorFile << "      return (void *)(*static_cast<" << getStructTypeName(ty) << "**>(ptr));\n";
+    DIType* structTy = iter->first;
+    std::string id = iter->second;
+    MonitorFile << "    case " << hashFunc(id) << ": {\n";
+    MonitorFile << "      return (void *)(*static_cast<" << getStructTypeName(structTy) << "**>(ptr));\n";
     MonitorFile << "    }\n";
   }
+}
+
+void pdg::GenerateMonitorPass::generateTypeCastFuncBottom()
+{
   MonitorFile << "    default: {\n";
   MonitorFile << "      return nullptr;\n";
   MonitorFile << "    }\n";
@@ -141,56 +164,77 @@ void pdg::GenerateMonitorPass::generateCastFunction(std::unordered_set<DIType *>
   MonitorFile << "}\n";
 }
 
-void pdg::GenerateMonitorPass::generateTypeCastFunc(Function &F)
+void pdg::GenerateMonitorPass::generateTypeCastFuncBody(Function &F)
 {
   // compute all struct types reachable from the parameters
-  std::unordered_set<DIType *> structTypes;
+  std::unordered_map<DIType *, std::string> structTypes;
   collectFuncParamsStructTys(structTypes, F);
   // give a unique id for each type, and start generating a function
-  generateCastFunction(structTypes);
+  generateTypeCasts(structTypes);
 }
 
 void pdg::GenerateMonitorPass::generateInstrumentFuncDefinitions()
 {
-  MonitorFile << "std::map<void*, unsigned> fieldAccCapMap;\n";
+  MonitorFile << "std::map<std::string, std::pair<unsigned, std::string>> fieldAccCapMap;\n";
   MonitorFile << R"(
     // receive a field addr, return the pointer stored on the address
 // the fieldJSONObj stores the cap, and nested struct fields for the pointer field
-void setupPolicyForAddr(void *addr, unsigned typeId, json fieldJSONObj)
+void setupPolicyForAddr(void *addr, std::string offsetStr, json fieldJSONObj, std::string funcName)
 {
-    void *fieldPtrVal = castToType(typeId, addr);
-    cout << "field addr " << addr << " deref addr " << fieldPtrVal << "\n";
+    void *fieldPtrVal = castToType(offsetStr, addr);
+    if (!fieldPtrVal)
+      return;
     for (auto obj : fieldJSONObj["fields"])
     {
         if (!obj.contains("offset"))
             continue;
+        std::string dbgStr = "";
+        if (obj.contains("dbg"))
+          dbgStr = obj["dbg"];
         auto offset = obj["offset"];
         auto accCap = obj["cap"];
         void *fieldAddr = static_cast<void *>(static_cast<char *>(fieldPtrVal) + offset);
-        fieldAccCapMap[fieldAddr] = accCap;
-        if (obj.contains("fields"))
-            setupPolicyForAddr(fieldAddr, 0, obj);
+        std::stringstream ss;
+        ss << fieldAddr;
+        std::string addrId = funcName + ss.str();
+        fieldAccCapMap[addrId] = std::make_pair(accCap, dbgStr);
+        if (obj.contains("fields")) {
+            std::string newOffsetStr = offsetStr + "." + std::to_string((long long)offset);
+            setupPolicyForAddr(fieldAddr, newOffsetStr, obj, funcName);
+        }
     }
 }
 
-void setupArgAccessPolicy(void *baseAddr, unsigned argIdx)
+void setupArgAccessPolicy(void *baseAddr, unsigned argIdx, char* fName)
 {
+    std::string funcName(fName);
+    std::string argID = funcName + std::to_string(argIdx);
+    if (checkID.find(argID) != checkID.end())
+      return;
+    checkID.insert(argID);
     // load the field offset and it's access tag
-    std::ifstream fieldAccFile("fieldAccFile.map");
     std::ifstream policyJSONFile("AccPolicy.json");
-    json policyJSONObjList;
-    policyJSONFile >> policyJSONObjList;
+    json moduleJSONObj;
+    policyJSONFile >> moduleJSONObj;
     // find the parameter based on the argIdx argument
-    auto it = std::find_if(policyJSONObjList["args"].begin(), policyJSONObjList["args"].end(),
+    auto modulePolicyObjList = moduleJSONObj["policy"];
+    auto funcJSONObjIter = std::find_if(modulePolicyObjList.begin(), modulePolicyObjList.end(), 
+                            [funcName](const auto &obj) {
+                                return obj["fname"] == funcName;
+                            });
+    if (funcJSONObjIter == modulePolicyObjList.end())
+      return;
+    cout << "setting up policy for func: " << funcName << "\n";
+    json funcJSONObj = *funcJSONObjIter;
+    auto it = std::find_if(funcJSONObj["args"].begin(), funcJSONObj["args"].end(),
                            [argIdx](const auto &obj)
                            {
                                return obj["idx"] == argIdx;
                            });
     // Check if the object was found
-    if (it != policyJSONObjList["args"].end())
+    if (it != funcJSONObj["args"].end())
     {
         // arg root object was found
-        std::cout << "Found policy object with arg idx" << argIdx << std::endl;
         // retrive offset and access cap
         auto parentJSONObj = *it;
         for (auto obj : parentJSONObj["fields"])
@@ -198,30 +242,53 @@ void setupArgAccessPolicy(void *baseAddr, unsigned argIdx)
             auto offset = obj["offset"];
             auto accCap = obj["cap"];
             void *fieldAddr = static_cast<void *>(static_cast<char *>(baseAddr) + offset);
-            fieldAccCapMap[fieldAddr] = accCap;
+            std::string dbgStr = "";
+            if (obj.contains("dbg"))
+              dbgStr = obj["dbg"];
+            std::stringstream ss;
+            ss << fieldAddr;
+            std::string addrId = funcName + ss.str();
+            fieldAccCapMap[addrId] = std::make_pair(accCap, obj["dbg"]);
             // process pointer fields
-            if (obj.contains("fields"))
-                setupPolicyForAddr(fieldAddr, 0, obj);
+             if (obj.contains("fields")) {
+                auto offsetStr = funcName + "." + std::to_string((long long)argIdx) + "." + std::to_string((long long)offset);
+                setupPolicyForAddr(fieldAddr, offsetStr, obj, funcName);
+            }
         }
     }
 }
 
-void checkFieldAccessPolicy(void *fieldAddr, unsigned accTag)
+void checkFieldAccessPolicy(void *fieldAddr, unsigned accTag, char* fName)
 {
-    if (fieldAccCapMap.find(fieldAddr) == fieldAccCapMap.end())
+    std::stringstream ss;
+    ss << fieldAddr;
+    std::string funcName(fName);
+    std::string addrId = funcName + ss.str();
+    if (fieldAccCapMap.find(addrId) == fieldAccCapMap.end())
         return;
-    auto policyAccTag = fieldAccCapMap[fieldAddr];
+    auto accPair = fieldAccCapMap[addrId];
+    auto policyAccTag = accPair.first;
+    auto dbgStr = accPair.second;
     // allow both read and write, don't need to check
     if (policyAccTag == 3)
         return;
     if (policyAccTag == 0)
     {
+        auto accTyStr = "READ";
+        if (accTag == 2)
+          accTyStr = "WRITE";
         // the policy says don't allow both read and write
         if (accTag != 0)
             std::cout << "\033[1;31m"
                       << "[Violation]: "
                       << "\033[0m"
-                      << "Accessing illegal addr." << std::endl;
+                      << accTyStr
+                      << " accessing illegal addr " 
+                      << fieldAddr
+                      << " ["
+                      << dbgStr
+                      << "]"
+                      << std::endl;
     }
     else if (policyAccTag != accTag)
     {
@@ -229,12 +296,22 @@ void checkFieldAccessPolicy(void *fieldAddr, unsigned accTag)
             std::cout << "\033[1;31m"
                       << "[Violation]: "
                       << "\033[0m"
-                      << "Writing to read-only addr " << fieldAddr << std::endl;
+                      << "Writing to read-only addr " 
+                      <<  fieldAddr
+                      << " ["
+                      << dbgStr 
+                      << "]"
+                      << std::endl;
         else if (policyAccTag == 2)
             std::cout << "\033[1;31m"
                       << "[Violation]: "
                       << "\033[0m"
-                      << "Reading to write-only addr" << fieldAddr << std::endl;
+                      << "Reading to write-only addr " 
+                      <<  fieldAddr
+                      << " ["
+                      << dbgStr 
+                      << "]"
+                      << std::endl;
     }
 }
 )";

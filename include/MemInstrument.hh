@@ -38,9 +38,6 @@ namespace pdg
         DataAccessAnalysis *DAA;
         ProgramGraph *PDG;
         llvm::Module *Module_;
-        llvm::FunctionCallee addMrrFunc;
-        llvm::FunctionCallee deleteMrrFunc;
-        llvm::FunctionCallee checkPtrAccessFunc;
         llvm::FunctionCallee setupArgAccessPolicyFunc;
         llvm::FunctionCallee checkFieldAccessFunc;
     };

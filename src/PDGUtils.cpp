@@ -634,6 +634,11 @@ bool pdg::pdgutils::isDoublePointer(Value &ptr)
   return false;
 }
 
+bool pdg::pdgutils::isMainFunc(Function &F)
+{
+  return F.getName() == "main";
+}
+
 bool pdg::pdgutils::isFileExist(std::string fileName)
 {
   std::ifstream in_file(fileName);
@@ -682,7 +687,6 @@ std::string pdg::pdgutils::getDemangledName(const char* mangledName)
   std::string ret(demangledName);
   free(demangledName);
   // Find the beginning of the function name.
- 
   size_t startPos = ret.find_first_not_of(" \t\n\r");
   if (startPos == std::string::npos) {
     return "";
@@ -694,5 +698,22 @@ std::string pdg::pdgutils::getDemangledName(const char* mangledName)
   }
   // Extract the function name and return it.
   return ret.substr(startPos, endPos - startPos);
-  return ret;
+}
+
+void pdg::pdgutils::readLinesFromFile(std::set<std::string> &lines, std::string fileName)
+{
+  std::ifstream file(fileName); // Open file
+  if (file.is_open())
+  {
+    std::string line;
+    while (getline(file, line))
+    {                   // Read each line
+    lines.insert(line); // Insert line into set
+    }
+    file.close(); // Close file
+  }
+  else
+  {
+    errs() << "Unable to open file!" << "\n";
+  }
 }
