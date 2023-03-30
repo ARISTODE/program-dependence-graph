@@ -7,6 +7,9 @@ pdg::TreeNode::TreeNode(const TreeNode &tree_node) : Node(tree_node.getNodeType(
   _func = tree_node.getFunc();
   _node_di_type = tree_node.getDIType();
   _node_type = tree_node.getNodeType();
+  _depth = tree_node.getDepth();
+  _parent_node = tree_node.getParentNode();
+  _func = tree_node.getFunc();
 }
 
 pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
@@ -15,6 +18,8 @@ pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parent_node, Tree 
   _depth = depth;
   _parent_node = parent_node;
   _tree = tree;
+  if (parent_node != nullptr)
+    _func = parent_node->getFunc();
 }
 
 pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
@@ -87,8 +92,12 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 
   for (auto base_node_addr_var : base_node_addr_vars)
   {
+    if (base_node_addr_var == nullptr)
+      continue;
     for (auto user : base_node_addr_var->users())
     {
+      if (user == nullptr)
+        continue;
       // handle load instruction, field should not get the load inst from the sturct pointer.
       if (LoadInst *li = dyn_cast<LoadInst>(user))
       {
