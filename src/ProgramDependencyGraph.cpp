@@ -67,6 +67,8 @@ void pdg::ProgramDependencyGraph::connectInTrees(Tree *src_tree, Tree *dst_tree,
                                                  EdgeType edge_type) {
   if (src_tree->size() != dst_tree->size())
     return;
+  if (src_tree == nullptr || dst_tree == nullptr)
+    return;
   auto src_tree_root_node = src_tree->getRootNode();
   auto dst_tree_root_node = dst_tree->getRootNode();
   std::queue<std::pair<TreeNode *, TreeNode *>> node_pairs_queue;
@@ -135,6 +137,9 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw,
     // step 2: connect actual in -> formal in
     auto actual_in_tree = cw.getArgActualInTree(*actual_arg);
     auto formal_in_tree = fw.getArgFormalInTree(*formal_arg);
+    // 为什么这里会有nullptr?
+    if (actual_in_tree == nullptr || formal_in_tree == nullptr)
+      continue;
     _PDG->addTreeNodesToGraph(*actual_in_tree);
     connectInTrees(actual_in_tree, formal_in_tree, EdgeType::PARAMETER_IN);
     // step 3: connect actual out -> formal out
