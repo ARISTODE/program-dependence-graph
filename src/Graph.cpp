@@ -176,6 +176,8 @@ void pdg::ProgramGraph::build(Module &M)
         auto ind_call_candidates = call_g.getIndirectCallCandidates(*ci, M);
         if (ind_call_candidates.size() > 0)
           called_func = *ind_call_candidates.begin();
+        else 
+          continue;
       }
       if (!hasFuncWrapper(*called_func))
         continue;
