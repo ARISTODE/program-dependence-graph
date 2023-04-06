@@ -18,8 +18,6 @@ pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parent_node, Tree 
   _depth = depth;
   _parent_node = parent_node;
   _tree = tree;
-  if (parent_node != nullptr)
-    _func = parent_node->getFunc();
 }
 
 pdg::TreeNode::TreeNode(Function &f, DIType *di_type, int depth, TreeNode *parent_node, Tree *tree, GraphNodeType node_type) : Node(node_type)
@@ -79,7 +77,7 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
   // handle struct pointer
   auto grand_parent_node = _parent_node->getParentNode();
   // TODO: now hanlde struct specifically, but should also verify on other aggregate pointer types
-  if (grand_parent_node != nullptr && dbgutils::isStructType(*_parent_node->getDIType()) && dbgutils::isStructPointerType(*grand_parent_node->getDIType()))
+  if (grand_parent_node != nullptr && dbgutils::isStructType(*(_parent_node->getDIType())) && dbgutils::isStructPointerType(*(grand_parent_node->getDIType())))
   {
     base_node_addr_vars = grand_parent_node->getAddrVars();
   }
@@ -96,8 +94,6 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
       continue;
     for (auto user : base_node_addr_var->users())
     {
-      if (user == nullptr)
-        continue;
       // handle load instruction, field should not get the load inst from the sturct pointer.
       if (LoadInst *li = dyn_cast<LoadInst>(user))
       {

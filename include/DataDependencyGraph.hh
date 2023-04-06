@@ -21,6 +21,7 @@ namespace pdg
     void addAliasEdges(llvm::Instruction &inst);
     llvm::AliasResult queryAliasUnderApproximate(llvm::Value &v1, llvm::Value &v2);
 
+    void dumpDataDepGraph(llvm::Function &F);
   private:
     llvm::MemoryDependenceResults *_mem_dep_res;
   };

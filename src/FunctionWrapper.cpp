@@ -42,7 +42,7 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
     AllocaInst* arg_alloca_inst = getArgAllocaInst(*arg);
     if (di_local_var == nullptr || arg_alloca_inst == nullptr)
     {
-      errs() << "empty di local var: " << _func->getName().str() << (di_local_var == nullptr) << " - " << (arg_alloca_inst == nullptr) << "\n";
+      // errs() << "empty di local var: " << _func->getName().str() << (di_local_var == nullptr) << " - " << (arg_alloca_inst == nullptr) << "\n";
       continue;
     }
     Tree *arg_formal_in_tree = new Tree(*arg);
