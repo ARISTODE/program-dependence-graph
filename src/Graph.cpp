@@ -109,9 +109,6 @@ void pdg::ProgramGraph::build(Module &M)
     Node * n = new Node(global_var, node_type);
     _val_node_map.insert(std::pair<Value *, Node *>(&global_var, n));
 
-    // outs() << "inserting ";
-    // global_var.print(outs());
-    // outs() << " \n";
     addNode(*n);
   }
 

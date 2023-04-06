@@ -142,15 +142,11 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw, Functi
     // step 2: connect actual in -> formal in
     auto actual_in_tree = cw.getArgActualInTree(*actual_arg);
     auto formal_in_tree = fw.getArgFormalInTree(*formal_arg);
-    if (actual_in_tree == nullptr)
-      continue;
     _PDG->addTreeNodesToGraph(*actual_in_tree);
     connectInTrees(actual_in_tree, formal_in_tree, EdgeType::PARAMETER_IN);
     // step 3: connect actual out -> formal out
     auto actual_out_tree = cw.getArgActualOutTree(*actual_arg);
     auto formal_out_tree = fw.getArgFormalOutTree(*formal_arg);
-    if (actual_out_tree == nullptr)
-      continue;
     _PDG->addTreeNodesToGraph(*actual_out_tree);
     connectOutTrees(formal_out_tree, actual_out_tree, EdgeType::PARAMETER_OUT);
   }
