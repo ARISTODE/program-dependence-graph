@@ -46,6 +46,8 @@ namespace pdg
     ValueNodeMap &getValueNodeMap() { return _val_node_map; }
     void dumpGraph();
 
+    std::set<Node *> findNodesReachedByEdges(Node &src, const std::set<EdgeType> &edge_types, bool is_backward = false);
+
   protected:
     ValueNodeMap _val_node_map;
     EdgeSet _edge_set;
@@ -85,7 +87,9 @@ namespace pdg
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
     bool isAnnotationCallInst(llvm::Instruction &inst);
     void buildGlobalAnnotationNodes(llvm::Module &M);
+
     void dumpDataDepGraph(llvm::Function &F);
+
 
   private:
     FuncWrapperMap _func_wrapper_map;

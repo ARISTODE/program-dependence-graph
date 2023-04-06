@@ -93,6 +93,8 @@ bool pdg::PDGCallGraph::isTypeEqual(Type& t1, Type &t2)
   return (t1_name == t2_name);
 }
 
+
+
 std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, Module &M)
 {
   Type *call_func_ty = ci.getFunctionType();
@@ -102,8 +104,9 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
   {
     if (F.isDeclaration() || F.empty())
       continue;
-    if (isFuncSignatureMatch(ci, F))
+    if (isFuncSignatureMatch(ci, F)) {
       ind_call_cand.insert(&F);
+    }
   }
   return ind_call_cand;
 }

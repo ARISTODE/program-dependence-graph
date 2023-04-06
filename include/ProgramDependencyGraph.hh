@@ -32,6 +32,9 @@ namespace pdg
       bool canReach(Node &src, Node &dst);
       bool canReach(Node &src, Node &dst, std::set<EdgeType> exclude_edge_types);
 
+      bool isIndirectCallCandidates(CallWrapper &cw, FunctionWrapper &fw);
+      bool checkChildNodes(Tree* src_tree, Tree* dst_tree);
+
     private:
       llvm::Module *_module;
       ProgramGraph *_PDG;

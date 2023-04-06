@@ -24,7 +24,7 @@ uint64_t pdg::pdgutils::getGEPOffsetInBits(Module& M, StructType &struct_type, G
   auto const struct_layout = data_layout.getStructLayout(&struct_type);
   if (gep_offset >= struct_type.getNumElements())
   {
-    errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
+    //errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
     return INT_MIN;
   }
   uint64_t field_bit_offset = struct_layout->getElementOffsetInBits(gep_offset);
@@ -390,7 +390,6 @@ std::string& pdg::pdgutils::rtrim(std::string& s, const char* t)
     s.erase(s.find_last_not_of(t) + 1);
     return s;
 }
-
 
 // check if i1 is precede of i2
 bool pdg::pdgutils::isPrecedeInst(Instruction &i1, Instruction &i2, Function& F) 

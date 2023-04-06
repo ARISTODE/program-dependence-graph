@@ -1,5 +1,4 @@
 #include "DataDependencyGraph.hh"
-#include "PDGUtils.hh"
 
 char pdg::DataDependencyGraph::ID = 0;
 
@@ -19,7 +18,6 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
-    
     _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
     // setup alias query interface for each function
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
@@ -27,7 +25,6 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
       addDefUseEdges(*inst_iter);
       addAliasEdges(*inst_iter);
       addRAWEdges(*inst_iter);
-      // some RAW could be missing due to the unsound alias analysis, need to swap the alias analysis used by the memory dependency analysis to obtain more precise results.
       addRAWEdgesUnderapproximate(*inst_iter);
     }
   }
@@ -82,8 +79,10 @@ void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
   ProgramGraph &g = ProgramGraph::getInstance();
   auto dep_res = _mem_dep_res->getDependency(&inst);
   auto dep_inst = dep_res.getInst();
-  
-  if (!dep_inst || !isa<StoreInst>(dep_inst))
+
+  if (!dep_inst)
+    return;
+  if (!isa<StoreInst>(dep_inst))
     return;
 
   Node *src = g.getNode(inst);

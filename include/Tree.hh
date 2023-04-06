@@ -26,9 +26,9 @@ namespace pdg
       std::vector<TreeNode *> &getChildNodes() { return _children; }
       std::unordered_set<llvm::Value *> &getAddrVars() { return _addr_vars; }
       void computeDerivedAddrVarsFromParent();
-      TreeNode *getParentNode() { return _parent_node; }
+      TreeNode *getParentNode() const { return _parent_node; }
       Tree *getTree() { return _tree; }
-      int getDepth() { return _depth; }
+      int getDepth() const { return _depth; }
       void addAccessTag(AccessTag acc_tag) { _acc_tag_set.insert(acc_tag); }
       std::set<AccessTag> &getAccessTags() { return _acc_tag_set; }
       bool isRootNode() {return _parent_node == nullptr;}
