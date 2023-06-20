@@ -1,5 +1,6 @@
 // #include "Graph.hh"
 #include "PDGCallGraph.hh"
+#include <thread>
 
 using namespace llvm;
 
@@ -34,52 +35,57 @@ pdg::Node *pdg::GenericGraph::getNode(Value &v)
 // ===== Graph Traversal =====
 
 // DFS search
-bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst)
+void pdg::GenericGraph::dfs(Node *currentNode, Node &dst, std::set<EdgeType> &includeEdgeTypes, std::unordered_set<Node *> &visited, std::vector<llvm::Function *> &currentPath, std::set<std::vector<llvm::Function *>> *allPaths, bool recordPath)
 {
-  std::set<EdgeType> edgeTypes;
-  if (canReach(src, dst, edgeTypes))
-    return true;
-  return false;
+  if (currentNode == nullptr || visited.find(currentNode) != visited.end())
+    return;
+
+  visited.insert(currentNode);
+
+  if (llvm::Function *currentFunction = currentNode->getFunc())
+    currentPath.push_back(currentFunction);
+
+  if (currentNode == &dst && recordPath)
+    allPaths->insert(currentPath);
+  else
+  {
+    for (auto out_edge : currentNode->getOutEdgeSet())
+    {
+      if (includeEdgeTypes.find(out_edge->getEdgeType()) == includeEdgeTypes.end())
+        continue;
+      dfs(out_edge->getDstNode(), dst, includeEdgeTypes, visited, currentPath, allPaths, recordPath);
+    }
+  }
+
+  visited.erase(currentNode);
+
+  if (!currentPath.empty())
+    currentPath.pop_back();
 }
 
-bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> &exclude_edge_types)
+bool pdg::GenericGraph::canReach(Node &src, Node &dst, std::set<EdgeType> &includeEdgeTypes, std::set<std::vector<llvm::Function *>> *allPaths, bool recordPath)
 {
-  // self-reachability
   if (&src == &dst)
     return true;
 
-  std::set<Node *> visited;
-  std::stack<Node *> nodeQueue;
-  nodeQueue.push(&src);
+  std::unordered_set<Node *> visited;
+  std::vector<llvm::Function *> currentPath;
 
-  while (!nodeQueue.empty())
-  {
-    auto currentNode = nodeQueue.top();
-    nodeQueue.pop();
-    if (currentNode == nullptr)
-      continue;
-    if (visited.find(currentNode) != visited.end())
-      continue;
-    visited.insert(currentNode);
-    if (currentNode == &dst)
-      return true;
-    for (auto out_edge : currentNode->getOutEdgeSet())
-    {
-      // exclude path
-      if (exclude_edge_types.find(out_edge->getEdgeType()) != exclude_edge_types.end())
-        continue;
-      nodeQueue.push(out_edge->getDstNode());
-    }
-  }
-  return false;
+  dfs(&src, dst, includeEdgeTypes, visited, currentPath, allPaths, recordPath);
+
+  if (recordPath)
+    return !allPaths->empty();
+  else
+    return visited.find(&dst) != visited.end();
 }
 
-std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edgeTy)
+
+std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edgeTy)
 {
-  std::set<Node *> ret;
+  std::unordered_set<Node *> ret;
   std::queue<Node *> nodeQueue;
   nodeQueue.push(&src);
-  std::set<Node*> visited;
+  std::unordered_set<Node*> visited;
   while (!nodeQueue.empty())
   {
     Node *currentNode = nodeQueue.front();
@@ -98,12 +104,12 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, 
   return ret;
 }
 
-std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src, std::set<EdgeType> &edgeTypes, bool isBackward)
+std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src, std::set<EdgeType> &edgeTypes, bool isBackward)
 {
-  std::set<Node *> ret;
+  std::unordered_set<Node *> ret;
   std::queue<Node *> nodeQueue;
   nodeQueue.push(&src);
-  std::set<Node *> visited;
+  std::unordered_set<Node *> visited;
   while (!nodeQueue.empty())
   {
     Node *currentNode = nodeQueue.front();
@@ -131,94 +137,111 @@ std::set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::Node &src,
 }
 
 // PDG Specific
-void pdg::ProgramGraph::build(Module &M)
+void pdg::ProgramGraph::build(Module &M) {
+  buildGlobalVariables(M);
+  buildFunctions(M);
+  buildCallGraphAndCallSites(M);
+  _isBuild = true;
+}
+
+void pdg::ProgramGraph::buildGlobalVariables(Module &M)
 {
-  // build node for global variables
   for (auto &global_var : M.getGlobalList())
   {
-    auto global_var_type = global_var.getType();
     if (global_var.isConstant())
       continue;
-    // if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
-    //   continue;
-    DIType* global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
+
+    DIType *global_var_di_type = dbgutils::getGlobalVarDIType(global_var);
     if (global_var_di_type == nullptr)
       continue;
-    TreeNode * n = new TreeNode(global_var, GraphNodeType::GLOBAL_VAR);
-    // add addr var for global
+
+    TreeNode *n = new TreeNode(global_var, GraphNodeType::GLOBAL_VAR);
     n->addAddrVar(global_var);
 
     _valNodeMap.insert(std::pair<Value *, Node *>(&global_var, n));
     addNode(*n);
-    Tree* global_tree = new Tree(global_var);
+
+    Tree *global_tree = new Tree(global_var);
     global_tree->setRootNode(*n);
     global_tree->build();
     _global_var_tree_map.insert(std::make_pair(&global_var, global_tree));
   }
+}
 
+void pdg::ProgramGraph::buildFunctions(Module &M)
+{
+  auto &call_g = PDGCallGraph::getInstance();
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
+    // if (!call_g.isBuildFuncNode(F))
+    //   continue;
     FunctionWrapper *func_w = new FunctionWrapper(&F);
-    for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
-    {
-      Node *n = new Node(*instIter, GraphNodeType::INST);
-      _valNodeMap.insert(std::pair<Value *, Node *>(&*instIter, n));
-      func_w->addInst(*instIter);
-      addNode(*n);
-      if (CallInst *ci = dyn_cast<CallInst>(&*instIter))
-      {
-        auto called_func = pdgutils::getCalledFunc(*ci);
-        if (called_func != nullptr)
-        {
-          std::string calleeName = called_func->getName().str();
-          calleeName = pdgutils::stripFuncNameVersionNumber(calleeName);
-        }
-      }
-    }
+    buildFunctionInstructions(F, func_w);
     func_w->buildFormalTreeForArgs();
     func_w->buildFormalTreesForRetVal();
     addFormalTreeNodesToGraph(*func_w);
     addNode(*func_w->getEntryNode());
     _func_wrapper_map.insert(std::make_pair(&F, func_w));
   }
+}
 
-  // build call graph
-  auto &call_g = PDGCallGraph::getInstance();
-  if (!call_g.isBuild())
-    call_g.build(M);
-  // handle call sites
-  for (auto &F : M)
+void pdg::ProgramGraph::buildFunctionInstructions(Function &F, FunctionWrapper *func_w)
+{
+  for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
   {
-    if (F.isDeclaration() || F.empty())
-      continue;
-    if (!hasFuncWrapper(F))
-      continue;
-    
-    FunctionWrapper *func_w = getFuncWrapper(F);
-    auto call_insts = func_w->getCallInsts();
-    for (auto ci : call_insts)
+    Node *n = new Node(*instIter, GraphNodeType::INST);
+    _valNodeMap.insert(std::pair<Value *, Node *>(&*instIter, n));
+    func_w->addInst(*instIter);
+    addNode(*n);
+    if (CallInst *ci = dyn_cast<CallInst>(&*instIter))
     {
       auto called_func = pdgutils::getCalledFunc(*ci);
-      if (called_func == nullptr)
+      if (called_func != nullptr)
       {
-        // handle indirect call
-        auto ind_call_candidates = call_g.getIndirectCallCandidates(*ci, M);
-        if (ind_call_candidates.size() > 0)
-          called_func = *ind_call_candidates.begin();
-        // continue;
+        std::string calleeName = called_func->getName().str();
+        calleeName = pdgutils::stripFuncNameVersionNumber(calleeName);
       }
-      if (!hasFuncWrapper(*called_func))
-        continue;
-      CallWrapper *cw = new CallWrapper(*ci);
-      FunctionWrapper *callee_fw = getFuncWrapper(*called_func);
-      cw->buildActualTreeForArgs(*callee_fw);
-      cw->buildActualTreesForRetVal(*callee_fw);
-      _call_wrapper_map.insert(std::make_pair(ci, cw));
     }
   }
-  _isBuild = true;
+}
+
+void pdg::ProgramGraph::buildCallGraphAndCallSites(Module &M)
+{
+  for (auto &F : M)
+  {
+    if (F.isDeclaration() || F.empty() || !hasFuncWrapper(F))
+      continue;
+
+    FunctionWrapper *func_w = getFuncWrapper(F);
+    auto call_insts = func_w->getCallInsts();
+
+    for (auto ci : call_insts)
+    {
+      handleCallSites(M, ci);
+    }
+  }
+}
+
+void pdg::ProgramGraph::handleCallSites(Module &M, CallInst *ci)
+{
+  auto &call_g = PDGCallGraph::getInstance();
+  auto called_func = pdgutils::getCalledFunc(*ci);
+  if (called_func == nullptr)
+  {
+    auto ind_call_candidates = call_g.getIndirectCallCandidates(*ci, M);
+    if (ind_call_candidates.size() > 0)
+      called_func = *ind_call_candidates.begin();
+  }
+  if (!called_func || !hasFuncWrapper(*called_func))
+    return;
+
+  CallWrapper *cw = new CallWrapper(*ci);
+  FunctionWrapper *callee_fw = getFuncWrapper(*called_func);
+  cw->buildActualTreeForArgs(*callee_fw);
+  cw->buildActualTreesForRetVal(*callee_fw);
+  _call_wrapper_map.insert(std::make_pair(ci, cw));
 }
 
 void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
@@ -228,32 +251,45 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
     if (F.isDeclaration())
       continue;
     FunctionWrapper *fw = _func_wrapper_map[&F];
-    auto dbgDeclareInsts = fw->getDbgDeclareInsts();
-    // bind ditype to the top-level pointer (alloca)
-    for (auto dbgInst : dbgDeclareInsts)
-    {
-      auto addr = dbgInst->getVariableLocation();
-      Node *addr_node = getNode(*addr);
-      if (!addr_node)
-        continue;
-      auto DLV = dbgInst->getVariable(); // di local variable instance
-      assert(DLV != nullptr && "cannot find DILocalVariable Node for computing DIType");
-      DIType *var_di_type = DLV->getType();
-      assert(var_di_type != nullptr && "cannot bind nullptr ditype to node!");
-      addr_node->setDIType(*var_di_type);
-      _node_di_type_map.insert(std::make_pair(addr_node, var_di_type));
-    }
-
-    for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
-    {
-      Instruction &i = *instIter;
-      Node* n = getNode(i);
-      assert(n != nullptr && "cannot compute node di type for null node!\n");
-      DIType* nodeDt = computeNodeDIType(*n);
-      n->setDIType(*nodeDt);
-    }
+    bindDITypeToLocalVariables(fw);
+    bindDITypeToInstructions(F);
   }
+  bindDITypeToGlobalVariables(M);
+}
 
+void pdg::ProgramGraph::bindDITypeToLocalVariables(FunctionWrapper *fw)
+{
+  auto dbgDeclareInsts = fw->getDbgDeclareInsts();
+  for (auto dbgInst : dbgDeclareInsts)
+  {
+    auto addr = dbgInst->getVariableLocation();
+    Node *addr_node = getNode(*addr);
+    if (!addr_node)
+      continue;
+    auto DLV = dbgInst->getVariable();
+    assert(DLV != nullptr && "cannot find DILocalVariable Node for computing DIType");
+    DIType *var_di_type = DLV->getType();
+    assert(var_di_type != nullptr && "cannot bind nullptr ditype to node!");
+
+    addr_node->setDIType(*var_di_type);
+    _node_di_type_map.insert(std::make_pair(addr_node, var_di_type));
+  }
+}
+
+void pdg::ProgramGraph::bindDITypeToInstructions(Function &F)
+{
+  for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
+  {
+    Instruction &i = *instIter;
+    Node *n = getNode(i);
+    assert(n != nullptr && "cannot compute node di type for null node!\n");
+    DIType *nodeDt = computeNodeDIType(*n);
+    n->setDIType(*nodeDt);
+  }
+}
+
+void pdg::ProgramGraph::bindDITypeToGlobalVariables(Module &M)
+{
   for (auto &global_var : M.getGlobalList())
   {
     Node *global_node = getNode(global_var);
@@ -265,10 +301,11 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
   }
 }
 
+// ----
 DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 {
-  // local variable 
-  Function* func = n.getFunc();
+  // local variable
+  Function *func = n.getFunc();
   if (!func)
     return nullptr;
   Value *val = n.getValue();
@@ -290,7 +327,7 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
           if (ai->getType() == val->getType())
           {
             Node *alloca_n = getNode(*ai);
-            DIType* alloca_node_dt = alloca_n->getDIType();
+            DIType *alloca_node_dt = alloca_n->getDIType();
             if (alloca_node_dt != nullptr && dbgutils::isStructPointerType(*alloca_node_dt))
               return alloca_node_dt;
           }
@@ -307,10 +344,10 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
   {
     if (Instruction *load_addr = dyn_cast<Instruction>(li->getPointerOperand()))
     {
-      Node* load_addr_node = getNode(*load_addr);
+      Node *load_addr_node = getNode(*load_addr);
       if (!load_addr_node)
         return nullptr;
-      DIType* load_addr_di_type = load_addr_node->getDIType();
+      DIType *load_addr_di_type = load_addr_node->getDIType();
       if (!load_addr_di_type)
         return nullptr;
       // DIType* retDIType = DIUtils::stripAttributes(sourceInstDIType);
@@ -333,17 +370,17 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
   // store inst
   if (StoreInst *st = dyn_cast<StoreInst>(val))
   {
-    Value* value_operand = st->getValueOperand();
-    Value* pointer_operand = st->getPointerOperand();
-    Node* value_op_node = getNode(*value_operand);
-    Node* ptr_op_node = getNode(*pointer_operand);
+    Value *value_operand = st->getValueOperand();
+    Value *pointer_operand = st->getPointerOperand();
+    Node *value_op_node = getNode(*value_operand);
+    Node *ptr_op_node = getNode(*pointer_operand);
     if (value_op_node == nullptr || ptr_op_node == nullptr)
       return nullptr;
-    
+
     if (value_op_node->getDIType() != nullptr)
       return nullptr;
 
-    DIType* ptr_op_di_type = ptr_op_node->getDIType();
+    DIType *ptr_op_di_type = ptr_op_node->getDIType();
     if (ptr_op_di_type == nullptr)
       return nullptr;
     DIType *value_op_di_type = dbgutils::getBaseDIType(*ptr_op_di_type);
@@ -357,15 +394,15 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
   // gep inst
   if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(val))
   {
-    Value* baseAddr = gep->getPointerOperand();
-    Node* baseAddrNode = getNode(*baseAddr);
+    Value *baseAddr = gep->getPointerOperand();
+    Node *baseAddrNode = getNode(*baseAddr);
     if (!baseAddrNode)
       return nullptr;
-    DIType* baseAddrDt = baseAddrNode->getDIType();
+    DIType *baseAddrDt = baseAddrNode->getDIType();
     if (!baseAddrDt)
       return nullptr;
 
-    DIType* baseAddrLowestDt = dbgutils::getLowestDIType(*baseAddrDt);
+    DIType *baseAddrLowestDt = dbgutils::getLowestDIType(*baseAddrDt);
     if (!baseAddrLowestDt)
       return nullptr;
     if (!dbgutils::isStructType(*baseAddrLowestDt))
@@ -390,7 +427,7 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
   if (CastInst *castInst = dyn_cast<CastInst>(val))
   {
     Value *castedVal = castInst->getOperand(0);
-    Node* castedValNode = getNode(*castedVal);
+    Node *castedValNode = getNode(*castedVal);
     if (!castedValNode)
       return nullptr;
     return castedValNode->getDIType();
@@ -402,13 +439,13 @@ DIType *pdg::ProgramGraph::computeNodeDIType(Node &n)
 
 void pdg::ProgramGraph::addTreeNodesToGraph(pdg::Tree &tree)
 {
-  TreeNode* rootNode = tree.getRootNode();
+  TreeNode *rootNode = tree.getRootNode();
   assert(rootNode && "cannot add tree nodes to graph, nullptr root node\n");
-  std::queue<TreeNode*> nodeQueue;
+  std::queue<TreeNode *> nodeQueue;
   nodeQueue.push(rootNode);
   while (!nodeQueue.empty())
   {
-    TreeNode* currentNode = nodeQueue.front();
+    TreeNode *currentNode = nodeQueue.front();
     nodeQueue.pop();
     addNode(*currentNode);
     for (auto childNode : currentNode->getChildNodes())
@@ -422,8 +459,8 @@ void pdg::ProgramGraph::addFormalTreeNodesToGraph(FunctionWrapper &func_w)
 {
   for (auto arg : func_w.getArgList())
   {
-    Tree* formalInTree = func_w.getArgFormalInTree(*arg);
-    Tree* formalOutTree = func_w.getArgFormalOutTree(*arg);
+    Tree *formalInTree = func_w.getArgFormalInTree(*arg);
+    Tree *formalOutTree = func_w.getArgFormalOutTree(*arg);
     if (!formalInTree || !formalOutTree)
       return;
     addTreeNodesToGraph(*formalInTree);

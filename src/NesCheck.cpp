@@ -619,7 +619,7 @@ namespace NesCheck
     // }
 
     // this function resolve a parameter's type based on it's reachable address nodes
-    std::string resolvePtrTypes(std::set<pdg::Node *> &addrNodes, std::string fieldID)
+    std::string resolvePtrTypes(std::unordered_set<pdg::Node *> &addrNodes, std::string fieldID)
     {
       std::string ptrType = "";
       for (auto node : addrNodes)

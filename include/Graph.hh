@@ -7,8 +7,6 @@
 #include "CallWrapper.hh"
 #include "FunctionWrapper.hh"
 #include "PDGEnums.hh"
-
-
 #include <unordered_map>
 #include <map>
 #include <set>
@@ -41,10 +39,10 @@ namespace pdg
     int numNode() { return _valNodeMap.size(); }
     void setIsBuild() { _isBuild = true; }
     bool isBuild() { return _isBuild; }
-    bool canReach(pdg::Node &src, pdg::Node &dst);
-    bool canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeType> &exclude_edge_types);
-    std::set<Node *> findNodesReachedByEdge(Node &src, EdgeType edgeTy);
-    std::set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edgeTypes, bool isBackward = false);
+    bool canReach(Node &src, Node &dst, std::set<EdgeType> &includeEdgeTypes, std::set<std::vector<llvm::Function *>> *allPaths, bool recordPath);
+    void dfs(Node *currentNode, Node &dst, std::set<EdgeType> &includeEdgeTypes, std::unordered_set<Node *> &visited, std::vector<llvm::Function *> &currentPath, std::set<std::vector<llvm::Function *>> *allPaths, bool recordPath);
+    std::unordered_set<Node *> findNodesReachedByEdge(Node &src, EdgeType edgeTy);
+    std::unordered_set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edgeTypes, bool isBackward = false);
     ValueNodeMap &getValueNodeMap() { return _valNodeMap; }
 
   protected:
@@ -78,12 +76,20 @@ namespace pdg
     NodeDIMap &getNodeDIMap() { return _node_di_type_map; }
     GlobalVarTreeMap &getGlobalVarTreeMap() { return _global_var_tree_map; }
     void build(llvm::Module &M) override;
+    void buildGlobalVariables(llvm::Module &M);
+    void buildFunctions(llvm::Module &M);
+    void buildFunctionInstructions(llvm::Function &F, FunctionWrapper *func_w);
+    void buildCallGraphAndCallSites(llvm::Module &M);
+    void handleCallSites(llvm::Module &M, llvm::CallInst *ci);
+    void bindDITypeToNodes(llvm::Module &M);
+    void bindDITypeToLocalVariables(FunctionWrapper *fw);
+    void bindDITypeToInstructions(llvm::Function &F);
+    void bindDITypeToGlobalVariables(llvm::Module &M);
+    llvm::DIType *computeNodeDIType(Node &n);
     bool hasFuncWrapper(llvm::Function &F) { return _func_wrapper_map.find(&F) != _func_wrapper_map.end(); }
     bool hasCallWrapper(llvm::CallInst &ci) { return _call_wrapper_map.find(&ci) != _call_wrapper_map.end(); }
     FunctionWrapper *getFuncWrapper(llvm::Function &F) { return _func_wrapper_map[&F]; }
     CallWrapper *getCallWrapper(llvm::CallInst &ci) { return _call_wrapper_map[&ci]; }
-    void bindDITypeToNodes(llvm::Module &M);
-    llvm::DIType *computeNodeDIType(Node &n);
     void addTreeNodesToGraph(Tree &tree);
     void addFormalTreeNodesToGraph(FunctionWrapper &func_w);
     std::unordered_set<llvm::Value *> &getAllocators() { return _allocators; }

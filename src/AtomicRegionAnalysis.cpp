@@ -692,23 +692,23 @@ bool pdg::AtomicRegionAnalysis::isKernelLockInstance(std::string fieldId)
   return (_lock_instance_map.find(fieldId) != _lock_instance_map.end());
 }
 
-bool pdg::AtomicRegionAnalysis::hasBoundaryAliasNodes(llvm::Value &v)
-{
-  std::set<Node *> ret;
-  auto PDG = _SDA->getPDG();
-  auto valNode = PDG->getNode(v);
-  if (valNode == nullptr)
-    return false;
-  std::set<EdgeType> edgeTypes = {
-      EdgeType::DATA_ALIAS,
-      EdgeType::PARAMETER_IN};
-  for (auto n : _boundary_arg_nodes)
-  {
-    if (PDG->canReach(*n, *valNode, edgeTypes))
-      return true;
-  }
-  return false;
-}
+// bool pdg::AtomicRegionAnalysis::hasBoundaryAliasNodes(llvm::Value &v)
+// {
+//   std::set<Node *> ret;
+//   auto PDG = _SDA->getPDG();
+//   auto valNode = PDG->getNode(v);
+//   if (valNode == nullptr)
+//     return false;
+//   std::set<EdgeType> edgeTypes = {
+//       EdgeType::DATA_ALIAS,
+//       EdgeType::PARAMETER_IN};
+//   for (auto n : _boundary_arg_nodes)
+//   {
+//     if (PDG->canReach(*n, *valNode, edgeTypes))
+//       return true;
+//   }
+//   return false;
+// }
 
 void pdg::AtomicRegionAnalysis::printWarningCS(pdg::AtomicRegionAnalysis::CSPair cs_pair, Value &v, Function &f, std::set<std::string> &modified_names, std::string source_type)
 {

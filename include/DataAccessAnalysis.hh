@@ -70,6 +70,18 @@ namespace pdg
     std::set<llvm::Function *> getPointedFuncAtArgIdx(llvm::Function &F, unsigned argIdx);
     std::map<unsigned, unsigned> getFieldOffsetAccessMap(TreeNode &paramRootNode);
     void dumpFieldOffsetAccessMapToFile(TreeNode &paramRootNode, std::string fileName);
+    // functions related to identifying risky allocator
+    void initAllocatorFuncNodes();
+    bool allocateKernelObj(llvm::Function &F);
+    void findKernelAllocatorAPI(std::unordered_set<llvm::Function *> &allocatorFuncs);
+    // functions related to identifying risky deallocator
+    void initDeallocatorFuncNodes();
+    bool deallocateKernelObj(llvm::Function &F);
+    void findKernelDeallocatorAPI(std::unordered_set<llvm::Function *> &allocatorFuncs);
+    // helper funcs on identify alloc/dealloc APIs
+    void printDriverTaintKernelAllocDeallocFuncs();
+    void printDriverCallSite(llvm::Function &boundaryFunc, llvm::Function &sinkFunc, bool isAlloc);
+    bool hasParamDataflow(llvm::Function &boundaryFunc, llvm::Function &allocatorFunc);
     // logging related functions
     void printContainerOfStats();
     void logSkbFieldStats(TreeNode &skb_root_node);
@@ -92,22 +104,24 @@ namespace pdg
     std::ofstream _idlFile;
     std::ofstream _globalVarAccessInfo;
     std::ofstream _sync_stub_file;
-    std::set<std::string> _seenFuncOps;
+    std::unordered_set<std::string> _seenFuncOps;
     std::string _opsStructProjStr;
     std::map<std::string, std::string> _exportedFuncsPtrNameMap;
-    std::set<std::string> _existFuncDefs;
+    std::unordered_set<std::string> _existFuncDefs;
     std::map<std::string, std::set<std::string>> _globalOpsFieldsMap;
-    std::set<llvm::Instruction *> _containerofInsts;
+    std::unordered_set<llvm::Instruction *> _containerofInsts;
     KSplitStats *_ksplitStats;
     std::string _currentProcessingFunc = "";
-    std::set<std::string> _driverDefGlobalVarNames;
-    std::set<std::string> _driverExportedFuncSymbols;
-    std::set<Node *> _funcsReachableFromBoundary;
-    std::set<llvm::Function *> _kernelFuncsRegisteredWithFuncPtr;
-    std::set<llvm::Function *> _transitiveBoundaryFuncs;
+    std::unordered_set<std::string> _driverDefGlobalVarNames;
+    std::unordered_set<std::string> _driverExportedFuncSymbols;
+    std::unordered_set<Node *> _funcsReachableFromBoundary;
+    std::unordered_set<llvm::Function *> _kernelFuncsRegisteredWithFuncPtr;
+    std::unordered_set<llvm::Function *> _transitiveBoundaryFuncs;
     bool _generateingIDLforGlobal = false;
     std::set<std::string> _visitedSharedFieldIDInRAWAna;
     unsigned int _kernelRAWDriverFields = 0;
+    std::unordered_set<Node *> allocatorFuncNodes;
+    std::unordered_set<Node *> deallocatorFuncNodes;
   };
 }
 

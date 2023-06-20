@@ -2,6 +2,7 @@
 #define DEBUGINFOUTILS_H_
 #include "LLVMEssentials.hh"
 #include <queue>
+#include <unordered_set>
 #include <set>
 
 namespace pdg
@@ -29,6 +30,7 @@ namespace pdg
     llvm::DIType *getBaseDIType(llvm::DIType &dt);
     llvm::DIType *stripAttributes(llvm::DIType &dt);
     llvm::DIType *stripMemberTag(llvm::DIType &dt);
+    llvm::DIType *stripMemberTagAndAttributes(llvm::DIType &dt);
     llvm::DIType *getGlobalVarDIType(llvm::GlobalVariable &gv);
     llvm::DIType *getFuncRetDIType(llvm::Function &F);
     std::string getArrayTypeStr(llvm::DIType &dt);
@@ -41,6 +43,7 @@ namespace pdg
     std::set<llvm::DIType*> computeContainedStructTypes(llvm::DIType &dt);
     std::string getFuncSigName(llvm::DIType &dt, llvm::Function &F, std::string funcPtrName);
     unsigned computeDeepCopyFields(llvm::DIType &dt, bool onlyCountPointer = false);
+    unsigned computeStructTypeStorageSize(llvm::DIType &dt, unsigned depth = 1);
   } // namespace dbgutils
 } // namespace pdg
 

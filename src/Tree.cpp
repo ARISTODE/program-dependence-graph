@@ -1,4 +1,5 @@
 #include "Tree.hh"
+#include "Graph.hh"
 
 using namespace llvm;
 
@@ -6,7 +7,7 @@ pdg::TreeNode::TreeNode(const TreeNode &treeNode) : Node(treeNode.getNodeType())
 {
   _func = treeNode.getFunc();
   _nodeDt = treeNode.getDIType();
-  _node_type = treeNode.getNodeType();
+  _nodeType = treeNode.getNodeType();
 }
 
 pdg::TreeNode::TreeNode(DIType *di_type, int depth, TreeNode *parentNode, Tree *tree, GraphNodeType nodeTy) : Node(nodeTy)
@@ -81,39 +82,90 @@ int pdg::TreeNode::expandNode()
   return 0;
 }
 
+/*
+This function calculates the IR variables representing the abstract address for a tree node.
+There are generally two cases:
+1. When the parent node is a pointer, the child's address variables should consist of the load instructions
+  (and their aliases) that load from the parent pointer. These instructions represent the address of the pointed object.
+2. When the parent node is an object, such as a struct, the child node should represent each field address.
+   In this case, we need to identify the GetElementPtr (GEP) instructions that compute the field address and
+   consider these instructions as the abstract address representation of the tree node.
+*/
+
 void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 {
-  if (!_parentNode)
+  if (!_parentNode || !_nodeDt)
     return;
-  if (!_nodeDt)
-    return;
-  std::unordered_set<llvm::Value *> baseNodeAddrVars;
-  // handle struct pointer
-  // if root node is pointer, the fields addresses are computed directly from the root node' addr vars
-  auto grandParentNode = _parentNode->getParentNode();
-  // hanlde struct specifically, because field's address could be computed from the base pointer, which is
-  if (grandParentNode != nullptr && dbgutils::isStructType(*_parentNode->getDIType()) && dbgutils::isStructPointerType(*grandParentNode->getDIType()))
-    baseNodeAddrVars = grandParentNode->getAddrVars();
-  else
-    baseNodeAddrVars = _parentNode->getAddrVars();
 
-  for (auto baseNodeAddrVar : baseNodeAddrVars)
+  auto &programGraph = ProgramGraph::getInstance();
+  auto parentAddrVars = _parentNode->getAddrVars();
+
+  auto handleLoadInst = [&](Value *user)
   {
-    if (baseNodeAddrVar == nullptr)
-      continue;
-    for (auto user : baseNodeAddrVar->users())
+    if (!isa<LoadInst>(user))
+      return;
+      
+    if (parentAddrVars.find(user) == parentAddrVars.end())
     {
-      // handle load instruction, field should not inherit the load inst from the sturct pointer.
-      if (LoadInst *li = dyn_cast<LoadInst>(user))
+      // _addrVars.insert(user);
+      auto instNode = programGraph.getNode(*user);
+      auto aliasNodes = programGraph.findNodesReachedByEdge(*instNode, EdgeType::DATA_ALIAS);
+      for (auto aliasNode : aliasNodes)
       {
-        if (baseNodeAddrVars.find(li) == baseNodeAddrVars.end())
-          _addrVars.insert(li);
+        auto aliasVar = aliasNode->getValue();
+        // if (aliasVar && isa<LoadInst>(aliasVar) && parentAddrVars.find(aliasVar) == parentAddrVars.end())
+        if (aliasVar && isa<LoadInst>(aliasVar) && aliasVar->getType() == user->getType())
+          _addrVars.insert(aliasVar);
       }
-      // handle gep instruction
-      if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
+    }
+  };
+
+  auto handleGEPInst = [&](Value *user)
+  {
+    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
+    {
+      if (pdgutils::isGEPOffsetMatchDIOffset(*_nodeDt, *gep))
       {
-        if (pdgutils::isGEPOffsetMatchDIOffset(*_nodeDt, *gep))
-          _addrVars.insert(gep);
+        _addrVars.insert(gep);
+
+        auto instNode = programGraph.getNode(*gep);
+        auto aliasNodes = programGraph.findNodesReachedByEdge(*instNode, EdgeType::DATA_ALIAS);
+
+        for (auto aliasNode : aliasNodes)
+        {
+          auto aliasVar = aliasNode->getValue();
+          // if (aliasVar && parentAddrVars.find(aliasVar) == parentAddrVars.end())
+          _addrVars.insert(aliasVar);
+        }
+      }
+    }
+  };
+
+  // a field's address can be computed using gep, using the pointer to the object as the base address
+  // but the parent node is the object, so need to consider the top pointer's addr vars when identifying gep
+  std::unordered_set<Value *> baseAddrVars = _parentNode->getAddrVars();
+  if (this->isStructMember())
+  {
+    auto topPointerNode = _parentNode->getParentNode();
+    if (topPointerNode)
+    {
+      // use the top pointer as the base variable to compute geps
+      auto topPointerAddrVars = topPointerNode->getAddrVars();
+      baseAddrVars = topPointerAddrVars;
+    }
+  }
+
+  for (auto addrVar : baseAddrVars)
+  {
+    for (auto user : addrVar->users())
+    {
+      if (isa<LoadInst>(user))
+      {
+        handleLoadInst(user);
+      }
+      else
+      {
+        handleGEPInst(user);
       }
     }
   }
@@ -121,7 +173,7 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
 
 void pdg::TreeNode::dump()
 {
-  errs() << _depth << " - " << static_cast<int>(_node_type) << "\n";
+  errs() << _depth << " - " << static_cast<int>(_nodeType) << "\n";
 }
 
 //  ====== Tree =======
@@ -166,18 +218,17 @@ void pdg::Tree::build(int maxTreeDepth)
   int current_tree_depth = 0;
   std::queue<TreeNode *> nodeQueue;
   nodeQueue.push(_rootNode);
-  while (!nodeQueue.empty()) // have more child to expand
+  while (!nodeQueue.empty() && current_tree_depth < maxTreeDepth)
   {
     current_tree_depth++;
-    if (current_tree_depth > maxTreeDepth)
-      break;
     int queue_size = nodeQueue.size();
-    while (queue_size > 0)
+
+    for (int i = 0; i < queue_size; i++)
     {
-      queue_size--;
       TreeNode *currentNode = nodeQueue.front();
       nodeQueue.pop();
       _size++;
+
       if (currentNode->expandNode() > 0)
       {
         for (auto childNode : currentNode->getChildNodes())
@@ -222,6 +273,56 @@ bool pdg::TreeNode::isStructField()
   return false;
 }
 
+bool pdg::TreeNode::isSharedLockField()
+{
+  auto fieldTypeName = getTypeName();
+
+  // must be mutex or spin lock type
+  bool isSpinLockType = fieldTypeName.find("spinlock") != std::string::npos;
+  bool isMutexType = fieldTypeName.find("mutex") != std::string::npos;
+  if (!isSpinLockType && !isMutexType)
+  {
+    return false;
+  }
+  return true;
+
+  // auto &progGraph = ProgramGraph::getInstance();
+  // for (auto addrVar : _addrVars)
+  // {
+  //   auto addrVarNode = progGraph.getNode(*addrVar);
+  //   auto aliasNodes = progGraph.findNodesReachedByEdge(*addrVarNode, EdgeType::DATA_ALIAS);
+  //   aliasNodes.insert(addrVarNode);
+  //   for (auto aliasNode : aliasNodes)
+  //   {
+  //     auto aliasVal = aliasNode->getValue();
+  //     if (!aliasVal)
+  //       continue;
+  //     // check two-levels of def-use chain, determine if the lock is used in lock/unlock calls
+  //     for (auto user : aliasVal->users())
+  //     {
+  //       for (auto secLevelUser : user->users())
+  //       {
+  //         for (auto u : secLevelUser->users())
+  //         {
+  //           if (CallInst *callInst = dyn_cast<CallInst>(u))
+  //           {
+  //             Function *calledFunc = callInst->getCalledFunction();
+  //             if (calledFunc)
+  //             {
+  //               StringRef funcName = calledFunc->getName();
+  //               if (funcName == "_raw_spin_lock" || funcName == "_raw_spin_unlock" ||
+  //                   funcName == "mutex_lock" || funcName == "mutex_unlock")
+  //                 return true;
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+  // return false;
+}
+
 std::string pdg::TreeNode::getSrcName()
 {
   if (_di_local_var)
@@ -231,17 +332,20 @@ std::string pdg::TreeNode::getSrcName()
   return "";
 }
 
-std::string pdg::TreeNode::getTypeName()
+std::string pdg::TreeNode::getTypeName(bool isRaw)
 {
   if (getDIType())
-    return dbgutils::getSourceLevelTypeName(*getDIType());
+    return dbgutils::getSourceLevelTypeName(*getDIType(), isRaw);
   return "";
 }
 
-std::string pdg::TreeNode::getSrcHierarchyName(bool hideStructTypeName)
+std::string pdg::TreeNode::getSrcHierarchyName(bool hideStructTypeName, bool ignoreRootParamName)
 {
+  if (!srcHierarchyName.empty())
+    return srcHierarchyName;
+
   std::string retStr = "";
-  auto curNode = this;
+  TreeNode *curNode = this;
   while (curNode)
   {
     if (hideStructTypeName && curNode->getDIType() && dbgutils::isCompositeType(*curNode->getDIType()))
@@ -249,13 +353,28 @@ std::string pdg::TreeNode::getSrcHierarchyName(bool hideStructTypeName)
       curNode = curNode->getParentNode();
       continue;
     }
+    
+    // anonymous struct/union may have empty src name
+    if (!curNode->getSrcName().empty() && curNode->isStructMember())
+      retStr = "->" + curNode->getSrcName() + retStr;
 
-    if (!curNode->getSrcName().empty())
-      retStr = curNode->getSrcName() + retStr;
+    if (curNode->isRootNode())
+    {
+        if (!ignoreRootParamName)
+          retStr = curNode->getSrcName() + retStr;
+    }
     curNode = curNode->getParentNode();
-    // add -> to indicate the fields
-    if (curNode)
-      retStr = "->" + retStr;
   }
-  return retStr;
+
+  srcHierarchyName = retStr;
+  return srcHierarchyName;
+}
+
+pdg::TreeNode *pdg::TreeNode::getStructObjNode()
+{
+  if (_nodeDt && dbgutils::isStructPointerType(*_nodeDt))
+  {
+    return getChildNodes()[0];
+  }
+  return nullptr;
 }

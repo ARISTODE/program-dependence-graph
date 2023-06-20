@@ -85,7 +85,6 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
     return false;
   Module &module = *(gep.getFunction()->getParent());
   uint64_t gep_bit_offset = getGEPOffsetInBits(module, *struct_ty, gep);
-
   if (gep_bit_offset < 0)
     return false;
 
@@ -102,10 +101,12 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
       }
     }
   }
+  
   uint64_t di_type_bit_offset = dt.getOffsetInBits();
 
   if (gep_bit_offset == di_type_bit_offset)
     return true;
+
   return false;
 }
 
@@ -716,4 +717,77 @@ void pdg::pdgutils::readLinesFromFile(std::set<std::string> &lines, std::string 
   {
     errs() << "Unable to open file!" << "\n";
   }
+}
+
+bool pdg::pdgutils::containsAnySubstring(const std::string &s, const std::vector<std::string> &S)
+{
+  for (const std::string &substring : S)
+  {
+    if (s.find(substring) != std::string::npos)
+    {
+    return true;
+    }
+  }
+  return false;
+}
+
+void pdg::pdgutils::printSourceLocation(Instruction &I)
+{
+  if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
+  {
+    unsigned line = debugLoc.getLine();
+    unsigned col = debugLoc.getCol();
+    llvm::MDNode *scopeNode = debugLoc.getScope();
+
+    if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
+    {
+      std::string file = scope->getFilename().str();
+      errs() << "\t Source location: " << file << ":" << line << ":" << col << "\n";
+    }
+  }
+}
+
+bool pdg::pdgutils::isUpdatedInHeader(Instruction &I)
+{
+  if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
+  {
+    llvm::MDNode *scopeNode = debugLoc.getScope();
+    if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
+    {
+      std::string pathStr = scope->getFilename().str();
+      // Find the last occurrence of ".h"
+      size_t pos = pathStr.rfind(".h");
+      // Check if the last occurrence is at the end of the string
+      return pos != std::string::npos && pos == pathStr.length() - 2;
+    }
+  }
+  return false;
+}
+
+unsigned pdg::pdgutils::getFuncUniqueId(const Function &F)
+{
+  std::string FunctionUniqueId = "";
+
+  // Return type
+  FunctionUniqueId += F.getReturnType()->getTypeID();
+
+  // Function name
+  FunctionUniqueId += F.getName().str();
+
+  // Parameters
+  for (llvm::Function::const_arg_iterator I = F.arg_begin(), E = F.arg_end(); I != E; ++I)
+  {
+    FunctionUniqueId += I->getType()->getTypeID();
+  }
+
+  // Hash the string to get a unique unsigned integer
+  std::hash<std::string> hash_fn;
+  unsigned hash = hash_fn(FunctionUniqueId);
+
+  return hash;
+}
+
+unsigned pdg::pdgutils::computeFieldUniqueId(unsigned funcId, unsigned argIdx, unsigned fieldOffset)
+{
+  return ((funcId ^ argIdx) << 5) ^ fieldOffset;
 }

@@ -10,8 +10,8 @@ void pdg::PDGCallGraph::build(Module &M)
 
   for (auto &F : M)
   {
-    if (F.isDeclaration() || F.empty())
-      continue;
+    // if (F.isDeclaration() || F.empty())
+    //   continue;
     Node* n = new Node(F, GraphNodeType::FUNC);
     _valNodeMap.insert(std::make_pair(&F, n));
     addNode(*n);
@@ -118,28 +118,77 @@ std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, 
   return ind_call_cand;
 }
 
+void pdg::PDGCallGraph::bfs(Node *currentNode, Node &sink, std::unordered_set<Node *> &visited, std::vector<Function *> &currentPath, std::set<std::vector<llvm::Function *>> &allPaths, bool recordPath)
+{
+  std::queue<std::pair<Node *, std::vector<llvm::Function *>>> nodeQueue;
+  nodeQueue.push({currentNode, currentPath});
+
+  while (!nodeQueue.empty())
+  {
+    auto [n, path] = nodeQueue.front();
+    nodeQueue.pop();
+
+    if (n == nullptr || visited.find(n) != visited.end())
+      continue;
+
+    visited.insert(n);
+
+    if (llvm::Function *currentFunction = n->getFunc())
+      path.push_back(currentFunction);
+
+    if (n == &sink && recordPath)
+      allPaths.insert(path);
+    else
+    {
+      for (auto out_neighbor : n->getOutNeighbors())
+      {
+        nodeQueue.push({out_neighbor, path});
+      }
+    }
+  }
+}
+
+bool pdg::PDGCallGraph::canReach(Node &src, Node &sink, std::set<std::vector<Function *>> &allPaths, bool recordPath)
+{
+  if (&src == &sink)
+    return true;
+
+  std::unordered_set<Node *> visited;
+  std::vector<llvm::Function *> currentPath;
+
+  bfs(&src, sink, visited, currentPath, allPaths, recordPath);
+
+  if (recordPath)
+    return !allPaths.empty();
+  else
+    return visited.find(&sink) != visited.end();
+}
+
 bool pdg::PDGCallGraph::canReach(Node &src, Node &sink)
 {
   std::queue<Node *> nodeQueue;
-  std::unordered_set<Node *> seen_node;
+  std::unordered_set<Node *> seenNodes;
   nodeQueue.push(&src);
+
   while (!nodeQueue.empty())
   {
-    Node *n = nodeQueue.front();
-    if (n == nullptr)
-      continue;
+    Node *currentNode = nodeQueue.front();
     nodeQueue.pop();
-    if (n == &sink)
-      return true;
-    if (seen_node.find(n) != seen_node.end())
-      continue;
-    seen_node.insert(n);
 
-    for (auto out_neighbor : n->getOutNeighbors())
+    if (currentNode == &sink)
+      return true;
+
+    if (seenNodes.find(currentNode) != seenNodes.end())
+      continue;
+
+    seenNodes.insert(currentNode);
+
+    for (auto outNeighbor : currentNode->getOutNeighbors())
     {
-      nodeQueue.push(out_neighbor);
+      nodeQueue.push(outNeighbor);
     }
   }
+
   return false;
 }
 
@@ -295,4 +344,83 @@ bool pdg::PDGCallGraph::isDriverFunc(Function &F)
   auto funcName = F.getName().str();
   funcName = pdgutils::stripFuncNameVersionNumber(funcName);
   return (_driver_func_names.find(funcName) != _driver_func_names.end());
+}
+
+bool pdg::PDGCallGraph::findPathDFS(Node *src, Node *dst, std::vector<Node *> &path, std::unordered_set<Node *> &visited)
+{
+  visited.insert(src);
+  path.push_back(src);
+
+  if (src == dst)
+  {
+    return true;
+  }
+
+  const std::set<Node *> &neighbors = src->getOutNeighbors();
+  for (Node *neighbor : neighbors)
+  {
+    if (visited.find(neighbor) == visited.end())
+    {
+      if (findPathDFS(neighbor, dst, path, visited))
+      {
+        return true;
+      }
+    }
+  }
+
+  // If we haven't found the path, backtrack and remove the current node from the path
+  path.pop_back();
+  return false;
+}
+
+void pdg::PDGCallGraph::printPath(const std::vector<Node *> &path)
+{
+  if (path.empty())
+  {
+    errs() << "Empty path" << "\n";
+    return;
+  }
+
+  errs() << "Call Path: \n";
+  for (size_t i = 0; i < path.size(); ++i)
+  {
+    Node* node = path[i];
+
+    // Print the node's function name
+    if (Function *f = dyn_cast<Function>(node->getValue()))
+    {
+      errs() << f->getName().str();
+    }
+
+    // If it's not the last node in the path, add an arrow (->)
+    if (i < path.size() - 1)
+    {
+      errs() << "->";
+    }
+  }
+
+  // Print a newline at the end of the path
+  errs() << "\n";
+}
+
+void pdg::PDGCallGraph::setupBuildFuncNodes(Module &M)
+{
+  // setup white list functions required for PDG construction
+  std::set<std::string> whiteListFuncNames;
+  pdgutils::readLinesFromFile(whiteListFuncNames, "boundaryAPI");
+  for (auto funcName : whiteListFuncNames)
+  {
+    auto func = M.getFunction(StringRef(funcName));
+    if (!func)
+      continue;
+    auto funcNode = getNode(*func);
+    auto transNodes = computeTransitiveClosure(*funcNode);
+    buildFuncNodes.insert(transNodes.begin(), transNodes.end());
+  }
+}
+
+bool pdg::PDGCallGraph::isBuildFuncNode(Function &F)
+{
+  auto funcNode = getNode(F);
+  return (buildFuncNodes.find(funcNode) != buildFuncNodes.end());
 }

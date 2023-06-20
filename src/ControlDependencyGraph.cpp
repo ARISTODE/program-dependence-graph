@@ -5,22 +5,32 @@ char pdg::ControlDependencyGraph::ID = 0;
 using namespace llvm;
 bool pdg::ControlDependencyGraph::runOnFunction(Function &F)
 {
+  auto &call_g = PDGCallGraph::getInstance();
+  ProgramGraph &g = ProgramGraph::getInstance();
+  Module &M = *F.getParent();
+  if (!g.isBuild())
+  {
+    g.build(M);
+    g.bindDITypeToNodes(M);
+  }
+  // if (!call_g.isBuildFuncNode(F))
+  //   return false;
   _PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
   addControlDepFromEntryNodeToEntryBlock(F);
-  computeControlDependencies(F);
+  addControlDepFromDominatedBlockToDominator(F);
   return false;
 }
 
-void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock &BB)
+void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock &BB, EdgeType edge_type)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   for (auto &inst : BB)
   {
-    Node* instNode = g.getNode(inst);
+    Node* inst_node = g.getNode(inst);
     // TODO: a special case when gep is used as a operand in load. Fix later
-    if (instNode != nullptr)
-      n.addNeighbor(*instNode, EdgeType::CONTROL);
-    // assert(instNode != nullptr && "cannot find node for inst\n");
+    if (inst_node != nullptr)
+      n.addNeighbor(*inst_node, edge_type);
+    // assert(inst_node != nullptr && "cannot find node for inst\n");
   }
 }
 
@@ -28,10 +38,10 @@ void pdg::ControlDependencyGraph::addControlDepFromEntryNodeToEntryBlock(Functio
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   FunctionWrapper* func_w = g.getFuncWrapperMap()[&F];
-  addControlDepFromNodeToBB(*func_w->getEntryNode(), F.getEntryBlock());
+  addControlDepFromNodeToBB(*func_w->getEntryNode(), F.getEntryBlock(), EdgeType::CONTROL);
 }
 
-void pdg::ControlDependencyGraph::computeControlDependencies(Function &F)
+void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Function &F)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   for (auto &BB : F)
@@ -47,17 +57,21 @@ void pdg::ControlDependencyGraph::computeControlDependencies(Function &F)
         {
           if (!bi->isConditional() || !bi->getCondition())
             break;
-          Node* cond_node = g.getNode(*bi->getCondition());
-          if (!cond_node)
+          // Node *cond_node = g.getNode(*bi->getCondition());
+          // if (!cond_node)
+          //   break;
+          Node *branch_node = g.getNode(*bi);
+          if (branch_node == nullptr)
             break;
-
           BasicBlock *nearestCommonDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
           if (nearestCommonDominator == &BB)
-            addControlDepFromNodeToBB(*cond_node, *succ_bb);
+          {
+            addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROL);
+          }
 
           for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
           {
-            addControlDepFromNodeToBB(*cond_node, *cur->getBlock());
+            addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROL);
           }
         }
       }

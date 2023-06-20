@@ -194,6 +194,19 @@ void pdg::KSplitStats::printTable2Raw()
   _stats_file.close();
 }
 
+void pdg::KSplitStats::printSoKClassifiedFields()
+{
+  errs() << "Shared Fields Classification:\n";
+  errs() << "----------------------------\n";
+  errs() << "Function Pointer Number: " << funcPtrNum << "\n";
+  errs() << "Data Corruption Function Pointer Number: " << DCFuncPtrNum << "\n";
+  errs() << "Data Leakage Function Pointer Number: " << DLFuncPtrNum << "\n";
+  errs() << "Data Pointer Number: " << dataPtrNum << "\n";
+  errs() << "Data Corruption Data Pointer Number: " << DCDataPtrNum << "\n";
+  errs() << "Data Leakage Data Pointer Number: " << DLDataPtrNum << "\n";
+  errs() << "----------------------------\n";
+}
+
 void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck_ptr_type, Function &func, int paramIdx, bool is_driver_func)
 {
   // this function classify the tree node and accumulate stats
@@ -244,7 +257,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck
           if (objNodeAccTags.find(AccessTag::DATA_WRITE) != objNodeAccTags.end())
           {
             _driver_write_through_ptr_fields++;
-            errs() << "write through pointer: " << fieldName << " in func " << funcName << "\n";
+            // errs() << "write through pointer: " << fieldName << " in func " << funcName << "\n";
           }
         }
       }
@@ -264,23 +277,17 @@ void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck
         if (isFuncPtrField)
         {
           _driver_write_func_ptr_fields += 1;
-          errs() << "driver update ptr field (func): " << fieldName << " - "
-                 << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
+          // errs() << "driver update ptr field (func): " << fieldName << " - "
+          //        << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
         }
-        else
-        {
-          errs() << "driver update ptr field (non-func): " << fieldName << " - "
-                 << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
-          errs() << "addr var size: " << treeNode.getAddrVars().size() << "\n";
-          for (auto addrVar : treeNode.getAddrVars())
-          {
-            if (auto inst = dyn_cast<Instruction>(addrVar))
-              errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
-          }
-        }
+        // else
+        // {
+        //   errs() << "driver update ptr field (non-func): " << fieldName << " - "
+        //          << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
+        // }
       }
-      else
-        errs() << "driver access field: " << fieldName << " - " << funcName << "\n";
+      // else
+      //   errs() << "driver access field: " << fieldName << " - " << funcName << "\n";
     }
     // collect read only, write only fields
     else if (access_tags.size() == 1)
@@ -293,17 +300,16 @@ void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck
         {
           _driver_read_ptr_fields++;
           std::get<0>(ptrFieldAccTuple) += 1;
-          errs() << "driver read only ptr data: " << fieldName << " - " << funcName << "\n";
+          // errs() << "driver read only ptr data: " << fieldName << " - " << funcName << "\n";
         }
-        else
-          errs() << "driver read only data: " << fieldName << " - " << funcName << "\n";
+        // else
+        //   errs() << "driver read only data: " << fieldName << " - " << funcName << "\n";
       }
       else if (access_tags.find(AccessTag::DATA_WRITE) != access_tags.end())
       {
         _driver_write_fields++;
         std::get<1>(fieldAccTuple) += 1;
-        // TODO: debugging purpose
-        errs() << "driver update only field: " << fieldName << " - " << funcName << "\n";
+        // errs() << "driver update only field: " << fieldName << " - " << funcName << "\n";
         if (!treeNode.isRootNode())
         {
           if (isPtrType)
@@ -313,19 +319,19 @@ void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck
             if (isFuncPtrField)
             {
               _driver_write_func_ptr_fields += 1;
-              errs() << "driver update only ptr field (func): " << fieldName << " - "
-                     << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
+              // errs() << "driver update only ptr field (func): " << fieldName << " - "
+              //        << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
             }
             else
             {
-              errs() << "driver update only ptr field (non-func): " << fieldName << " - "
-                     << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
-              errs() << "addr var size: " << treeNode.getAddrVars().size() << "\n";
-              for (auto addrVar : treeNode.getAddrVars())
-              {
-                if (auto inst = dyn_cast<Instruction>(addrVar))
-                  errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
-              }
+              // errs() << "driver update only ptr field (non-func): " << fieldName << " - "
+              //        << funcName << " - " << treeNode.getDepth() << " - " << paramIdx << "\n";
+              // errs() << "addr var size: " << treeNode.getAddrVars().size() << "\n";
+              // for (auto addrVar : treeNode.getAddrVars())
+              // {
+              //   if (auto inst = dyn_cast<Instruction>(addrVar))
+              //     errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
+              // }
             }
           }
         }
@@ -485,4 +491,39 @@ void pdg::KSplitStats::printDrvAPIStats()
   }
 
   drvAPIFile.close();
+}
+
+void pdg::KSplitStats::printRiskyPatterns()
+{
+  errs() << "-------------------------------------------------\n";
+  errs() << "| Pattern Name         | Number of Occurrences |\n";
+  errs() << "-------------------------------------------------\n";
+
+  std::vector<std::pair<std::string, int>> patterns = {
+      {"Risky ptr arith field num", riskyPtrArithField},
+      {"Risky index field num", riskyIndexField},
+      {"Risky RAW bound field num", riskyBoundRAWField},
+      {"Risky cond field num", riskyCondField},
+      {"Risky RAW cond field num", riskyCondRAWField},
+      {"Risky cond func Ptr", riskyCondFuncField},
+      {"Risky sensitive API field num", riskyFieldUsedInSensitiveAPI},
+      {"Risky lock field num", riskyLockField},
+      {"Risky kernel alloc API", kernelAllocAPI},
+      {"Risky kernel RAW alloc API", kernelRAWAllocAPI},
+      {"Risky kernel dealloc API", kernelDeallocAPI},
+      {"Risky kernel RAW dealloc API", kernelRAWDeallocAPI},
+      {"Risky ptr arith taint field num ", riskyPtrArithFieldTaint},
+      {"Risky index taint field num", riskyIndexFieldTaint},
+      {"Risky cond taint field num", riskyCondFieldTaint},
+      {"Risky sensitive API taint field num", riskyFieldUsedInSensitiveAPITaint}
+      };
+
+  for (const auto &pattern : patterns) {
+    std::ostringstream oss;
+    oss << "| " << std::left << std::setw(22) << pattern.first
+        << std::right << std::setw(10) << "  " << std::right << std::setw(10) << pattern.second << " |\n";
+    errs() << oss.str();
+  }
+
+  errs() << "-------------------------------------------------\n";
 }

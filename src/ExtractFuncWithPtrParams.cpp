@@ -12,6 +12,12 @@ void pdg::ExtractFuncWithPtrParamsPass::getAnalysisUsage(AnalysisUsage &AU) cons
 
 bool pdg::ExtractFuncWithPtrParamsPass::runOnModule(Module &M)
 {
+    // PDGCallGraph &call_g = PDGCallGraph::getInstance();
+    // if (!call_g.isBuild())
+    // {
+    //     call_g.build(M);
+    // }
+
     std::ofstream outFile("boundaryAPI");
     for (auto &F : M)
     {
@@ -22,7 +28,7 @@ bool pdg::ExtractFuncWithPtrParamsPass::runOnModule(Module &M)
         {
             auto arg = &*argIter;
             // should also check if it contain a pointer field. But coersion may avoid this problem
-            if (arg->getType()->isPointerTy())
+            if (pdgutils::isStructPointerType(*arg->getType()))
             {
                 outFile << pdgutils::getDemangledName(F.getName().str().data()) << "\n";
                 break;

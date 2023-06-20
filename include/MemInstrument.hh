@@ -33,6 +33,7 @@ namespace pdg
         void insertFieldAccCheckPolicy(llvm::Function &F);
         void insertMockAttack(llvm::Function &F);
         unsigned computeAccTagforAddr(llvm::Value &addr);
+        void computeMustInstrumentInsts(llvm::Function &F, std::unordered_set<llvm::Instruction *> &mustInstrumentInsts);
 
     private:
         DataAccessAnalysis *DAA;

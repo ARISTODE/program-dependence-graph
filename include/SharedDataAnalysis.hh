@@ -1,5 +1,5 @@
 #ifndef SHARED_DATA_ANALYSIS_H_
-#define SHARED_DATA_ANALYSIS_H_
+#define SHARED_DATA_ANALYSIS_H_ 
 #include "LLVMEssentials.hh"
 #include "ProgramDependencyGraph.hh"
 #include "KSplitStatsCollector.hh"
@@ -35,8 +35,8 @@ namespace pdg
     bool isSentinelField(std::string &s) { return _sentinelFields.find(s) != _sentinelFields.end(); }
     bool isGlobalOpStruct(std::string &s) { return _driver_func_op_struct_names.find(s) != _driver_func_op_struct_names.end(); }
     std::set<llvm::Function *> readFuncsFromFile(std::string fileName, llvm::Module &M);
-    std::set<llvm::Function *> computeBoundaryTransitiveClosure();
-    bool isBoundaryFuncName(std::string &funcName) { return _boundary_func_names.find(funcName) != _boundary_func_names.end(); }
+    std::unordered_set<llvm::Function *> computeBoundaryTransitiveClosure();
+    bool isBoundaryFuncName(std::string funcName) { return _boundary_func_names.find(funcName) != _boundary_func_names.end(); }
     void computeSharedStructDITypes();
     void computeGlobalStructTypeNames();
     void buildTreesForSharedStructDIType(llvm::Module &M);
@@ -64,21 +64,30 @@ namespace pdg
     // shared fields access stats
     void collectSharedFieldsAccessStats();
     void countReadWriteAccessTimes(TreeNode &treeNode);
+    void printDriverUpdateLocations(TreeNode &treeNode);
     std::string getFieldTypeStr(TreeNode &treeNode);
     bool usedInBranch(TreeNode &treeNode);
     bool isFuncPtr(TreeNode &treeNode);
     bool isDriverCallBackFuncPtrFieldNode(TreeNode &treeNode);
+    
     // functions related to potential attacks search
     void detectDrvAttacksOnField(TreeNode &treeNode);
-    bool detectIsAddrVarUsedAsIndex(llvm::Value &addrVar);
+    bool detectIsAddrVarUsedAsIndex(llvm::Value &addrVar, bool countTaint = false);
     bool detectIsAddrVarUsedInCond(llvm::Value &addrVar);
+    bool detectIsAddrVarUsedInSensitiveAPI(llvm::Value &addrVar);
     void printPrecedeDriverUpdate(llvm::Value &addrVar);
     bool checkRAWDriverUpdate(Node &node);
+    void computeTaintOnField(TreeNode &treeNode);
+    void computeExplicitFlowTaintedOnNode(Node &node, llvm::Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith);
+    void computeImplicitFlowTaintedOnField(Node &node, llvm::Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith);
+    void findGlobalAlias(Node &node, std::unordered_set<Node *> &aliasNodes);
+    void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName , std::string flowType);
 
   private:
     ProgramGraph *_PDG;
     llvm::Module* _module;
     PDGCallGraph* _callGraph;
+    KSplitStats* _ksplitStats;
     std::set<llvm::GlobalVariable *> _shared_global_vars;
     std::set<llvm::DIType *> _shared_struct_di_types;
     std::set<llvm::Function *> _driverDomainFuncs;
@@ -100,6 +109,7 @@ namespace pdg
     unsigned int _sharedKRDWFields = 0;
     std::map<std::string, std::set<std::tuple<std::string, bool, bool, bool, bool>>> sharedStructTypeFieldsAccessMap;
     std::ofstream fieldStatsFile;
+    std::ofstream riskyPatternLog;
   };
 } // namespace pdg
 #endif

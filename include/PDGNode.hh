@@ -23,7 +23,7 @@ namespace pdg
     Node(GraphNodeType nodeTy)
     {
       _val = nullptr;
-      _node_type = nodeTy;
+      _nodeType = nodeTy;
       _is_visited = false;
       _func = nullptr;
       _nodeDt = nullptr;
@@ -35,7 +35,7 @@ namespace pdg
         _func = inst->getFunction();
       else
         _func = nullptr;
-      _node_type = nodeTy;
+      _nodeType = nodeTy;
       _is_visited = false;
       _nodeDt = nullptr;
     }
@@ -43,8 +43,8 @@ namespace pdg
     void addOutEdge(Edge &e) { _out_edge_set.insert(&e); }
     EdgeSet &getInEdgeSet() { return _in_edge_set; }
     EdgeSet &getOutEdgeSet() { return _out_edge_set; }
-    void setNodeType(GraphNodeType nodeTy) { _node_type = nodeTy; }
-    GraphNodeType getNodeType() const { return _node_type; }
+    void setNodeType(GraphNodeType nodeTy) { _nodeType = nodeTy; }
+    GraphNodeType getNodeType() const { return _nodeType; }
     bool isVisited() { return _is_visited; }
     llvm::Function *getFunc() const { return _func; }
     void setFunc(llvm::Function &f) { _func = &f; }
@@ -74,7 +74,7 @@ namespace pdg
     bool _is_visited;
     EdgeSet _in_edge_set;
     EdgeSet _out_edge_set;
-    GraphNodeType _node_type;
+    GraphNodeType _nodeType;
     llvm::DIType *_nodeDt;
   };
 

@@ -10,6 +10,7 @@ namespace pdg
   {
   public:
     using PathVecs = std::vector<std::vector<llvm::Function *>>;
+    std::unordered_set<Node*> buildFuncNodes;
     PDGCallGraph() = default;
     PDGCallGraph(const PDGCallGraph &) = delete;
     PDGCallGraph(PDGCallGraph &&) = delete;
@@ -24,7 +25,12 @@ namespace pdg
     std::set<llvm::Function *> getIndirectCallCandidates(llvm::CallInst &ci, llvm::Module &M);
     bool isFuncSignatureMatch(llvm::CallInst &ci, llvm::Function &f);
     bool isTypeEqual(llvm::Type &t1, llvm::Type &t2);
+    // bool canReach(Node &src, Node &sink);
     bool canReach(Node &src, Node &sink);
+    bool findPathDFS(Node *src, Node *dst, std::vector<Node *> &path, std::unordered_set<Node *> &visited);
+    bool canReach(Node &src, Node &sink, std::set<std::vector<llvm::Function *>> &allPaths, bool recordPath);
+    void bfs(Node *currentNode, Node &sink, std::unordered_set<Node *> &visited, std::vector<llvm::Function *> &currentPath, std::set<std::vector<llvm::Function *>> &allPaths, bool recordPath);
+    void printPath(const std::vector<Node *> &path);
     void dump();
     void printPaths(Node &src, Node &sink);
     PathVecs computePaths(Node &src, Node &sink); // compute all pathes
@@ -36,6 +42,8 @@ namespace pdg
     bool isExcludeFunc(llvm::Function &F);
     bool isExportedFunc(llvm::Function &F);
     bool isDriverFunc(llvm::Function &F);
+    void setupBuildFuncNodes(llvm::Module &M);
+    bool isBuildFuncNode(llvm::Function &F);
 
   private:
     std::set<std::string> _exclude_func_names;

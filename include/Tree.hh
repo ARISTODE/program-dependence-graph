@@ -5,6 +5,7 @@
 #include "PDGNode.hh"
 #include "PDGEnums.hh"
 #include "PDGUtils.hh"
+#include <stack>
 #include <set>
 
 namespace pdg
@@ -36,6 +37,7 @@ namespace pdg
       bool isRootNode() {return _parentNode == nullptr;}
       bool isStructMember();
       bool isStructField();
+      bool isSharedLockField();
       int numOfChild() { return _children.size(); }
       bool hasReadAccess() { return _acc_tag_set.find(AccessTag::DATA_READ) != _acc_tag_set.end(); }
       bool hasWriteAccess() { return _acc_tag_set.find(AccessTag::DATA_WRITE) != _acc_tag_set.end(); }
@@ -50,9 +52,10 @@ namespace pdg
       void setSeqPtr() { is_seq_ptr = true; }
       void dump() override;
       std::string getSrcName();
-      std::string getTypeName();
-      std::string getSrcHierarchyName(bool hideStructTypeName = true); // obj->field->field
+      std::string getTypeName(bool isRaw=false);
+      std::string getSrcHierarchyName(bool hideStructTypeName = true, bool ignoreRootParamName = false); // obj->field->field
       // used for collecting ksplit stats
+      TreeNode *getStructObjNode();
     public:
       bool isShared = false;
       bool is_ioremap = false;
@@ -72,9 +75,65 @@ namespace pdg
       std::set<AccessTag> _acc_tag_set;
       bool _is_accessed_in_atomic_region = false;
       bool _can_opt_out = false;
+      std::string srcHierarchyName = "";
       // FIXME: outdated
       std::string _alloc_str;
       std::string _dealloc_str;
+  };
+
+  // tree node iterator
+  class TreeNodeIterator
+  {
+    public:
+      TreeNodeIterator(TreeNode *node) : _currentNode(node) {}
+      TreeNodeIterator &operator++()
+      {
+        traverseNextNode();
+        return *this;
+      }
+
+      bool operator!=(const TreeNodeIterator &other) const
+      {
+        return _currentNode != other._currentNode;
+      }
+
+      TreeNode &operator*() const { return *_currentNode; }
+
+    private:
+      void traverseNextNode()
+      {
+        if (_currentNode == nullptr)
+          return;
+
+        if (!_currentNode->getChildNodes().empty())
+        {
+          _stack.push(_currentNode);
+          _currentNode = _currentNode->getChildNodes()[0];
+        }
+        else
+        {
+          while (!_stack.empty())
+          {
+            TreeNode *parent = _stack.top();
+            _stack.pop();
+
+            auto it = std::find(parent->getChildNodes().begin(), parent->getChildNodes().end(), _currentNode);
+            if (it + 1 != parent->getChildNodes().end())
+            {
+              _currentNode = *(it + 1);
+              break;
+            }
+
+            if (_stack.empty())
+            {
+              _currentNode = nullptr;
+            }
+          }
+        }
+      }
+
+      TreeNode *_currentNode;
+      std::stack<TreeNode *> _stack;
   };
 
   class Tree
@@ -83,6 +142,8 @@ namespace pdg
     Tree() = default;
     Tree(llvm::Value &v) { _baseVal = &v; }
     Tree(const Tree &src_tree);
+    TreeNodeIterator begin() { return TreeNodeIterator(_rootNode); }
+    TreeNodeIterator end() { return TreeNodeIterator(nullptr); }
     void setRootNode(TreeNode &rootNode) { _rootNode = &rootNode; }
     void setTreeNodeType(GraphNodeType nodeTy) { _rootNode->setNodeType(nodeTy); }
     TreeNode *getRootNode() const { return _rootNode; }

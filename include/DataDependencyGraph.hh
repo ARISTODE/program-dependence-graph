@@ -1,6 +1,7 @@
 #ifndef DATADEPENDENCYGRAPH_H_
 #define DATADEPENDENCYGRAPH_H_
 #include "Graph.hh"
+#include "PDGCallGraph.hh"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "PTAWrapper.hh"
@@ -23,6 +24,7 @@ namespace pdg
 
   private:
     llvm::MemoryDependenceResults *_mem_dep_res;
+    llvm::Module *_module;
   };
 } // namespace pdg
 #endif

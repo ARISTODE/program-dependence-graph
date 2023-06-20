@@ -1,6 +1,6 @@
 #ifndef PDGUTILS_H_
 #define PDGUTILS_H_
-#include "LLVMEssentials.hh"
+#include "LLVMEssentials.hh" 
 #include "llvm/Demangle/Demangle.h"
 #include "Tree.hh"
 #include <vector>
@@ -9,9 +9,11 @@
 #include <unordered_map>
 #include <queue>
 #include <fstream>
+#include <functional>
 
 namespace pdg
 {
+  class Tree;
   class TreeNode;
 
   namespace pdgutils
@@ -55,13 +57,19 @@ namespace pdg
     std::string rtrim(std::string str);
     std::string trimStr(std::string str);
     std::string constructAnnoStr(std::set<std::string> &annotations);
+    bool containsAnySubstring(const std::string &s, const std::vector<std::string> &S);
     bool isMainFunc(llvm::Function &F);
     bool isFileExist(std::string fileName);
     bool isSkbNode(TreeNode& treeNode);
     bool isPrecedeInst(llvm::Instruction &i1, llvm::Instruction &i2, llvm::Function &F);
     void printTreeNodeAddrVars(TreeNode &treeNode);
+    bool isUpdatedInHeader(llvm::Instruction &I);
     std::string getDemangledName(const char *mangledName);
     void readLinesFromFile(std::set<std::string> &lines, std::string fileName);
+    void printSourceLocation(llvm::Instruction &I);
+    unsigned getFuncUniqueId(const llvm::Function &F);
+    // TODO: should consider depth as well
+    unsigned computeFieldUniqueId(unsigned funcId, unsigned argIdx, unsigned fieldOffset);
   } // namespace pdgutils
 } // namespace pdg
 #endif

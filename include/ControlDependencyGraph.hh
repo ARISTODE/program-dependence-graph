@@ -1,6 +1,7 @@
 #ifndef CONTROLDEPENDENCYGRAPH_H_
 #define CONTROLDEPENDENCYGRAPH_H_
 #include "Graph.hh"
+#include "PDGCallGraph.hh"
 #include "llvm/Analysis/PostDominators.h"
 
 namespace pdg
@@ -13,9 +14,9 @@ namespace pdg
     void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
     llvm::StringRef getPassName() const override { return "Control Dependency Graph"; }
     bool runOnFunction(llvm::Function &F) override;
-    void addControlDepFromNodeToBB(Node &n, llvm::BasicBlock &bb);
+    void addControlDepFromNodeToBB(Node &n, llvm::BasicBlock &bb, EdgeType edge_type);
     void addControlDepFromEntryNodeToEntryBlock(llvm::Function &F);
-    void computeControlDependencies(llvm::Function &F);
+    void addControlDepFromDominatedBlockToDominator(llvm::Function &F);
   private:
     llvm::PostDominatorTree *_PDT;
   };

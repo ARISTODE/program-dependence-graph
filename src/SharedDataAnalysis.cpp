@@ -10,12 +10,24 @@ void pdg::SharedDataAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
   AU.setPreservesAll();
 }
 
+std::unordered_set<std::string> sensitiveOperations = {
+  "kmalloc",
+  "kzalloc",
+  "kfree",
+  "mutex_lock",
+  "mutex_unlock",
+  "spin_lock",
+  "spin_unlock"
+};
+
 bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
 {
   _module = &M;
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
   _callGraph = &PDGCallGraph::getInstance();
+  _ksplitStats = &KSplitStats::getInstance();
   fieldStatsFile.open("fieldAccessStats.csv");
+  riskyPatternLog.open("riskyPatterns.txt");
   // read driver/kernel domian funcs
   setupStrOps();
   readSentinelFields();
@@ -35,6 +47,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   // generate shared field id
   computeSharedFieldID();
   // dumpSharedFieldID();
+  _ksplitStats->printSoKClassifiedFields();
   errs() << "number of shared fields: " << _shared_field_id.size() << "\n";
   errs() << "number of kernel read driver update fields: " << _sharedKRDWFields << "\n";
   // computeSharedGlobalVars();
@@ -42,7 +55,7 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
     dumpSharedTypes("shared_struct_types");
   // printPingPongCalls(M);
   // collect shared fields detail access stats
-  collectSharedFieldsAccessStats();
+  // collectSharedFieldsAccessStats();
   fieldStatsFile.close();
   errs() << "Shared fields computation finished\n";
   return false;
@@ -121,7 +134,7 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
   _boundary_funcs.insert(imported_funcs.begin(), imported_funcs.end());
   _boundary_funcs.insert(exported_funcs.begin(), exported_funcs.end());
   // module init functions
-  Function* init_func = getModuleInitFunc(M);
+  Function *init_func = getModuleInitFunc(M);
   if (init_func != nullptr)
     _boundary_funcs.insert(init_func);
 
@@ -147,9 +160,9 @@ std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string file
   return ret;
 }
 
-std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
+std::unordered_set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
 {
-  std::set<Function*> boundary_trans_funcs;
+  std::unordered_set<Function *> boundary_trans_funcs;
   for (auto boundary_func : _boundary_funcs)
   {
     if (_callGraph->isExcludeFunc(*boundary_func))
@@ -169,7 +182,7 @@ std::set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiveClosure()
   return boundary_trans_funcs;
 }
 /*
-Basically, we can both driver side and kernel side code. Then 
+Basically, we can both driver side and kernel side code. Then
 compute the intersaction of struct types used by both sides.
 */
 void pdg::SharedDataAnalysis::computeSharedStructDITypes()
@@ -245,7 +258,7 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
   // computed in this step.
   // for (auto f : _boundary_funcs)
   // {
-  //   if (f->isDeclaration())  
+  //   if (f->isDeclaration())
   //     continue;
   //   auto fw = _PDG->getFuncWrapper(*f);
   //   for (auto arg : fw->getArgList())
@@ -334,12 +347,13 @@ void pdg::SharedDataAnalysis::connectTypeTreeToAddrVars(Tree &type_tree)
       auto addrVarNode = _PDG->getNode(*addrVar);
       currentNode->addNeighbor(*addrVarNode, EdgeType::VAL_DEP);
       // consider aliasing
-      auto aliasNodes = _PDG->findNodesReachedByEdge(*addrVarNode, EdgeType::DATA_ALIAS);
-      for (auto aliasNode : aliasNodes)
-      {
-        currentNode->addAddrVar(*aliasNode->getValue());
-        currentNode->addNeighbor(*aliasNode, EdgeType::VAL_DEP);
-      }
+      // auto aliasNodes = _PDG->findNodesReachedByEdge(*addrVarNode, EdgeType::DATA_ALIAS);
+      // for (auto aliasNode : aliasNodes)
+      // {
+        
+      //   currentNode->addAddrVar(*aliasNode->getValue());
+      //   currentNode->addNeighbor(*aliasNode, EdgeType::VAL_DEP);
+      // }
     }
     for (auto childNode : currentNode->getChildNodes())
     {
@@ -395,18 +409,22 @@ bool pdg::SharedDataAnalysis::isStructFieldNode(TreeNode &treeNode)
 bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode, bool &hasReadByKernel, bool &hasUpdateByDriver)
 {
   auto dt = treeNode.getDIType();
-  if (dt && dbgutils::isFuncPointerType(*dt))
-    return true;
-  auto addrVars = treeNode.getAddrVars();
   bool accessed_in_driver = false;
   bool accessed_in_kernel = false;
 
+  // the assumption is that driver updates the call back exported by it at initialization phase
+  if (dt && dbgutils::isFuncPointerType(*dt) && isDriverCallBackFuncPtrFieldNode(treeNode))
+  {
+    hasUpdateByDriver = true;
+    accessed_in_driver = true;
+  }
+
+  auto addrVars = treeNode.getAddrVars();
   for (auto addrVar : addrVars)
   {
     if (Instruction *i = dyn_cast<Instruction>(addrVar))
     {
       Function *f = i->getFunction();
-
       if (_driverDomainFuncs.find(f) != _driverDomainFuncs.end())
       {
         accessed_in_driver = true;
@@ -421,6 +439,7 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode, bool &hasRead
       }
     }
 
+    // early terminates if we find a field read by kernel and updated by driver
     if (hasReadByKernel && hasUpdateByDriver)
     {
       _sharedKRDWFields++;
@@ -497,13 +516,7 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       // counting for shared struct fields
       if (currentTreeNode->isStructField())
       {
-        // assume function pointer type fields are shared
-        if (dbgutils::isFuncPointerType(*nodeDIType))
-        {
-          _shared_field_id.insert(pdgutils::computeTreeNodeID(*currentTreeNode));
-          countReadWriteAccessTimes(*currentTreeNode);
-        }
-        else if (isTreeNodeShared(*currentTreeNode, hasReadByKernel, hasUpdateByDriver))
+        if (isTreeNodeShared(*currentTreeNode, hasReadByKernel, hasUpdateByDriver))
         {
           auto fieldID = pdgutils::computeTreeNodeID(*currentTreeNode);
           if (!fieldID.empty())
@@ -707,7 +720,7 @@ void pdg::SharedDataAnalysis::collectSharedFieldsAccessStats()
         ksplit_stats.driverWritableFieldsPerTy += 1;
         if (isPtrType)
         {
-          errs() << "driver update ptr field (shared type): " << std::get<0>(*tupleIter) << "\n";
+          // errs() << "driver update ptr field (shared type): " << std::get<0>(*tupleIter) << "\n";
           ksplit_stats.driverWritablePtrFieldsPerTy += 1;
         }
       }
@@ -718,7 +731,7 @@ void pdg::SharedDataAnalysis::collectSharedFieldsAccessStats()
         if (isPtrType)
         {
           ksplit_stats.kernelReadDriverUpdateSharedPtrFieldsPerTy += 1;
-          if (isFuncPtrType) 
+          if (isFuncPtrType)
             ksplit_stats.kernelReadDriverUpdateSharedFuncPtrFieldsPerTy += 1;
         }
       }
@@ -728,20 +741,23 @@ void pdg::SharedDataAnalysis::collectSharedFieldsAccessStats()
 
 void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
 {
+  // treeNode is shared
+
   if (!treeNode.isStructField())
     return;
-
-  auto addrVars = treeNode.getAddrVars();
+  // init kernel/driver read/write stats
   unsigned driverReadTimes = 0;
   unsigned driverWriteTimes = 0;
   unsigned kernelReadTimes = 0;
   unsigned kernelWriteTimes = 0;
 
-  // TODO: this is a temporary optimization, should find the function that are
-  // exported from driver and only mark those as written by driver
-  if (isFuncPtr(treeNode))
+  if (isFuncPtr(treeNode) && isDriverCallBackFuncPtrFieldNode(treeNode))
+  {
+    errs() << "Find driver exported funct ptr field: " << treeNode.getSrcName() << "\n";
     driverWriteTimes += 1;
+  }
 
+  auto addrVars = treeNode.getAddrVars();
   for (auto addrVar : addrVars)
   {
     if (Instruction *i = dyn_cast<Instruction>(addrVar))
@@ -766,13 +782,65 @@ void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
     }
   }
 
-  auto fieldName = treeNode.getSrcHierarchyName(false);
+  // collect pointer type fields stats
+  auto nodeDIType = treeNode.getDIType();
+  bool isPtrType = dbgutils::isPointerType(*nodeDIType);
+  bool isFuncPtrType = dbgutils::isFuncPointerType(*nodeDIType);
+
   // detect fields only updated by driver and read by the kernel
-  if (kernelReadTimes != 0 && driverWriteTimes != 0) {
-    std::string fieldTypeStr = getFieldTypeStr(treeNode);
-    fieldStatsFile << fieldTypeStr << fieldName << "," << kernelReadTimes << "," << driverWriteTimes << "\n";
-    detectDrvAttacksOnField(treeNode);
+  //if (kernelReadTimes != 0 && !isPtrType)
+  if (kernelReadTimes != 0 && driverWriteTimes != 0)
+  {
+    if (isPtrType)
+    {
+      if (isFuncPtrType)
+      {
+        _ksplitStats->funcPtrNum++;
+        // if (driverWriteTimes > 0)
+        //   _ksplitStats->DCFuncPtrNum++;
+        // if (driverReadTimes > 0)
+        //   _ksplitStats->DLFuncPtrNum++;
+      }
+      else
+      {
+        _ksplitStats->dataPtrNum++;
+        // if (driverWriteTimes > 0)
+        //   _ksplitStats->DCDataPtrNum++;
+        // if (driverReadTimes > 0)
+        //   _ksplitStats->DLDataPtrNum++;
+      }
+    }
+    else
+    {
+      // classify non-ptr fields
+      // std::string fieldTypeStr = getFieldTypeStr(treeNode);
+      // auto fieldName = treeNode.getSrcHierarchyName(false);
+      detectDrvAttacksOnField(treeNode);
+      computeTaintOnField(treeNode);
+    }
   }
+}
+
+// print out the update locations of a field in driver domain
+void pdg::SharedDataAnalysis::printDriverUpdateLocations(TreeNode &treeNode)
+{
+  errs() << "Driver Update Locations ( " << treeNode.getSrcHierarchyName(false) << " ): \n";
+  for (auto addrVar : treeNode.getAddrVars())
+  {
+    if (auto inst = dyn_cast<Instruction>(addrVar))
+    {
+      // igonore cases in which header path is updated in the header files
+      if (pdgutils::isUpdatedInHeader(*inst))
+        continue;
+      auto func = inst->getFunction();
+      if (isDriverFunc(*func) && pdgutils::hasWriteAccess(*inst))
+      {
+        errs() << "(" << func->getName() << ") ";
+        pdgutils::printSourceLocation(*inst);
+      }
+    }
+  }
+  errs() << " =========================================== \n";
 }
 
 std::string pdg::SharedDataAnalysis::getFieldTypeStr(TreeNode &treeNode)
@@ -801,7 +869,8 @@ std::string pdg::SharedDataAnalysis::getFieldTypeStr(TreeNode &treeNode)
       ret += "ptrari|";
     }
   }
-  else {
+  else
+  {
     ksplitStats.numRWNonPtr++;
     // non pointer type
     if (usedInBranch(treeNode))
@@ -830,8 +899,14 @@ bool pdg::SharedDataAnalysis::isFuncPtr(TreeNode &treeNode)
 
 bool pdg::SharedDataAnalysis::isDriverCallBackFuncPtrFieldNode(TreeNode &treeNode)
 {
+  if (!treeNode.isStructField())
+    return false;
+
+  auto parentTypeName = treeNode.getParentNode()->getTypeName(true);
   auto fieldName = treeNode.getSrcName();
-  if (exportedFuncPtrFieldNames.find(fieldName) != exportedFuncPtrFieldNames.end())
+  std::string funcOpID = parentTypeName + "_" + fieldName;
+
+  if (exportedFuncPtrFieldNames.find(funcOpID) != exportedFuncPtrFieldNames.end())
     return true;
   return false;
 }
@@ -849,48 +924,103 @@ bool pdg::SharedDataAnalysis::usedInBranch(TreeNode &treeNode)
   return false;
 }
 
-
 // ----- detect attacks ------
+
+void printRiskyFieldInfo(raw_ostream &os, const std::string &category, pdg::TreeNode &treeNode, Function &func, Instruction &inst)
+{
+  os.changeColor(raw_ostream::RED);
+  os << "--- [" << category << "] --- ";
+  os.resetColor();
+  os << treeNode.getSrcHierarchyName(false) << " in func " << func.getName() << "\n";
+  pdg::pdgutils::printSourceLocation(inst);
+}
+
 // the tree node is already detected to be updated in driver and read in kernel
 void pdg::SharedDataAnalysis::detectDrvAttacksOnField(TreeNode &treeNode)
 {
   auto addrVars = treeNode.getAddrVars();
+  bool isRiskyBound = false;
+  bool isRiskyCond = false;
+  bool isRiskyCondFunc = false;
+  bool isUsedInRiskyAPI = false;
+
+  // detect shared lock field
+  if (treeNode.isSharedLockField())
+  {
+    _ksplitStats->riskyLockField++;
+    auto addrVar = *addrVars.begin();
+    auto inst = cast<Instruction>(addrVar);
+    auto func = inst->getFunction();
+    printRiskyFieldInfo(errs(), "Risky Lock Field", treeNode, *func, *inst);
+    printDriverUpdateLocations(treeNode);
+  }
+
+  // check for risky bound field and risky cond field, these two are mutual exclusive
+  // if a field is classified as risky bound, it cannot classified as risky cond.
   for (auto addrVar : addrVars)
   {
-    // 1. finds all the reads in the kernel domain
+    if (isRiskyCond || isRiskyBound || isUsedInRiskyAPI)
+      break;
+
     if (auto inst = dyn_cast<Instruction>(addrVar))
     {
       auto func = inst->getFunction();
       auto funcNode = _callGraph->getNode(*func);
-      // only check for kernel functions
+
       if (isDriverFunc(*func))
         continue;
+
       auto addrVarNode = _PDG->getNode(*addrVar);
-      // if variable is in a kernel function
-      if (detectIsAddrVarUsedAsIndex(*addrVar))
+      if (!addrVarNode->isAddrVarNode())
+        continue;
+
+      if (!isRiskyBound && detectIsAddrVarUsedAsIndex(*addrVar))
       {
-        errs().changeColor(raw_ostream::RED);
-        errs() << "[Risky Bound Field]: ";
-        errs().resetColor();
-        errs() << treeNode.getSrcHierarchyName(false) << " in func " << func->getName()
-               << "\n";
+        isRiskyBound = true;
+        printRiskyFieldInfo(errs(), "Risky Bound Field", treeNode, *func, *inst);
+        printDriverUpdateLocations(treeNode);
+
         if (checkRAWDriverUpdate(*addrVarNode))
         {
-          errs() << "find driver RAW shared bound field: " << treeNode.getSrcHierarchyName(false) << "\n";
+          errs().indent(20);
+          errs() << "RAW shared bound field: ";
+          errs() << treeNode.getSrcHierarchyName(false) << "\n";
+          _ksplitStats->riskyBoundRAWField++;
         }
       }
 
-      if (detectIsAddrVarUsedInCond(*addrVar))
+      if (!isRiskyCond && detectIsAddrVarUsedInCond(*addrVar))
       {
-        errs().changeColor(raw_ostream::RED);
-        errs() << "[Risky Cond Field]: ";
-        errs().resetColor();
-        errs() << treeNode.getSrcHierarchyName(false) << " in func " << func->getName()
-               << "\n";
+        printRiskyFieldInfo(errs(), "Risky Cond Field", treeNode, *func, *inst);
+        printDriverUpdateLocations(treeNode);
+
+        isRiskyCond = true;
+        _ksplitStats->riskyCondField++;
+
         if (checkRAWDriverUpdate(*addrVarNode))
         {
-          errs() << "find driver RAW shared cond field: " << treeNode.getSrcHierarchyName(false) << "\n";
+          errs().indent(20);
+          errs() << "RAW shared cond field: ";
+          errs() << treeNode.getSrcHierarchyName(false) << "\n";
+          _ksplitStats->riskyCondRAWField++;
         }
+
+        if (!isRiskyCondFunc)
+        {
+          if (dbgutils::isFuncPointerType(*treeNode.getDIType()) && isDriverCallBackFuncPtrFieldNode(treeNode))
+          {
+            errs().indent(20);
+            errs() << "shared cond func field\n";
+            _ksplitStats->riskyCondFuncField++;
+            isRiskyCondFunc = true;
+          }
+        }
+      }
+
+      if (!isUsedInRiskyAPI && detectIsAddrVarUsedInSensitiveAPI(*addrVar))
+      {
+        isUsedInRiskyAPI = true;
+        _ksplitStats->riskyFieldUsedInSensitiveAPI++;
       }
     }
   }
@@ -899,13 +1029,13 @@ void pdg::SharedDataAnalysis::detectDrvAttacksOnField(TreeNode &treeNode)
 /*
 Check if a driver updated field used to index buffer in the kernel domain
 */
-bool pdg::SharedDataAnalysis::detectIsAddrVarUsedAsIndex(Value &addrVar)
+bool pdg::SharedDataAnalysis::detectIsAddrVarUsedAsIndex(Value &addrVar, bool countTaint)
 {
   for (auto user : addrVar.users())
   {
     // check the load instruction that reads from the address,
-    // determine if the loaded value is used as index in array etc.
-    // gep (addr) -> load gep -> used as index (used as the offset operand ) 
+    // determine if the loaded value is used as index in array or pointer arithmetic
+    // gep (addr) -> load gep -> used as index (used as the offset operand )
     if (auto li = dyn_cast<LoadInst>(user))
     {
       for (auto u : li->users())
@@ -914,14 +1044,26 @@ bool pdg::SharedDataAnalysis::detectIsAddrVarUsedAsIndex(Value &addrVar)
         {
           auto ptrOperand = gep->getPointerOperand();
           auto ptrValNode = _PDG->getNode(*ptrOperand);
-          // this check whether the field is is used in pointer arithmetic, excluding the cases in which the field is a 
+          // this check whether the field is is used in pointer arithmetic, excluding the cases in which the field is a
           // struct pointer.
-          if (li == ptrOperand && ptrValNode->getDIType() && !dbgutils::isStructPointerType(*ptrValNode->getDIType()))
+          if (ptrValNode->getDIType() && !dbgutils::isStructPointerType(*ptrValNode->getDIType()))
+          {
+            if (li == ptrOperand)
+            {
+              if (countTaint)
+                _ksplitStats->riskyPtrArithFieldTaint++;
+              else
+                _ksplitStats->riskyPtrArithField++;
+            }
+            else
+            {
+              if (countTaint)
+                _ksplitStats->riskyIndexFieldTaint++;
+              else
+                _ksplitStats->riskyIndexField++;
+            }
             return true;
-
-          // check it is used as the offset operand, instead of pointer operand, this found the array indexing cases
-          if (li != ptrOperand)
-            return true;
+          }
         }
       }
     }
@@ -939,6 +1081,26 @@ bool pdg::SharedDataAnalysis::detectIsAddrVarUsedInCond(Value &addrVar)
       for (auto u : li->users())
       {
         if (isa<ICmpInst>(u) || isa<SwitchInst>(u))
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool pdg::SharedDataAnalysis::detectIsAddrVarUsedInSensitiveAPI(Value &addrVar)
+{
+  for (auto user : addrVar.users())
+  {
+    if (CallInst *ci = dyn_cast<CallInst>(user))
+    {
+      auto calledFunc = pdgutils::getCalledFunc(*ci);
+      if (!calledFunc)
+        continue;
+      auto calledFuncName = calledFunc->getName().str();
+      for (auto op : sensitiveOperations)
+      {
+        if (calledFuncName.find(op) != std::string::npos)
           return true;
       }
     }
@@ -966,6 +1128,214 @@ bool pdg::SharedDataAnalysis::checkRAWDriverUpdate(Node &node)
     }
   }
   return false;
+}
+
+void pdg::SharedDataAnalysis::printTaintTrace(Instruction &source, Instruction &sink, std::string fieldHierarchyName , std::string flowType)
+{
+  auto sourceFunc = source.getFunction();
+  auto sourceFuncNode = _callGraph->getNode(*sourceFunc);
+  auto sinkFunc = sink.getFunction();
+  auto sinkFuncNode = _callGraph->getNode(*sinkFunc);
+
+  errs() << "(field: " << fieldHierarchyName << ")" <<"\n";
+  errs() << "flow type: " << flowType << "\n";
+  errs() << "source inst: " << source << " in func " << sourceFunc->getName() << "\n";
+  pdgutils::printSourceLocation(source);
+  errs() << "sink inst: " << sink << " in func " << sinkFunc->getName() << "\n";
+  pdgutils::printSourceLocation(sink);
+  std::vector<Node *> callPath;
+  std::unordered_set<Node *> visited;
+  _callGraph->findPathDFS(sourceFuncNode, sinkFuncNode, callPath, visited);
+  _callGraph->printPath(callPath);
+  errs() << "<=========================================>\n";
+}
+
+void pdg::SharedDataAnalysis::findGlobalAlias(Node &node, std::unordered_set<Node *> &aliasNodes)
+{
+  std::set<EdgeType> searchEdgeTypes = {
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_ALIAS};
+  auto ret = _PDG->findNodesReachedByEdges(node, searchEdgeTypes);
+  aliasNodes.insert(ret.begin(), ret.end());
+}
+
+void pdg::SharedDataAnalysis::computeTaintOnField(TreeNode &treeNode)
+{
+  // TODO: skip func ptr now for sannity check
+  // if (dbgutils::isFuncPointerType(*treeNode.getDIType()))
+  //   return;
+
+  std::unordered_set<Node *> aliasNodes;
+  bool taintSenAPI = false;
+  bool taintCond = false;
+  bool taintPtrArith = false;
+
+  for (auto addrVar : treeNode.getAddrVars())
+  {
+    if (taintSenAPI || taintCond || taintPtrArith)
+      break;
+    auto addrVarNode = _PDG->getNode(*addrVar);
+    findGlobalAlias(*addrVarNode, aliasNodes);
+    Instruction* srcInst = cast<Instruction>(addrVar);
+    Function *srcFunc = srcInst->getFunction();
+    // only start the taint from the fields accessed in kernel
+    if (isDriverFunc(*srcFunc))
+      continue;
+    computeExplicitFlowTaintedOnNode(*addrVarNode, *srcInst, treeNode.getSrcHierarchyName(), taintSenAPI, taintCond, taintPtrArith);
+    for (auto aliasNode : aliasNodes)
+    {
+      if (aliasNode == addrVarNode)
+        continue;
+      if (!aliasNode->getValue() || aliasNode->getValue()->getType() != addrVar->getType())
+        continue;
+      // skip driver alias
+      auto aliasNodeFunc = aliasNode->getFunc();
+      if (aliasNodeFunc && isDriverFunc(*aliasNodeFunc))
+        continue;
+      computeExplicitFlowTaintedOnNode(*aliasNode, *srcInst, treeNode.getSrcHierarchyName(), taintSenAPI, taintCond, taintPtrArith);
+      // computeImplicitFlowTaintedOnField(*aliasNode, *srcInst, treeNode.getSrcHierarchyName(), isTainted);
+    }
+  }
+}
+
+// assume the tree node (field) is updated by driver and read by kernel
+void pdg::SharedDataAnalysis::computeExplicitFlowTaintedOnNode(Node &node, Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith)
+{
+  // taint nodes found through def_use edge
+  std::set<EdgeType> defUseEdges = {
+      EdgeType::PARAMETER_IN,
+      EdgeType::DATA_DEF_USE};
+
+  auto defUseNodes = _PDG->findNodesReachedByEdges(node, defUseEdges);
+  for (auto defUseNode : defUseNodes)
+  {
+    // if (isTainted)
+    //   break;
+    auto taintVal = defUseNode->getValue();
+    // if (!taintVal || taintVal == &srcInst)
+    if (!taintVal)
+      continue;
+
+    auto taintNode = _PDG->getNode(*taintVal);
+    auto taintFunc = taintNode->getFunc();
+    if (isDriverFunc(*taintFunc))
+      continue;
+
+    if (!taintSenAPI && detectIsAddrVarUsedInSensitiveAPI(*taintVal))
+    {
+      taintSenAPI = true;
+      _ksplitStats->riskyFieldUsedInSensitiveAPITaint++;
+      // if (defUseNode != &node)
+      //   printTaintTrace(srcInst, *taintCI, fieldAccessPath, "Explicit SenOp");
+    }
+
+    // if (LoadInst *li = dyn_cast<LoadInst>(taintVal))
+    // {
+    //   // check memory read
+    //   for (auto user : li->users())
+    //   {
+    //     if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
+    //     {
+    //       if (!pdgutils::isStructPointerType(*gep->getPointerOperandType()))
+    //       {
+    //         // printTaintTrace(srcInst, *li, fieldAccessPath, "Explicit Mem Read Acc");
+    //         if (!isTainted)
+    //         {
+    //           isTainted = true;
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
+
+    // if (StoreInst *si = dyn_cast<StoreInst>(taintVal))
+    // {
+    //   // check memory update
+    //   if (si->getPointerOperand() == taintVal)
+    //   {
+    //     // printTaintTrace(srcInst, *si, fieldAccessPath, "Explicit Mem Write Acc");
+    //     if (!isTainted)
+    //     {
+    //       isTainted = true;
+    //     }
+    //   }
+    // }
+
+    // check for buffer access / ptr arithmetic
+    if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(taintVal))
+    {
+      if (!taintPtrArith && detectIsAddrVarUsedAsIndex(*gep, true))
+      {
+        taintPtrArith = true;
+        if (defUseNode != &node)
+          printTaintTrace(srcInst, *gep, fieldAccessPath, "Explicit PtrAri");
+      }
+    }
+
+    if (!taintCond && detectIsAddrVarUsedInCond(*taintVal))
+    {
+      // check if branch condition is affected
+      taintCond = true;
+      _ksplitStats->riskyCondFieldTaint++;
+      if (Instruction *taintI = dyn_cast<Instruction>(taintVal))
+      {
+        if (defUseNode != &node)
+          printTaintTrace(srcInst, *taintI, fieldAccessPath, "Explicit Branch");
+      }
+    }
+  }
+}
+
+void pdg::SharedDataAnalysis::computeImplicitFlowTaintedOnField(Node &node, Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith)
+{
+  std::set<EdgeType> searchEdgeTypes = {
+      EdgeType::CONTROL};
+
+  auto nodeVal = node.getValue();
+  for (auto user : nodeVal->users())
+  {
+    if (auto li = dyn_cast<LoadInst>(user))
+    {
+      for (auto liUser : li->users())
+      {
+        // check if the field value is used in any branch.
+        // TODO: we should potentially also check the address itself too.
+        if (isa<ICmpInst>(liUser))
+        {
+          for (auto icmpUser : liUser->users())
+          {
+            // check if the cmp instruction value is used in branch condition evaluation
+            if (isa<BranchInst>(icmpUser))
+            {
+              auto branchUserNode = _PDG->getNode(*icmpUser);
+              // search instructions that are reachable through CONTROL_DEP Edge
+              auto taintNodes = _PDG->findNodesReachedByEdges(*branchUserNode, searchEdgeTypes);
+              for (auto taintNode : taintNodes)
+              {
+                if (taintNode == branchUserNode)
+                  continue;
+                auto taintVal = taintNode->getValue();
+                if (CallInst *CI = dyn_cast<CallInst>(taintVal))
+                {
+                  auto calledFunc = pdgutils::getCalledFunc(*CI);
+                  if (!calledFunc)
+                    continue;
+                  auto calledFuncName = calledFunc->getName().str();
+                  for (auto op : sensitiveOperations)
+                  {
+                    if (calledFuncName.find(op) != std::string::npos)
+                    {
+                      printTaintTrace(srcInst, *CI, fieldAccessPath, "Implicit Dep - Sen Op");
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 static RegisterPass<pdg::SharedDataAnalysis>

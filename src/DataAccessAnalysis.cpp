@@ -51,6 +51,8 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   {
     if (F.isDeclaration())
       continue;
+    // if (!_callGraph->isBuildFuncNode(F))
+    //   continue;
     // create an entry for driver API fields and ptr fields access, this is purely for
     // stats collection
     if (_SDA->isDriverFunc(F))
@@ -60,11 +62,12 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
     }
     // compute data access for function arguments, used later for IDL generation
     computeDataAccessForFuncArgs(F);
-    // computeContainerOfLocs(F);
     total_num_funcs++;
   }
 
   generateSyncStubsForBoundaryFunctions(M);
+  // printDriverTaintKernelAllocDeallocFuncs();
+  _ksplitStats->printRiskyPatterns();
   // count total func size
   if (EnableAnalysisStats)
   {
@@ -451,9 +454,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
   //   return;
   if (!treeNode.getDIType())
   {
-    // errs() << "[Warning]: processing tree node with null DIType in func " << 
-    // func->getName() << " - depth " << treeNode.getDepth() 
-    // << " - isRet " << isRet 
+    // errs() << "[Warning]: processing tree node with null DIType in func " <<
+    // func->getName() << " - depth " << treeNode.getDepth()
+    // << " - isRet " << isRet
     // << " parent var name " << treeNode.getParentNode()->getSrcHierarchyName() << "\n";
     return;
   }
@@ -526,7 +529,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
         if (!gep->hasAllConstantIndices())
         {
           if (pdgutils::isStructPointerType(*gep->getPointerOperand()->getType()))
-            errs() << "[Warning]: GEP has variadic idx. May miss field access - " << gep->getFunction()->getName() << "\n";
+            errs() << "[Warning]: " << treeNode.getSrcHierarchyName() << " GEP has variadic idx. May miss field access - " << gep->getFunction()->getName() << "\n";
         }
       }
     }
@@ -614,9 +617,9 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
         // this avoid frequent query of address variable nodes
         // if (func_domain_tag == boundary_func_domain_tag)
         // {
-          treeNode.addAddrVar(*i);
-          auto instNode = _PDG->getNode(*i);
-          treeNode.addNeighbor(*instNode, EdgeType::PARAMETER_IN);
+        treeNode.addAddrVar(*i);
+        auto instNode = _PDG->getNode(*i);
+        treeNode.addNeighbor(*instNode, EdgeType::PARAMETER_IN);
         // }
         // assumption when computing access for driver side global variables
         if (isGlobalTreeNode && !_SDA->isDriverFunc(*(i->getFunction())))
@@ -634,8 +637,6 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
         for (auto accTag : acc_tags)
         {
           treeNode.addAccessTag(accTag);
-          // TODO: this is a temporary fix, because Parameter tree don't have node representing
-          // the value of the field address. Need to add this kind of node soon.
           if (parentNode && parentNode->isStructField())
             parentNode->addAccessTag(accTag);
         }
@@ -1101,7 +1102,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
     {
       // null terminated arraies
       fieldsProjectionStr << indentLevel << "array<" << field_type_name << ", "
-                            << "null> " << field_var_name << ";\n";
+                          << "null> " << field_var_name << ";\n";
       nodeQueue.push(childNode);
     }
     else if (childNode->isSeqPtr() && !dbgutils::isArrayType(*field_di_type)) // leave sized array to be handled by default generation
@@ -1116,7 +1117,7 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
         element_proj_type_str += "*";
 
       fieldsProjectionStr << indentLevel << "array<" << element_proj_type_str << ", "
-                            << "size_unknown> " << field_var_name << ";\n";
+                          << "size_unknown> " << field_var_name << ";\n";
     }
     else if (dbgutils::isStructPointerType(*field_di_type))
     {
@@ -1147,15 +1148,15 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
       }
 
       fieldsProjectionStr << indentLevel
-                            << "projection "
-                            << parentStructTypeName
-                            << "_"
-                            << field_name_prefix
-                            << field_type_name
-                            << ptr_postfix
-                            << " "
-                            << field_var_name
-                            << ";\n";
+                          << "projection "
+                          << parentStructTypeName
+                          << "_"
+                          << field_name_prefix
+                          << field_type_name
+                          << ptr_postfix
+                          << " "
+                          << field_var_name
+                          << ";\n";
       nodeQueue.push(childNode);
     }
     else if (dbgutils::isProjectableType(*field_di_type))
@@ -1201,14 +1202,14 @@ void pdg::DataAccessAnalysis::generateIDLFromTreeNode(TreeNode &treeNode, raw_st
           }
           // only produce a reference to global definition
           fieldsProjectionStr << indentLevel
-                                << "projection "
-                                << parentStructTypeName
-                                << "_"
-                                << "global_"
-                                << field_type_name
-                                << "* "
-                                << field_var_name
-                                << ";\n";
+                              << "projection "
+                              << parentStructTypeName
+                              << "_"
+                              << "global_"
+                              << field_type_name
+                              << "* "
+                              << field_var_name
+                              << ";\n";
         }
         else
         {
@@ -1353,7 +1354,7 @@ for each field address.
 nlohmann::json pdg::DataAccessAnalysis::generateJSONObjectFromArgTree(Tree *argTree, unsigned argIdx)
 {
   // argTree->print();
-  // obtain the root node 
+  // obtain the root node
   TreeNode *rootNode = argTree->getRootNode();
   DIType *rootNodeDt = rootNode->getDIType();
   assert(rootNodeDt && "cannot generate json object for root node without debugging info\n");
@@ -1368,7 +1369,7 @@ nlohmann::json pdg::DataAccessAnalysis::createJSONObjectForNode(TreeNode &treeNo
   // create a JSON object for a given node
   // if the node represent a struct, and it has a pointer field which points to
   // other struct, recursively build JSON object for the pointer field
-  nlohmann::json jsonObj;  
+  nlohmann::json jsonObj;
   // check if this is a struct field, if so, add the offset info to the json object
   auto nodeDt = treeNode.getDIType();
   if (!nodeDt)
@@ -1378,7 +1379,7 @@ nlohmann::json pdg::DataAccessAnalysis::createJSONObjectForNode(TreeNode &treeNo
   {
     unsigned fieldOffset = dbgutils::computeFieldOffsetInBytes(*nodeDt);
     jsonObj["offset"] = fieldOffset;
-    jsonObj["dbg"] =  funcName + "::" + treeNode.getSrcHierarchyName();
+    jsonObj["dbg"] = funcName + "::" + treeNode.getSrcHierarchyName();
   }
   unsigned accCap = computeAccCapForNode(treeNode);
   jsonObj["cap"] = accCap;
@@ -2224,6 +2225,227 @@ void pdg::DataAccessAnalysis::dumpFieldOffsetAccessMapToFile(TreeNode &paramRoot
     ofs << p.first << "," << p.second << "\n";
   }
   ofs.close();
+}
+
+void pdg::DataAccessAnalysis::initAllocatorFuncNodes()
+{
+  std::vector<std::string> allocatorNames = {
+      "kmalloc",
+      "kzalloc",
+      "vzalloc"};
+  for (auto &F : *_module)
+  {
+    if (pdgutils::containsAnySubstring(F.getName().str(), allocatorNames))
+    {
+      auto funcNode = _callGraph->getNode(F);
+      if (funcNode)
+        allocatorFuncNodes.insert(funcNode);
+    }
+  }
+}
+
+void pdg::DataAccessAnalysis::initDeallocatorFuncNodes()
+{
+  std::vector<std::string> deallocatorNames = {
+      "kfree",
+      "vfree"};
+  for (auto &F : *_module)
+  {
+    if (pdgutils::containsAnySubstring(F.getName().str(), deallocatorNames))
+    {
+      auto funcNode = _callGraph->getNode(F);
+      if (funcNode)
+        deallocatorFuncNodes.insert(funcNode);
+    }
+  }
+}
+
+void pdg::DataAccessAnalysis::printDriverTaintKernelAllocDeallocFuncs()
+{
+  initAllocatorFuncNodes();
+  initDeallocatorFuncNodes();
+  // identify kernel API that leads to kernel object allocation
+  std::unordered_set<Function *> kernelAllocatorAPIs;
+  std::unordered_set<Function *> kernelDeallocatorAPIs;
+  findKernelAllocatorAPI(kernelAllocatorAPIs);
+  findKernelDeallocatorAPI(kernelDeallocatorAPIs);
+
+  _ksplitStats->kernelAllocAPI = kernelAllocatorAPIs.size();
+  _ksplitStats->kernelDeallocAPI = kernelDeallocatorAPIs.size();
+
+  // for each of allocator function, check hwo driver invoke these functions
+  for (auto kernelAllocAPI : kernelAllocatorAPIs)
+  {
+    errs() << "Kernel allocator API: " << kernelAllocAPI->getName() << "\n";
+  }
+
+  // for each of deallocator function, check hwo driver invoke these functions
+  for (auto kernelDeallocAPI : kernelDeallocatorAPIs)
+  {
+    errs() << "Kernel deallocator API: " << kernelDeallocAPI->getName() << "\n";
+  }
+}
+
+void pdg::DataAccessAnalysis::findKernelAllocatorAPI(std::unordered_set<Function *> &allocatorFuncs)
+{
+  for (auto func : _SDA->getBoundaryFuncs())
+  {
+    if (func->isDeclaration())
+      continue;
+    if (!_SDA->isBoundaryFuncName(func->getName().str()))
+      continue;
+    if (_SDA->isDriverFunc(*func))
+      continue;
+    if (allocateKernelObj(*func))
+      allocatorFuncs.insert(func);
+    if (allocatorFuncNodes.find(_callGraph->getNode(*func)) != allocatorFuncNodes.end())
+      allocatorFuncs.insert(func);
+  }
+}
+
+void pdg::DataAccessAnalysis::findKernelDeallocatorAPI(std::unordered_set<Function *> &deallocatorFuncs)
+{
+  for (auto func : _SDA->getBoundaryFuncs())
+  {
+    if (func->isDeclaration())
+      continue;
+    if (!_SDA->isBoundaryFuncName(func->getName().str()))
+      continue;
+    if (_SDA->isDriverFunc(*func))
+      continue;
+    if (deallocateKernelObj(*func))
+      deallocatorFuncs.insert(func);
+    if (deallocatorFuncNodes.find(_callGraph->getNode(*func)) != deallocatorFuncNodes.end())
+      deallocatorFuncs.insert(func);
+  }
+}
+
+
+bool pdg::DataAccessAnalysis::allocateKernelObj(Function &F)
+{
+
+  auto boundaryFuncNode = _callGraph->getNode(F);
+  for (auto allocFuncNode : allocatorFuncNodes)
+  {
+    Function *allocFunc = cast<Function>(allocFuncNode->getValue());
+    
+    std::vector<Node *> path;
+    std::unordered_set<Node *> visited;
+    if (_callGraph->findPathDFS(boundaryFuncNode, allocFuncNode, path, visited))
+    {
+      _callGraph->printPath(path);
+      // print out the call sites of the allocator
+      printDriverCallSite(F, *allocFunc, true);
+      if (hasParamDataflow(F, *allocFunc))
+        _ksplitStats->kernelRAWAllocAPI++;
+      return true;
+    }
+  }
+  return false;
+}
+
+bool pdg::DataAccessAnalysis::deallocateKernelObj(Function &F)
+{
+
+  auto boundaryFuncNode = _callGraph->getNode(F);
+  for (auto deallocFuncNode : deallocatorFuncNodes)
+  {
+    Function *deallocFunc = cast<Function>(deallocFuncNode->getValue());
+    
+    std::vector<Node *> path;
+    std::unordered_set<Node *> visited;
+    if (_callGraph->findPathDFS(boundaryFuncNode, deallocFuncNode, path, visited))
+    {
+      _callGraph->printPath(path);
+      // print out the call sites of the allocator
+      printDriverCallSite(F, *deallocFunc, false);
+      if (hasParamDataflow(F, *deallocFunc))
+        _ksplitStats->kernelRAWDeallocAPI++;
+      return true;
+    }
+  }
+  return false;
+}
+
+bool pdg::DataAccessAnalysis::hasParamDataflow(Function &boundaryF, Function &sinkFunc)
+{
+  auto boundaryFuncW = _PDG->getFuncWrapper(boundaryF);
+  // for each parameter, obtain the formal parameter tree
+  auto argTreeMap = boundaryFuncW->getArgFormalInTreeMap();
+  for (auto treeMapIter = argTreeMap.begin(); treeMapIter != argTreeMap.end(); ++treeMapIter)
+  {
+    auto arg = treeMapIter->first;
+    auto formalInTree = treeMapIter->second;
+    auto formalInRootNode = formalInTree->getRootNode();
+    auto paramInNodes = _PDG->findNodesReachedByEdge(*formalInRootNode, EdgeType::PARAMETER_IN);
+    for (auto n : paramInNodes)
+    {
+      if (n->getFunc() == &sinkFunc)
+      {
+        errs() << "\tFind data flow: "
+               << "kernel func ("
+               << boundaryF.getName()
+               << ")"
+               << "arg ("
+               << arg->getArgNo()
+               << ") | field ("
+               << formalInRootNode->getSrcHierarchyName() << ")\n";
+        return true;
+      }
+    }
+
+    // for (TreeNode &treeNode : *formalInTree)
+    // {
+    //   if (treeNode.getAccessTags().size() == 0)
+    //     continue;
+    //   auto paramInNodes = _PDG->findNodesReachedByEdge(treeNode, EdgeType::PARAMETER_IN);
+    //   for (auto n : paramInNodes)
+    //   {
+    //     if (n->getFunc() == &sinkFunc)
+    //       errs() << "\tFind data flow: "
+    //              << "kernel func ("
+    //              << boundaryF.getName()
+    //              << ")"
+    //              << "arg ("
+    //              << arg->getArgNo()
+    //              << ") | field ("
+    //              << treeNode.getSrcHierarchyName() << ")\n";
+    //   }
+    // }
+  }
+  return false;
+}
+
+void pdg::DataAccessAnalysis::printDriverCallSite(Function &boundaryFunc, Function &sinkFunc, bool isAlloc)
+{
+  // given a kernel boundary function node, printing out all the driver call sites
+  auto funcWrapper = _PDG->getFuncWrapper(boundaryFunc);
+  assert(funcWrapper != nullptr && "(PrintAllocatrCallSites) Cannot obtain func wrapper for nullptr!\n");
+  Node *funcEntryNode = funcWrapper->getEntryNode();
+  auto sinkStr = "allocator";
+  if (!isAlloc)
+    sinkStr = "deallocator";
+  for (auto callSiteNode : funcEntryNode->getInNeighbors())
+  {
+    auto callInst = callSiteNode->getValue();
+    if (!callInst)
+      continue;
+    if (Instruction *inst = dyn_cast<Instruction>(callInst))
+    {
+      if (!_SDA->isDriverFunc(*inst->getFunction()))
+        continue;
+      errs() << "kernel func ("
+             << boundaryFunc.getName() << ") "
+             << "|" 
+             << sinkStr 
+             << " (" << sinkFunc.getName() << ") "
+             << "| driver call site ("
+             << inst->getFunction()->getName() << ") - ";
+             pdgutils::printSourceLocation(*inst);
+    }
+  }
+  // check if there is dataflow between the boundary func and the allocator func
+  // hasParamDataflow(boundaryFunc, sinkFunc);
 }
 
 static RegisterPass<pdg::DataAccessAnalysis>

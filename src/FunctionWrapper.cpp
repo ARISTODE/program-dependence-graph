@@ -14,8 +14,7 @@ void pdg::FunctionWrapper::addInst(Instruction &i)
     _dbgDeclareInsts.push_back(dbi);
   if (CallInst *ci = dyn_cast<CallInst>(&i))
   {
-    if (!isa<DbgDeclareInst>(&i))
-      _callInsts.push_back(ci);
+    if (!isa<DbgDeclareInst>(&i)) _callInsts.push_back(ci);
   }
   if (ReturnInst *reti = dyn_cast<ReturnInst>(&i))
     _returnInsts.push_back(reti);
@@ -52,6 +51,7 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
     for (auto addr_taken_var : addr_taken_vars)
     {
       formal_in_root_node->addAddrVar(*addr_taken_var);
+      // TODO: add alias
     }
     arg_formal_in_tree->setRootNode(*formal_in_root_node);
     arg_formal_in_tree->build();
@@ -185,4 +185,9 @@ int pdg::FunctionWrapper::getArgIdxByFormalInTree(pdg::Tree *tree)
     idx++;
   }
   return -1;
+}
+
+DIType *pdg::FunctionWrapper::getReturnValDIType()
+{
+  return _retValFormalInTree->getRootNode()->getDIType();
 }

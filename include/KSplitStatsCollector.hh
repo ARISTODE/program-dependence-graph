@@ -7,6 +7,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <tuple>
+#include <iomanip>
 
 namespace pdg
 {
@@ -33,6 +34,8 @@ namespace pdg
     void printTable1Raw();
     void printTable2Raw();
     void printDrvAPIStats();
+    void printRiskyPatterns();
+    void printSoKClassifiedFields();
 
   public:
     std::ofstream _stats_file;
@@ -179,6 +182,32 @@ namespace pdg
     unsigned numRWNonPtrCondVar = 0;
     unsigned numRWPtrInPtrArith = 0;
     unsigned numRWNonPtrInPtrArith = 0;
+    unsigned riskyFieldUsedInSensitiveAPI = 0;
+    unsigned riskyFieldUsedInSensitiveAPITaint = 0;
+    unsigned riskyPtrArithField = 0;
+    unsigned riskyPtrArithFieldTaint = 0;
+    unsigned riskyIndexField = 0;
+    unsigned riskyIndexFieldTaint = 0;
+    unsigned riskyBoundRAWField = 0;
+    unsigned riskyCondField = 0;
+    unsigned riskyCondFieldTaint = 0;
+    unsigned riskyCondRAWField = 0;
+    unsigned riskyCondFuncField = 0;
+    unsigned riskyLockField = 0;
+
+
+    unsigned kernelAllocAPI = 0;
+    unsigned kernelRAWAllocAPI = 0;
+    unsigned kernelDeallocAPI = 0;
+    unsigned kernelRAWDeallocAPI = 0;
+
+    // classify shared fields
+    unsigned funcPtrNum = 0;
+    unsigned DCFuncPtrNum = 0;
+    unsigned DLFuncPtrNum = 0;
+    unsigned dataPtrNum = 0;
+    unsigned DCDataPtrNum = 0;
+    unsigned DLDataPtrNum = 0;
 
     // outdated
     unsigned _unhandled_array_num = 0; // for some dyn size arr, we could try infer it's size

@@ -6,45 +6,41 @@ using namespace llvm;
 
 bool pdg::DataDependencyGraph::runOnModule(Module &M)
 {
-  // setup SVF 
-  ProgramGraph &g = ProgramGraph::getInstance();
+  _module = &M;
+
+  PDGCallGraph &call_g = PDGCallGraph::getInstance();
+  if (!call_g.isBuild())
+  {
+    call_g.build(M);
+    call_g.setupBuildFuncNodes(M);
+  }
+  // setup SVF
   PTAWrapper &ptaw = PTAWrapper::getInstance();
+  if (!ptaw.hasPTASetup())
+    ptaw.setupPTA(M);
+
+  ProgramGraph &g = ProgramGraph::getInstance();
   if (!g.isBuild())
   {
     g.build(M);
     g.bindDITypeToNodes(M);
   }
 
-  if (!ptaw.hasPTASetup())
-    ptaw.setupPTA(M);
-
-  // std::chrono::milliseconds defuse = std::chrono::milliseconds::zero();
-  // std::chrono::milliseconds raw = std::chrono::milliseconds::zero();
-  // std::chrono::milliseconds alias = std::chrono::milliseconds::zero();
-
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
       continue;
+    // if (!call_g.isBuildFuncNode(F))
+    //   continue;
     _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
     for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
     {
-      // auto t1 = std::chrono::high_resolution_clock::now();
       addDefUseEdges(*instIter);
-      // auto t2 = std::chrono::high_resolution_clock::now();
-      // defuse += std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+      addAliasEdges(*instIter);
       addRAWEdges(*instIter);
       addRAWEdgesUnderapproximate(*instIter);
-      // auto t3 = std::chrono::high_resolution_clock::now();
-      // raw += std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2);
-      addAliasEdges(*instIter);
-      // auto t4 = std::chrono::high_resolution_clock::now();
-      // alias += std::chrono::duration_cast<std::chrono::milliseconds>(t4 - t3);
     }
   }
-  // errs() << "defuse: " << std::chrono::duration_cast<std::chrono::milliseconds>(defuse).count() << "\n";
-  // errs() << "raw: " << std::chrono::duration_cast<std::chrono::milliseconds>(raw).count() << "\n";
-  // errs() << "alias: " << std::chrono::duration_cast<std::chrono::milliseconds>(alias).count() << "\n";
   return false;
 }
 
@@ -52,27 +48,51 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   PTAWrapper &ptaw = PTAWrapper::getInstance();
-  Function* func = inst.getFunction();
-  for (auto instIter = inst_begin(func); instIter != inst_end(func); instIter++)
+  Function *func = inst.getFunction();
+
+  auto instIter = inst_begin(func);
+  while (&*instIter != &inst)
+  {
+    if (instIter == inst_end(func))
+      break;
+    instIter++;
+  }
+
+  for (; instIter != inst_end(func); instIter++)
   {
     if (&inst == &*instIter)
       continue;
     if (!inst.getType()->isPointerTy())
       continue;
-    // auto andersAAresult = ptaw.queryAlias(inst, *instIter);
+    auto andersAAresult = ptaw.queryAlias(inst, *instIter);
     auto mustAliasRes = queryMustAlias(inst, *instIter);
-    // if (andersAAresult != NoAlias || mustAliasRes != NoAlias)
-    if (mustAliasRes != NoAlias)
+    if (andersAAresult != NoAlias || mustAliasRes != NoAlias)
     {
-      Node* src = g.getNode(inst);
-      Node* dst = g.getNode(*instIter);
+      Node *src = g.getNode(inst);
+      Node *dst = g.getNode(*instIter);
       if (src == nullptr || dst == nullptr)
         continue;
       // use type info to eliminate dubious gep
-      if (!isa<BitCastInst>(*instIter) && !isa<BitCastInst>(&inst))
+      // TODO: prune the type by creating equivalent classes
+      if (inst.getType() != instIter->getType())
       {
-        if (inst.getType() != instIter->getType())
-          continue;
+        continue;
+        //if (!isa<BitCastInst>(*instIter) && !isa<BitCastInst>(&inst))
+      }
+      // if alias is a gep, ensure the offset is the same
+      if (auto srcGep = dyn_cast<GetElementPtrInst>(&inst))
+      {
+        if (auto dstGep = dyn_cast<GetElementPtrInst>(&*instIter))
+        {
+          StructType *srcStructTy = pdgutils::getStructTypeFromGEP(*srcGep);
+          StructType *dstStructTy = pdgutils::getStructTypeFromGEP(*dstGep);
+          if (!srcStructTy || !dstStructTy)
+            continue;
+          uint64_t srcGepBitOffset = pdgutils::getGEPOffsetInBits(*_module, *srcStructTy, *srcGep);
+          uint64_t dstGepBitOffset = pdgutils::getGEPOffsetInBits(*_module, *srcStructTy, *dstGep);
+          if (srcGepBitOffset != dstGepBitOffset)
+            continue;
+        }
       }
       src->addNeighbor(*dst, EdgeType::DATA_ALIAS);
       dst->addNeighbor(*src, EdgeType::DATA_ALIAS);
@@ -115,29 +135,35 @@ void pdg::DataDependencyGraph::addRAWEdges(Instruction &inst)
   src->addNeighbor(*dst, EdgeType::DATA_RAW_REV);
 }
 
-void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst) {
+void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst)
+{
   ProgramGraph &g = ProgramGraph::getInstance();
-  if (LoadInst *li = dyn_cast<LoadInst>(&inst)) {
-    Function* curFunc = inst.getFunction();
+  if (LoadInst *li = dyn_cast<LoadInst>(&inst))
+  {
+    Function *curFunc = inst.getFunction();
     // obtain load address
     auto loadAddr = li->getPointerOperand();
     auto addrNode = g.getNode(*loadAddr);
-    if (addrNode == nullptr) {
-        // errs() << "empty addr node load inst " << *loadAddr << " in func " << curFunc->getName().str() << "\n";
-        return;
+    if (addrNode == nullptr)
+    {
+      // errs() << "empty addr node load inst " << *loadAddr << " in func " << curFunc->getName().str() << "\n";
+      return;
     }
-    auto aliasNodes =
-        addrNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+    auto aliasNodes = addrNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
     aliasNodes.insert(addrNode);
     // check the user of the load addr, search for store inst
     // check for alias nodes
-    for (auto aliasNode : aliasNodes) {
+    for (auto aliasNode : aliasNodes)
+    {
       auto nodeVal = aliasNode->getValue();
       if (!nodeVal)
         continue;
-      for (auto user : nodeVal->users()) {
-        if (StoreInst* si = dyn_cast<StoreInst>(user)) {
-          if (si->getPointerOperand() == nodeVal) {
+      for (auto user : nodeVal->users())
+      {
+        if (StoreInst *si = dyn_cast<StoreInst>(user))
+        {
+          if (si->getPointerOperand() == nodeVal)
+          {
             // check for order, the store must happen before the load
             if (!pdgutils::isPrecedeInst(*si, *li, *curFunc))
               continue;
@@ -164,8 +190,8 @@ AliasResult pdg::DataDependencyGraph::queryMustAlias(Value &v1, Value &v2)
     if (bci->getOperand(0) == &v2)
       return MustAlias;
   }
-  // handle load instruction  
-  if (LoadInst* li = dyn_cast<LoadInst>(&v1))
+  // handle load instruction
+  if (LoadInst *li = dyn_cast<LoadInst>(&v1))
   {
     auto load_addr = li->getPointerOperand();
     for (auto user : load_addr->users())

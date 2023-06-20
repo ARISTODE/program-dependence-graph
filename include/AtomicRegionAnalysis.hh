@@ -65,7 +65,7 @@ namespace pdg
     void dumpCS();
     void dumpAtomicOps();
     std::set<llvm::Instruction*> computeInstsInCS(CSPair cs_pair);
-    std::set<llvm::Function *> getFuncsNeedSynStubGen() { return _funcs_need_sync_stub_gen; }
+    std::unordered_set<llvm::Function *> getFuncsNeedSynStubGen() { return _funcs_need_sync_stub_gen; }
     bool isFuncNeedSyncStubGen(llvm::Function &F) { return _funcs_need_sync_stub_gen.find(&F) == _funcs_need_sync_stub_gen.end(); }
     bool isRcuLock(llvm::CallInst &lock_call_inst);
     std::set<llvm::DIType*> findAccessedSharedTypesinRcuRegion(std::set<llvm::Instruction*> insts_in_cs);
@@ -91,7 +91,7 @@ namespace pdg
     std::set<std::string> _processed_func_names;
     std::set<std::string> _lock_instance_map;
     std::set<llvm::Value *> _warning_shared_atomic_ops;
-    std::set<llvm::Function *> _funcs_need_sync_stub_gen;
+    std::unordered_set<llvm::Function *> _funcs_need_sync_stub_gen;
     std::map<llvm::Instruction *, Tree *> _sync_data_inst_tree_map;
     std::set<llvm::Instruction *> _insts_in_CS;
     std::ofstream _sync_stub_file;

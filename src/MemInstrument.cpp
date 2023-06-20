@@ -1,6 +1,5 @@
 #include "MemInstrument.hh"
 
-
 using namespace llvm;
 
 char pdg::MemInstrumentPass::ID = 0;
@@ -132,9 +131,12 @@ void pdg::MemInstrumentPass::insertFieldAccCheckPolicy(Function &F)
     auto funcName = F.getName().str();
     // obtain function type
     FunctionType *funcTy = checkFieldAccessFunc.getFunctionType();
-    for (auto instI = inst_begin(F); instI != inst_end(F); instI++)
+    std::unordered_set<Instruction*> mustInstrumentInsts;
+    computeMustInstrumentInsts(F, mustInstrumentInsts);
+    auto funcW = PDG->getFuncWrapper(F);
+    errs() << "(" << F.getName() << ") instrument inst count: " << mustInstrumentInsts.size() << " - " << (funcW->getLoadInsts().size() + funcW->getStoreInsts().size()) << "\n";
+    for (auto inst : mustInstrumentInsts)
     {
-        auto inst = &*instI;
         if (LoadInst *li = dyn_cast<LoadInst>(inst))
         {
             auto loadAddr = li->getPointerOperand();
@@ -146,7 +148,7 @@ void pdg::MemInstrumentPass::insertFieldAccCheckPolicy(Function &F)
             Value *ptrVal = Builder.CreatePointerCast(loadAddr, ptrTy);
             Type *accTagTy = funcTy->getParamType(1);
             Value *accTagVal = Builder.CreateIntCast(ConstantInt::get(Type::getInt32Ty(Ctx), 1), accTagTy, true);
-            GlobalVariable* strGlobal = Module_->getGlobalVariable(funcName);
+            GlobalVariable *strGlobal = Module_->getGlobalVariable(funcName);
             if (!strGlobal)
             {
                 Constant *strConstant = ConstantDataArray::getString(Ctx, funcName);
@@ -167,7 +169,7 @@ void pdg::MemInstrumentPass::insertFieldAccCheckPolicy(Function &F)
             Value *ptrVal = Builder.CreatePointerCast(storeAddr, ptrTy);
             Type *accTagTy = funcTy->getParamType(1);
             Value *accTagVal = Builder.CreateIntCast(ConstantInt::get(Type::getInt32Ty(Ctx), 2), accTagTy, true);
-            GlobalVariable* strGlobal = Module_->getGlobalVariable(funcName);
+            GlobalVariable *strGlobal = Module_->getGlobalVariable(funcName);
             if (!strGlobal)
             {
                 Constant *strConstant = ConstantDataArray::getString(Ctx, funcName);
@@ -175,6 +177,46 @@ void pdg::MemInstrumentPass::insertFieldAccCheckPolicy(Function &F)
             }
             Value *funcNameVal = Builder.CreateConstGEP2_32(strGlobal->getValueType(), strGlobal, 0, 0);
             Builder.CreateCall(checkFieldAccessFunc, {ptrVal, accTagVal, funcNameVal});
+        }
+    }
+}
+
+void pdg::MemInstrumentPass::computeMustInstrumentInsts(Function &F, std::unordered_set<Instruction *> &mustInstrumentInsts)
+{
+    // step 1: iterate through all the instructions in the Function and its transitive closure
+    auto funcWrapper = PDG->getFuncWrapper(F);
+    if (!funcWrapper)
+        return;
+    auto argTreeMap = funcWrapper->getArgFormalInTreeMap();
+    for (auto iter = argTreeMap.begin(); iter != argTreeMap.end(); iter++)
+    {
+        auto argTree = iter->second;
+        auto rootNode = argTree->getRootNode();
+        std::queue<TreeNode *> nodeQ;
+        nodeQ.push(rootNode);
+        while (!nodeQ.empty())
+        {
+            TreeNode *curNode = nodeQ.front();
+            nodeQ.pop();
+            // enqueue all child nodes
+            for (auto childNode : curNode->getChildNodes())
+            {
+                if (curNode->getDepth() < 3)
+                    nodeQ.push(childNode);
+            }
+            for (auto addrVar : curNode->getAddrVars())
+            {
+                for (auto user : addrVar->users())
+                {
+                    if (isa<LoadInst>(user))
+                        mustInstrumentInsts.insert(cast<Instruction>(user));
+                    else if (StoreInst *si = dyn_cast<StoreInst>(user))
+                    {
+                        if (si->getPointerOperand() == addrVar)
+                            mustInstrumentInsts.insert(cast<Instruction>(user));
+                    }
+                }
+            }
         }
     }
 }

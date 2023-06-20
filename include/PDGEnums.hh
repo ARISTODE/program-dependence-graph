@@ -13,6 +13,8 @@ namespace pdg
     DATA_RAW,
     DATA_RAW_REV,
     DATA_READ,
+    DATA_MAY_ALIAS,
+    DATA_MUST_ALIAS,
     DATA_ALIAS,
     DATA_RET,
     PARAMETER_IN,
