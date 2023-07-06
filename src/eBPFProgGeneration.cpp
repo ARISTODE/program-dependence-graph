@@ -7,11 +7,17 @@ cl::opt<std::string> TargetFuncName("target-func",
                                 cl::value_desc("function_name"),
                                 cl::init(""));
 
+cl::opt<std::string> TargetBinPath("target-bin",
+                                cl::desc("Specify the path of the instrumented binary"),
+                                cl::value_desc("target bin path to instrument"),
+                                cl::init(""));
+
 bool pdg::EbpfGeneration::runOnModule(Module &M)
 {
   // step 1: obtain access information for all functions in the module
   DAA = &getAnalysis<DataAccessAnalysis>();
   PDG = DAA->getPDG();
+  
   // step 2: using the access information to generate policy
   std::set<std::string> boundaryAPINames;
   pdgutils::readLinesFromFile(boundaryAPINames, "boundaryAPI");
@@ -73,8 +79,9 @@ void pdg::EbpfGeneration::generateKernelProgImports()
   EbpfKernelFile << "#include <uapi/linux/ptrace.h>"
                  << "\n";
   // EbpfKernelFile << "<linux/netdevice.h>" << "\n";
-  EbpfKernelFile << "#include <linux/version.h>"
-                 << "\n";
+  EbpfKernelFile << "#include <linux/version.h>" << "\n";
+  // provide u1 - u32
+  EbpfKernelFile << "#include <linux/types.h>" << "\n";
   // generate includes for headers that contain the struct definitions
 }
 
@@ -111,6 +118,7 @@ void pdg::EbpfGeneration::generateStructDefString(TreeNode &structNode)
   // The generation of the type should be limited to the first level struct definition,
   // however, if the struct contains pointer to other struct, we replace the pointer to void*
   // this avoid bringing in more types
+  Function *func = structNode.getFunc();
   std::string structDefStr = "";
   auto structDIType = structNode.getDIType();
   auto structName = dbgutils::getSourceLevelTypeName(*structDIType);
@@ -118,15 +126,39 @@ void pdg::EbpfGeneration::generateStructDefString(TreeNode &structNode)
   for (auto childNode : structNode.getChildNodes())
   {
     auto fieldDIType = childNode->getDIType();
-    auto baseDIType = dbgutils::stripMemberTag(*fieldDIType);
-    std::string fieldTypeStr = "";
-    if (baseDIType && dbgutils::isStructPointerType(*baseDIType))
-      fieldTypeStr = "void*";
-    else
-      fieldTypeStr = dbgutils::getSourceLevelTypeName(*fieldDIType);
+    auto baseDIType = dbgutils::stripMemberTagAndAttributes(*fieldDIType);
     auto fieldNameStr = dbgutils::getSourceLevelVariableName(*fieldDIType);
-    auto fieldStr = fieldTypeStr + " " + fieldNameStr;
-    structDefStr = structDefStr + "\t" + fieldStr + ";\n";
+    // process function ptr field
+    if (dbgutils::isFuncPointerType(*baseDIType))
+    {
+      structDefStr = structDefStr + "\t" + dbgutils::getFuncSigName(*baseDIType, *func, fieldNameStr) + ";\n";
+    }
+    else
+    {
+      // if the element type is aggregate type, we replace it with array of
+      errs() << "generating for struct type\n";
+      if (dbgutils::isStructType(*baseDIType))
+      {
+        auto fieldByteSize = baseDIType->getSizeInBits() / 8;
+        std::string fieldStr = "char " + fieldNameStr + "[" + std::to_string(fieldByteSize) + "]";
+        structDefStr = structDefStr + "\t" + fieldStr + ";\n";
+      }
+      else
+      {
+        std::string fieldTypeStr = "";
+        // all pointers are replaced with void pointer primitive/struct ptrs -> void*
+        if (baseDIType && dbgutils::isStructPointerType(*baseDIType))
+        {
+          fieldTypeStr = "u64*";
+        }
+        else
+        {
+          fieldTypeStr = switchType(dbgutils::getSourceLevelTypeName(*fieldDIType));
+        }
+        auto fieldStr = fieldTypeStr + " " + fieldNameStr;
+        structDefStr = structDefStr + "\t" + fieldStr + ";\n";
+      }
+    }
   }
   structDefStr += "};";
 
@@ -195,12 +227,11 @@ void pdg::EbpfGeneration::generatePerfOutput()
 std::string pdg::EbpfGeneration::createEbpfMapForType(DIType &dt)
 {
   auto fieldType = dbgutils::stripMemberTag(dt);
-  // we only handle map for 
   if (!fieldType)
     return "";
   auto fieldTypeStr = dbgutils::getSourceLevelTypeName(*fieldType);
   if (dbgutils::isPointerType(*fieldType))
-    fieldTypeStr = "void*";
+    fieldTypeStr = "u64";
   else
     fieldTypeStr = switchType(fieldTypeStr);
 
@@ -216,8 +247,9 @@ std::string pdg::EbpfGeneration::createEbpfMapForType(DIType &dt)
     // if the field is a pointer, we store this pointer to a void* map
     if (!hasPtrMap && dbgutils::isPointerType(*fieldType))
     {
-      mapName = "void_ptr";
-      typeStr = "void*";
+      mapName = "u64";
+      //typeStr = "void*";
+      typeStr = "u64";
       hasPtrMap = true;
     }
     else
@@ -227,19 +259,23 @@ std::string pdg::EbpfGeneration::createEbpfMapForType(DIType &dt)
         return "";
       mapName = elementType->getName().str();
       mapName = switchType(mapName);
-      typeStr = dbgutils::getSourceLevelTypeName(*elementType);
+      // typeStr = dbgutils::getSourceLevelTypeName(*elementType);
     }
     // Create the eBPF map copy/ref definition string
     std::string mapDefinition = "BPF_HASH(";
     mapDefinition += mapName;
-    mapDefinition += "_copy_map, u32, ";
-    mapDefinition += typeStr;
+    mapDefinition += "_copy_map, ";
+    mapDefinition += "u32";
+    mapDefinition += ", ";
+    mapDefinition += mapName;
     mapDefinition += ");\n";
 
     mapDefinition += "BPF_HASH(";
     mapDefinition += mapName;
-    mapDefinition += "_ref_map, u32, ";
-    mapDefinition += typeStr;
+    mapDefinition += "_ref_map, ";
+    mapDefinition += "u32";
+    mapDefinition += ", ";
+    mapDefinition += mapName;
     mapDefinition += "*);";
 
     return mapDefinition;
@@ -362,12 +398,13 @@ void pdg::EbpfGeneration::generateEbpfKernelEntryProgOnArg(Tree &argTree, unsign
       auto fieldDt = fieldNode->getDIType();
       auto rawFieldDt = dbgutils::stripMemberTagAndAttributes(*fieldDt);
 
+      // skip the check for aggregate data type
       if (dbgutils::isArrayType(*rawFieldDt) || dbgutils::isCompositeType(*rawFieldDt))
         continue;
 
       auto fieldTypeStr = dbgutils::getSourceLevelTypeName(*fieldDt);
-      auto mapTypeStr = dbgutils::isPointerType(*fieldDt) ? "void_ptr" : switchType(fieldTypeStr);
-      fieldTypeStr = dbgutils::isPointerType(*fieldDt) ? "void*" : mapTypeStr;
+      auto mapTypeStr = dbgutils::isPointerType(*fieldDt) ? "u64" : switchType(fieldTypeStr);
+      fieldTypeStr = dbgutils::isPointerType(*fieldDt) ? "u64*" : switchType(mapTypeStr);
 
       auto fieldName = fieldNode->getSrcName();
       std::string fieldHierarchyName = fieldNode->getSrcHierarchyName();
@@ -378,6 +415,20 @@ void pdg::EbpfGeneration::generateEbpfKernelEntryProgOnArg(Tree &argTree, unsign
       EbpfKernelFile << "\ttmpFieldId = " << uniqueFieldId << ";\n";
       updateRefMap(fieldTypeStr, fieldName, fieldHierarchyName, mapTypeStr + "_ref_map");
       updateCopyMap(fieldTypeStr, fieldName, fieldHierarchyName, mapTypeStr + "_copy_map");
+      // if a field is not read by the callee domain, we should just ensure this field contain random info, instead of leaking things.
+      if (fieldNode->hasReadAccess())
+      {
+        if (dbgutils::isPointerType(*fieldDt) || dbgutils::isPrimitiveType(*fieldDt))
+        {
+          // for pointers and other numeric ty pes, generate a random number and store that to the field
+          EbpfKernelFile << "\trand_val = bpf_get_prandom_u32();\n";
+          EbpfKernelFile << "\tif (bpf_probe_write_user(&" << fieldHierarchyName << ", &rand_val, sizeof(rand_val))"
+                         << " != 0 ) {\n ";
+          EbpfKernelFile << "\t\tbpf_trace_printk(\"bpf_probe_write_user fail, " << fieldHierarchyName << "\\n\");\n";
+          EbpfKernelFile << "\t\treturn 0;\n";
+          EbpfKernelFile << "\t}\n";
+        }
+      }
     }
   }
   else
@@ -399,11 +450,13 @@ void pdg::EbpfGeneration::generateEbpfKernelEntryProgOnFunc(Function &F)
   if (!argNameStr.empty())
     EbpfKernelFile << ", ";
   EbpfKernelFile << argNameStr << ") {\n";
-  EbpfKernelFile << "\tuint64_t pid_tgid = bpf_get_current_pid_tgid();\n";
+  // EbpfKernelFile << "\tuint64_t pid_tgid = bpf_get_current_pid_tgid();\n";
   
   // stack variable for holding the unique function id
   auto tmpFieldId = "tmpFieldId";
+  auto randVal = "rand_val";
   EbpfKernelFile << "\tunsigned " << tmpFieldId << ";\n";
+  EbpfKernelFile << "\tu32 " << randVal << ";\n";
 
   auto argTreeMap = funcWrapper->getArgFormalInTreeMap();
   for (auto iter = argTreeMap.begin(); iter != argTreeMap.end(); iter++)
@@ -486,8 +539,8 @@ void pdg::EbpfGeneration::generateEbpfAccessChecksOnArg(Tree &argTree, unsigned 
         continue;
 
       auto fieldTypeStr = dbgutils::getSourceLevelTypeName(*fieldDt);
-      auto mapTypeStr = dbgutils::isPointerType(*fieldDt) ? "void_ptr" : switchType(fieldTypeStr);
-      fieldTypeStr = dbgutils::isPointerType(*fieldDt) ? "void*" : mapTypeStr;
+      auto mapTypeStr = dbgutils::isPointerType(*fieldDt) ? "u64" : switchType(fieldTypeStr);
+      fieldTypeStr = dbgutils::isPointerType(*fieldDt) ? "u64" : mapTypeStr;
 
       auto fieldName = fieldNode->getSrcName();
       unsigned funcID = pdgutils::getFuncUniqueId(*F);
@@ -518,7 +571,7 @@ void pdg::EbpfGeneration::generateEbpfKernelExitProg(Function &F)
   auto funcName = F.getName().str();
   EbpfKernelFile << "int "
                  << "uretprobe_" << funcName << "( struct pt_regs *ctx ) {\n";
-  EbpfKernelFile << "\tuint64_t pid_tgid = bpf_get_current_pid_tgid();\n";
+  // EbpfKernelFile << "\tuint64_t pid_tgid = bpf_get_current_pid_tgid();\n";
   auto tmpFieldId = "tmpFieldId";
   EbpfKernelFile << "\tunsigned " << tmpFieldId << ";\n";
   // extract reference and copy
@@ -651,8 +704,8 @@ void pdg::EbpfGeneration::generateProbeAttaches(Function &F)
 {
   auto entryEbpfProgName = "uprobe_" + F.getName().str();
   auto exitEbpfProgName = "uretprobe_" + F.getName().str();
-  EbpfUserspaceFile << "b.attach_uprobe(name=\"  \", sym=\"" << F.getName().str() << "\", fn_name=\"" << entryEbpfProgName << "\")\n";
-  EbpfUserspaceFile << "b.attach_uretprobe(name=\" \", sym=\"" << F.getName().str() << "\", fn_name=\"" << exitEbpfProgName << "\")\n";
+  EbpfUserspaceFile << "b.attach_uprobe(name=\"" << TargetBinPath <<  "\", sym=\"" << F.getName().str() << "\", fn_name=\"" << entryEbpfProgName << "\")\n";
+  EbpfUserspaceFile << "b.attach_uretprobe(name=\"" << TargetBinPath <<  "\", sym=\"" << F.getName().str() << "\", fn_name=\"" << exitEbpfProgName << "\")\n";
 }
 
 void pdg::EbpfGeneration::generateTracePrint()
@@ -689,32 +742,33 @@ std::string pdg::EbpfGeneration::extractFuncArgStr(Function &F)
   return argStr;
 }
 
-std::string pdg::EbpfGeneration::switchType(std::string typeStr)
-{
-  if (typeStr == "long int" || typeStr == "signed long int")
-    return "long";
-  else if (typeStr == "unsigned long int" || typeStr == "long unsigned int")
-    return "ulong";
-  else if (typeStr == "short int" || typeStr == "signed short int")
-    return "short";
-  else if (typeStr == "unsigned short int" || typeStr == "unsigned short")
-    return "ushort";
-  else if (typeStr == "signed int" || typeStr == "int")
-    return "int";
-  else if (typeStr == "unsigned int")
-    return "uint";
-  else if (typeStr == "signed char" || typeStr == "char")
-    return "char";
-  else if (typeStr == "unsigned char")
-    return "uchar";
-  else if (typeStr == "double")
-    return "double";
-  else if (typeStr == "long double")
-    return "ldouble";
-  else if (typeStr == "float")
-    return "float";
-  else
+std::string pdg::EbpfGeneration::switchType(const std::string& typeStr) {
+  static const std::unordered_map<std::string, std::string> typeMapping = {
+      {"long int", "s64"},
+      {"signed long int", "s64"},
+      {"unsigned long int", "u64"},
+      {"long unsigned int", "u64"},
+      {"short int", "s16"},
+      {"signed short int", "s16"},
+      {"unsigned short int", "u16"},
+      {"unsigned short", "u16"},
+      {"signed int", "s32"},
+      {"int", "s32"},
+      {"unsigned int", "u32"},
+      {"signed char", "s8"},
+      {"char", "s8"},
+      {"unsigned char", "u8"},
+      {"double", "s64"},
+      {"long double", "s64"},
+      {"float", "s32"}
+  };
+
+  auto it = typeMapping.find(typeStr);
+  if (it != typeMapping.end()) {
+    return it->second;
+  } else {
     return typeStr;
+  }
 }
 
 // generate checks at the entry of a function

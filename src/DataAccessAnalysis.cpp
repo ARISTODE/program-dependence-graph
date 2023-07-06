@@ -1624,7 +1624,7 @@ void pdg::DataAccessAnalysis::generateRpcForFunc(Function &F, bool processExport
   }
   _existFuncDefs.insert(calleeName);
   // handle exported func called from kernel to driver. Switch name and rpc prefix
-  if (!_SDA->isKernelFunc(calleeName))
+  if (!_SDA->isKernelFuncName(calleeName))
   {
     rpcPrefix = "rpc_ptr";
   }

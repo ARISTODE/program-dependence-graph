@@ -23,9 +23,9 @@ namespace pdg
     void setupKernelFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getDriverFuncs() { return _driverDomainFuncs; }
     bool isDriverFunc(llvm::Function &F) { return (_driverDomainFuncs.find(&F) != _driverDomainFuncs.end()); }
+    bool isKernelFunc(llvm::Function &F) {return (_kernelDomainFuncs.find(&F) != _kernelDomainFuncs.end());}
     std::set<llvm::Function *> &getKernelFuncs() { return _kernelDomainFuncs; }
-    // bool isKernelFunc(llvm::Function &F) { return (_kernelDomainFuncs.find(&F) != _kernelDomainFuncs.end()); }
-    bool isKernelFunc(std::string funcName) { return (_kernel_domain_func_names.find(funcName) != _kernel_domain_func_names.end()); }
+    bool isKernelFuncName(std::string funcName) { return (_kernel_domain_func_names.find(funcName) != _kernel_domain_func_names.end()); }
     void setupBoundaryFuncs(llvm::Module &M);
     std::set<llvm::Function *> &getBoundaryFuncs() { return _boundary_funcs; }
     std::set<std::string> &getBoundaryFuncNames() { return _boundary_func_names; }
@@ -44,7 +44,7 @@ namespace pdg
     void computeVarsWithStructDITypeInFunc(llvm::DIType &dt, llvm::Function &F, std::set<llvm::Value *> &vars);
     std::set<llvm::Value *> computeVarsWithStructDITypeInModule(llvm::DIType &dt, llvm::Module &M);
     bool isStructFieldNode(TreeNode &treeNode);
-    bool isTreeNodeShared(TreeNode &treeNode, bool &hasReadByKernel, bool &hasUpdateByDriver);
+    bool isTreeNodeShared(TreeNode &treeNode);
     bool isFieldUsedInStringOps(TreeNode &treeNode);
     bool isStringFieldID(std::string fieldId) { return _string_op_names.find(fieldId) != _string_op_names.end(); }
     bool isSharedFieldID(std::string fieldId, std::string field_type_name="");
@@ -81,7 +81,7 @@ namespace pdg
     void computeExplicitFlowTaintedOnNode(Node &node, llvm::Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith);
     void computeImplicitFlowTaintedOnField(Node &node, llvm::Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith);
     void findGlobalAlias(Node &node, std::unordered_set<Node *> &aliasNodes);
-    void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName , std::string flowType);
+    std::map<llvm::DIType *, Tree *> getGlobalStructDTMap() { return _global_struct_di_type_map; }
 
   private:
     ProgramGraph *_PDG;
@@ -105,9 +105,6 @@ namespace pdg
     std::set<std::string> _driver_global_struct_types;
     std::set<std::string> _sentinelFields;
     std::set<std::string> exportedFuncPtrFieldNames;
-    // tuple definition (field name, is pointer, is func ptr, is read by kernel, is update by driver)
-    unsigned int _sharedKRDWFields = 0;
-    std::map<std::string, std::set<std::tuple<std::string, bool, bool, bool, bool>>> sharedStructTypeFieldsAccessMap;
     std::ofstream fieldStatsFile;
     std::ofstream riskyPatternLog;
   };

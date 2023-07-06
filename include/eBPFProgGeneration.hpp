@@ -37,7 +37,7 @@ namespace pdg
         std::string extractFuncArgStr(llvm::Function &F);
         void generateFuncStructDefinition(llvm::Function &F);
         void generateStructDefString(TreeNode &structNode);
-        std::string switchType(std::string typeStr);
+        std::string switchType(const std::string &typeStr);
 
     private:
         DataAccessAnalysis *DAA;
