@@ -1,0 +1,55 @@
+WARNING: You're attempting to print out a bitcode file.
+This is inadvisable as it may cause display problems. If
+you REALLY want to taste LLVM bitcode first-hand, you
+can force output with the `-f' option.
+
+Unable to open file!
+func size: 7
+PDG Node size: 110
+drv func: main
+kernel func: dereference_ptr
+kernel func: controlled_malloc
+kernel func: free_ptr
+kernel func: sensitive_branch
+kernel func: pointer_arithmetic
+kernel func: array_indexing
+Shared Fields Classification:
+----------------------------
+Function Pointer Number: 0
+Data Corruption Function Pointer Number: 0
+Data Leakage Function Pointer Number: 0
+Data Pointer Number: 1
+Data Corruption Data Pointer Number: 0
+Data Leakage Data Pointer Number: 0
+----------------------------
+number of shared fields: 5
+Shared fields computation finished
+===-------------------------------------------------------------------------===
+                      ... Pass execution timing report ...
+===-------------------------------------------------------------------------===
+  Total Execution Time: 0.0133 seconds (0.0176 wall clock)
+
+   ---User Time---   --System Time--   --User+System--   ---Wall Time---  --- Name ---
+   0.0058 ( 62.5%)   0.0033 ( 80.8%)   0.0091 ( 68.0%)   0.0094 ( 53.5%)  Data Dependency Graph
+   0.0011 ( 11.5%)   0.0000 (  0.0%)   0.0011 (  8.0%)   0.0030 ( 17.2%)  Shared Data Analysis
+   0.0013 ( 14.4%)   0.0007 ( 16.7%)   0.0020 ( 15.1%)   0.0025 ( 14.3%)  Program Dependency Graph
+   0.0008 (  8.2%)   0.0000 (  0.0%)   0.0008 (  5.7%)   0.0020 ( 11.3%)  Risky Field Analysis
+   0.0001 (  1.5%)   0.0001 (  1.7%)   0.0002 (  1.6%)   0.0004 (  2.4%)  Control Dependency Graph
+   0.0001 (  1.1%)   0.0000 (  0.0%)   0.0001 (  0.8%)   0.0001 (  0.6%)  Module Verifier
+   0.0000 (  0.3%)   0.0000 (  0.3%)   0.0000 (  0.3%)   0.0000 (  0.2%)  Post-Dominator Tree Construction
+   0.0000 (  0.2%)   0.0000 (  0.2%)   0.0000 (  0.2%)   0.0000 (  0.1%)  Dominator Tree Construction
+   0.0000 (  0.1%)   0.0000 (  0.1%)   0.0000 (  0.1%)   0.0000 (  0.1%)  Basic Alias Analysis (stateless AA impl)
+   0.0000 (  0.1%)   0.0000 (  0.0%)   0.0000 (  0.1%)   0.0000 (  0.1%)  Function Alias Analysis Results
+   0.0000 (  0.1%)   0.0000 (  0.1%)   0.0000 (  0.1%)   0.0000 (  0.0%)  Memory Dependence Analysis
+   0.0000 (  0.0%)   0.0000 (  0.0%)   0.0000 (  0.0%)   0.0000 (  0.0%)  Phi Values Analysis
+   0.0093 (100.0%)   0.0040 (100.0%)   0.0133 (100.0%)   0.0176 (100.0%)  Total
+
+===-------------------------------------------------------------------------===
+                                LLVM IR Parsing
+===-------------------------------------------------------------------------===
+  Total Execution Time: 0.0004 seconds (0.0004 wall clock)
+
+   ---User Time---   --System Time--   --User+System--   ---Wall Time---  --- Name ---
+   0.0003 (100.0%)   0.0001 (100.0%)   0.0004 (100.0%)   0.0004 (100.0%)  Parse IR
+   0.0003 (100.0%)   0.0001 (100.0%)   0.0004 (100.0%)   0.0004 (100.0%)  Total
+

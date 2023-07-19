@@ -49,10 +49,31 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
     for (auto succ_iter = succ_begin(&BB); succ_iter != succ_end(&BB); succ_iter++)
     {
       BasicBlock *succ_bb = *succ_iter;
+      // Check if the current basic block is not the same as its successor (loop), 
+      // and if the successort block doesn't postdominate the current block
       if (&BB == &*succ_bb || !_PDT->dominates(&*succ_bb, &BB))
       {
         // get terminator and connect with the dependent block
         Instruction *terminator = BB.getTerminator();
+        // handle switch instruction
+        if (SwitchInst *switchI = dyn_cast<SwitchInst>(terminator))
+        {
+          auto condVal = switchI->getCondition();
+          auto condNode = g.getNode(*condVal);
+          if (!condNode)
+            continue;
+          for (unsigned i = 0, numCases = switchI->getNumSuccessors(); i < numCases; ++i)
+          {
+            BasicBlock *targetBlock = switchI->getSuccessor(i);
+            addControlDepFromNodeToBB(*condNode, *targetBlock, EdgeType::CONTROL);
+          }
+
+          // Handle the default target block if it exists
+          BasicBlock *defaultBlock = switchI->getDefaultDest();
+          if (defaultBlock != nullptr)
+            addControlDepFromNodeToBB(*condNode, *defaultBlock, EdgeType::CONTROL);
+        }
+
         if (BranchInst *bi = dyn_cast<BranchInst>(terminator))
         {
           if (!bi->isConditional() || !bi->getCondition())

@@ -731,21 +731,23 @@ bool pdg::pdgutils::containsAnySubstring(const std::string &s, const std::vector
   return false;
 }
 
-void pdg::pdgutils::printSourceLocation(Instruction &I)
+void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &OutputStream)
 {
   if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
   {
     unsigned line = debugLoc.getLine();
     unsigned col = debugLoc.getCol();
     llvm::MDNode *scopeNode = debugLoc.getScope();
+    std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
 
     if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
     {
       std::string file = scope->getFilename().str();
-      errs() << "\t Source location: " << file << ":" << line << ":" << col << "\n";
+      OutputStream << "\t Source location: " << filePrefix << file << ":" << line << ":" << col << "\n";
     }
   }
 }
+
 
 bool pdg::pdgutils::isUpdatedInHeader(Instruction &I)
 {

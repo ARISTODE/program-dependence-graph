@@ -2333,7 +2333,7 @@ bool pdg::DataAccessAnalysis::allocateKernelObj(Function &F)
     std::unordered_set<Node *> visited;
     if (_callGraph->findPathDFS(boundaryFuncNode, allocFuncNode, path, visited))
     {
-      _callGraph->printPath(path);
+      // _callGraph->printPath(path);
       // print out the call sites of the allocator
       printDriverCallSite(F, *allocFunc, true);
       if (hasParamDataflow(F, *allocFunc))
@@ -2356,7 +2356,7 @@ bool pdg::DataAccessAnalysis::deallocateKernelObj(Function &F)
     std::unordered_set<Node *> visited;
     if (_callGraph->findPathDFS(boundaryFuncNode, deallocFuncNode, path, visited))
     {
-      _callGraph->printPath(path);
+      // _callGraph->printPath(path);
       // print out the call sites of the allocator
       printDriverCallSite(F, *deallocFunc, false);
       if (hasParamDataflow(F, *deallocFunc))

@@ -1,0 +1,32 @@
+Risky ptr dereference (ptr) [1;33mdata->ptr[0m:
+	 Source location: https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/dummydrv_kernel.c:5:20
+
+Risky ptr arith (ptr) [1;33mdata->ptr[0m:
+	 Source location: https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/dummydrv_kernel.c:18:6
+
+Risky branch [1;31mdata->size[0m:
+	 Source location: https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/dummydrv_kernel.c:22:14
+
+Number of kernel read driver updated fields: 2
+Number of pointer fields: 1
+	 Number of function pointer fields: 0
+	 Number of data pointer fields: 1
+		 Number of pointer arithmetic pointer fields: 1
+		 Number of dereference pointer fields: 1
+		 Number of sensitive operation pointer fields: 0
+		 Number of branch pointer fields: 0
+Number of array index fields: 0
+Number of sensitive branch fields: 1
+Number of sensitive operation fields: 0
+Number of unclassified fields: 0
+Number of unclassified func ptr fields: 0
+ <==================================================>
+		Number of pointer arithmetic pointer fields (Taint): 0
+		Number of dereference pointer fields (Taint): 1
+		Number of sensitive operation pointer fields (Taint): 1
+		Number of branch pointer fields (Taint): 0
+Number of array index fields (Taint): 1
+Number of sensitive branch fields (Taint): 1
+Number of sensitive operation fields (Taint): 1
+Number of unclassified fields (Taint): 0
+Number of unclassified func ptr fields (Taint): 0

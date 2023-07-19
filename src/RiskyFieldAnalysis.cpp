@@ -21,6 +21,8 @@ void pdg::RiskyFieldAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 }
 
 std::unordered_set<std::string> sensitiveOperations = {
+    // "malloc",
+    // "free",
     "kmalloc",
     "vmalloc",
     "kzalloc",
@@ -35,9 +37,20 @@ std::unordered_set<std::string> sensitiveOperations = {
 
 bool pdg::RiskyFieldAnalysis::runOnModule(llvm::Module &M)
 {
+    _module = &M;
     _SDA = &getAnalysis<SharedDataAnalysis>();
     _PDG = _SDA->getPDG();
     _callGraph = &PDGCallGraph::getInstance();
+    std::error_code EC;
+    riskyFieldOS = new raw_fd_ostream("RiskyField.log", EC, sys::fs::OF_Text);
+    riskyFieldTaintOS = new raw_fd_ostream("RiskyFieldTaint.log", EC, sys::fs::OF_Text);
+    if (EC)
+    {
+        delete riskyFieldOS;
+        errs() << "cannot open RiskyField.log\n";
+        return false;
+    }
+
     auto globalStructDTMap = _SDA->getGlobalStructDTMap();
     for (auto dtPair : globalStructDTMap)
     {
@@ -55,7 +68,9 @@ bool pdg::RiskyFieldAnalysis::runOnModule(llvm::Module &M)
             // classify the risky field into different classes
             if (isDriverControlledField(*n))
             {
-                classifyRiskyField(*n);
+                numKernelReadDriverUpdatedFields++;
+                classifyRiskyFieldDirectUse(*n);
+                classifyRiskyFieldTaint(*n);
             }
 
             for (auto childNode : n->getChildNodes())
@@ -64,7 +79,14 @@ bool pdg::RiskyFieldAnalysis::runOnModule(llvm::Module &M)
             }
         }
     }
-    printFieldClassification();
+
+    // TODO: taint the return value of driver interface functions    
+
+
+    printFieldDirectUseClassification(*riskyFieldOS);
+    printFieldClassificationTaint(*riskyFieldOS);
+    riskyFieldOS->close();
+    riskyFieldTaintOS->close();
     return false;
 }
 
@@ -113,96 +135,382 @@ bool pdg::RiskyFieldAnalysis::isDriverControlledField(TreeNode &tn)
     return false;
 }
 
-// Taint source: the direct read of driver-controlled shared fields in the kernel
+const std::string RED("\033[1;31m");
+const std::string YELLOW("\033[1;33m");
 
-void pdg::RiskyFieldAnalysis::classifyRiskyField(TreeNode &tn)
+std::string colorize(const std::string& str, const std::string& color_code) {
+    return color_code + str + "\033[0m";
+}
+
+void pdg::RiskyFieldAnalysis::classifyRiskyFieldDirectUse(TreeNode &tn)
 {
     if (!tn.isStructField())
         return;
-    numKernelReadDriverUpdatedFields++;
+
+    std::string accessPathStr = tn.getSrcHierarchyName(false, false);
+    auto fieldDIType = tn.getDIType() ;
+    // for a struct field, always getting the child node addr vars as the child
+    // node addr vars represet the field value
+    auto addrVars = tn.getAddrVars();
+    if (tn.getChildNodes().size() > 0)
+    {
+        auto ptrNode = tn.getChildNodes()[0];
+        if (ptrNode)
+            addrVars = ptrNode->getAddrVars();
+    }
+
+    bool classified = false;
+    // classify based on pointer and non-pointer fields
+    if (dbgutils::isPointerType(*fieldDIType))
+    {
+        bool isArithPtrField = false;
+        bool isDerefPtrField = false;
+        bool isSensitiveOpPtrField = false;
+        bool isBranchPtrField = false;
+
+        numPtrField++;
+        // classify function pointer (code pointer) and data pointer
+        if (dbgutils::isFuncPointerType(*fieldDIType))
+        {
+            numFuncPtrField++;
+            classified = true;
+            *riskyFieldOS << "Risky function ptr kernel read locations " << colorize(accessPathStr, YELLOW) << ":\n";
+            for (auto addrVar : addrVars)
+            {
+                if (Instruction *i = dyn_cast<Instruction>(addrVar))
+                {
+                    auto instFunc = i->getFunction();
+                    if (_SDA->isKernelFunc(*instFunc))
+                        pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                }
+            }
+        }
+        else
+        {
+            // data pointers
+            numDataPtrField++;
+            for (auto addrVar : addrVars)
+            {
+                if (Instruction *i = dyn_cast<Instruction>(addrVar))
+                {
+                    auto instFunc = i->getFunction();
+                    if (_SDA->isKernelFunc(*instFunc))
+                    {
+                        auto addrVarNode = _PDG->getNode(*addrVar);
+                        // 1. check if the field is used in pointer arithmetic
+                        if (!isArithPtrField && checkPtrValUsedInPtrArithOp(*addrVarNode))
+                        {
+                            isArithPtrField = true;
+                            numPtrArithPtrField++;
+                            *riskyFieldOS << "Risky ptr arith (ptr) " << colorize(accessPathStr, YELLOW) << ":\n";
+                            pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                            *riskyFieldOS << "\n";
+                        }
+                        // 2. check if the ptr field is directly dereferenced
+                        if (!isDerefPtrField && pdgutils::hasReadAccess(*addrVar))
+                        {
+                            isDerefPtrField = true;
+                            numDereferencePtrField++;
+                            *riskyFieldOS << "Risky ptr dereference (ptr) " << colorize(accessPathStr, YELLOW) << ":\n";
+                            pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                            *riskyFieldOS << "\n";
+                        }
+                        // 3. check if used in sensitive operations
+                        if (!isSensitiveOpPtrField && checkValUsedInSensitiveOperations(*addrVarNode))
+                        {
+                            isSensitiveOpPtrField = true;
+                            numSensitiveOpPtrField++;
+                            *riskyFieldOS << "Risky sensitive op (ptr) " << colorize(accessPathStr, YELLOW) << ":\n";
+                            pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                            *riskyFieldOS << "\n";
+                        }
+                        // 4. check if used in branch that contain sensitive operations
+                        if (!isBranchPtrField && checkValUsedInSenBranchCond(*addrVarNode, *riskyFieldOS))
+                        {
+                            isBranchPtrField = true;
+                            numBranchPtrField++;
+                            *riskyFieldOS << "Risky branch (ptr) " << colorize(accessPathStr, YELLOW) << ":\n";
+                            pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                            *riskyFieldOS << "\n";
+                        }
+                    }
+                }
+            }
+            // mark as classified
+            if (isArithPtrField || isDerefPtrField || isSensitiveOpPtrField || isBranchPtrField)
+                classified = true;
+        }
+    }
+    else
+    {
+        bool isArrayIdxField = false;
+        bool isArithField = false;
+        bool isBranchField = false;
+        bool isUsedInSensitiveOp = false;
+        for (auto addrVar : addrVars)
+        {
+            if (Instruction *i = dyn_cast<Instruction>(addrVar))
+            {
+                auto instFunc = i->getFunction();
+                if (_SDA->isKernelFunc(*instFunc))
+                {
+                    auto addrVarNode = _PDG->getNode(*addrVar);
+                    if (!isArrayIdxField && checkValUsedAsArrayIndex(*addrVarNode))
+                    {
+                        isArrayIdxField = true;
+                        numArrayIdxField++;
+                        *riskyFieldOS << "Risky array idx " << colorize(accessPathStr, RED) << ":\n";
+                        pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                        *riskyFieldOS << "\n";
+                    }
+
+                    if (!isArithField && checkValUsedInPtrArithOp(*addrVarNode))
+                    {
+                        isArithField = true;
+                        numArithField++;
+                        *riskyFieldOS << "Risky arith op " << colorize(accessPathStr, RED) << ":\n";
+                        pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                        *riskyFieldOS << "\n";
+                    }
+
+                    if (!isBranchField && checkValUsedInSenBranchCond(*addrVarNode, *riskyFieldOS))
+                    {
+                        isBranchField = true;
+                        numSensitiveBranchField++;
+                        *riskyFieldOS << "Risky branch " << colorize(accessPathStr, RED) << ":\n";
+                        pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                        *riskyFieldOS << "\n";
+                    }
+
+                    if (!isUsedInSensitiveOp && checkValUsedInSensitiveOperations(*addrVarNode))
+                    {
+                        isUsedInSensitiveOp = true;
+                        numSensitiveOpsField++;
+                        *riskyFieldOS << "Risky sensitive op " << colorize(accessPathStr, RED) << ":\n";
+                        pdgutils::printSourceLocation(*i, *riskyFieldOS);
+                        *riskyFieldOS << "\n";
+                    }
+                }
+            }
+        }
+        if (isArrayIdxField || isArithField || isBranchField || isUsedInSensitiveOp)
+            classified = true;
+    }
+    // print unclassified field
+    if (!classified)
+    {
+        std::string funcAttr = "";
+        if (dbgutils::isFuncPointerType(*fieldDIType))
+        {
+            funcAttr = " (fptr) ";
+            numUnclassifiedFuncPtrField++;
+        }
+        numUnclassifiedField++;
+        *riskyFieldOS << "Unclassified field " << funcAttr << colorize(accessPathStr, RED) << "\n";
+        for (auto addrVar : addrVars)
+        {
+            if (auto inst = dyn_cast<Instruction>(addrVar))
+            {
+                auto f = inst->getFunction();
+                if (_SDA->isKernelFunc(*f))
+                {
+                    pdgutils::printSourceLocation(*inst, *riskyFieldOS);
+                }
+            }
+        }
+        *riskyFieldOS << "\n";
+    }
+}
+
+// Taint source: the direct read of driver-controlled shared fields in the kernel
+void pdg::RiskyFieldAnalysis::classifyRiskyFieldTaint(TreeNode &tn)
+{
+    if (!tn.isStructField())
+        return;
     std::string accessPathStr = tn.getSrcHierarchyName();
 
     auto addrVars = tn.getAddrVars();
-    bool classified = false;
-    bool isTaintArray = false;
-    bool isTaintBranch = false;
-    bool isTaintMemOps = false;
-    bool isTaintSensitiveOp = false;
-
     // setup taint edges
     std::set<EdgeType> taintEdges = {
         EdgeType::PARAMETER_IN,
         EdgeType::PARAMETER_OUT,
         // EdgeType::DATA_ALIAS,
-        EdgeType::DATA_RET,
+        // EdgeType::DATA_RET,
         EdgeType::DATA_DEF_USE,
         EdgeType::CONTROL};
 
-    for (auto addrVar : addrVars)
+    auto fieldDIType = tn.getDIType();
+    bool classified = false;
+    // classify between pointer and non-pointer
+    if (dbgutils::isPointerType(*fieldDIType))
     {
-        auto addrVarNode = _PDG->getNode(*addrVar);
-        auto func = addrVarNode->getFunc();
-        // only start taint from the kernel uses
-        // TODO: here, we should also consider the special case of write access on a pointer field. If 
-        // the pointer field is directly updated by the kernel, then the address it write to could be affected 
-        // by the driver too. For example, if driver supply a random address in the kerenl, the kernel would write
-        // to that address, causing unknown consequences.
-        if (!_SDA->isKernelFunc(*func) || !pdgutils::hasReadAccess(*addrVar))
-            continue;
-
-        auto taintSourceInst = cast<Instruction>(addrVar);
-        auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
-        for (auto taintNode : taintNodes)
+        bool isArithPtrField = false;
+        bool isDerefPtrField = false;
+        bool isSensitiveOpPtrField = false;
+        bool isBranchPtrField = false;
+        // We only compute taint for data pointers
+        if (dbgutils::isFuncPointerType(*fieldDIType))
         {
-            auto taintVal = taintNode->getValue();
-
-            // classify the fields based on taint
-            if (!isTaintArray && checkValUsedAsArrayIndex(*taintNode))
+            classified = true;
+        }
+        else
+        {
+            for (auto addrVar : addrVars)
             {
-                isTaintArray = true;
-                if (auto taintInst = dyn_cast<Instruction>(taintVal))
+                auto addrVarInst = cast<Instruction>(addrVar);
+                auto func = addrVarInst->getFunction();
+                if (!_SDA->isKernelFunc(*func) || !pdgutils::hasReadAccess(*addrVar))
+                    continue;
+                auto addrVarNode = _PDG->getNode(*addrVar);
+                auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
+                for (auto taintNode : taintNodes)
                 {
-                    printRiskyFieldInfo(errs(), "Risky Index Field", tn, *func, *taintInst);
-                    printTaintTrace(*taintSourceInst, *taintInst, accessPathStr, "Idx");
+                    auto taintVal = taintNode->getValue();
+                    if (!taintVal)
+                        continue;
+                    if (auto taintInst = dyn_cast<Instruction>(taintVal))
+                    {
+                        auto taintNodeType = taintVal->getType();
+                        // if a taint value is pointer, check if the pointer is used in ptr arith operations
+                        // if (taintNodeType->isPointerTy())
+                        // {
+                        //     if (!isArithPtrField && checkPtrValUsedInPtrArithOp(*taintNode))
+                        //     {
+                        //         isArithPtrField = true;
+                        //         numPtrArithPtrFieldTaint++;
+                        //         classified = true;
+                        //         *riskyFieldTaintOS << "Risky ptr arith (ptr|taint) " << colorize(accessPathStr, RED) << ":\n";
+                        //         *riskyFieldTaintOS << "\ttaint source: ";
+                        //         pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                        //         *riskyFieldTaintOS << "\ttaint sink: ";
+                        //         pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                        //         *riskyFieldTaintOS << "\n";
+                        //     }
+                        // }
+
+                        if (!isDerefPtrField && pdgutils::hasReadAccess(*taintVal))
+                        {
+                            isDerefPtrField = true;
+                            numDereferencePtrFieldTaint++;
+                            classified = true;
+                            *riskyFieldTaintOS << "Risky ptr deref (ptr|taint) " << colorize(accessPathStr, RED) << ":\n";
+                            pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                            *riskyFieldTaintOS << "\ttaint sink: ";
+                            pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                            printTaintTrace(*addrVarInst, *taintInst, accessPathStr, "Ptr Deref - Ptr", *riskyFieldTaintOS);
+                            *riskyFieldTaintOS << "\n";
+                        }
+
+                        // check if a tiant field control sensitive branchs
+                        if (!isBranchPtrField && checkValUsedInSenBranchCond(*taintNode, *riskyFieldTaintOS))
+                        {
+                            isBranchPtrField = true;
+                            numBranchPtrFieldTaint++;
+                            classified = true;
+                            *riskyFieldTaintOS << "Risky branch (ptr|taint) " << colorize(accessPathStr, RED) << ":\n";
+                            *riskyFieldTaintOS << "\ttaint source: ";
+                            pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                            *riskyFieldTaintOS << "\ttaint sink: ";
+                            pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                            printTaintTrace(*addrVarInst, *taintInst, accessPathStr, "Sensitive Branch - Ptr", *riskyFieldTaintOS);
+                            *riskyFieldTaintOS << "\n";
+                        }
+
+                        if (!isSensitiveOpPtrField && checkValUsedInSensitiveOperations(*taintNode))
+                        {
+                            isSensitiveOpPtrField = true;
+                            numSensitiveOpPtrFieldTaint++;
+                            classified = true;
+                            *riskyFieldTaintOS << "Risky sensitive op (ptr|taint) " << colorize(accessPathStr, RED) << ":\n";
+                            *riskyFieldTaintOS << "\ttaint source: ";
+                            pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                            *riskyFieldTaintOS << "\ttaint sink: ";
+                            pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                            printTaintTrace(*addrVarInst, *taintInst, accessPathStr, "Sensitive Ops - Ptr", *riskyFieldTaintOS);
+                            *riskyFieldTaintOS << "\n";
+                        }
+                    }
                 }
-                numArrayIdxField++;
-                classified = true;
             }
-
-            // if a field control branchs, which contains
-            if (!isTaintBranch && checkValUsedInBranch(*taintNode))
+        }
+    }
+    else
+    {
+        bool isArrayIdxField = false;
+        bool isArithField = false;
+        bool isBranchField = false;
+        bool isUsedInSensitiveOp = false;
+        for (auto addrVar : addrVars)
+        {
+            auto addrVarInst = cast<Instruction>(addrVar);
+            auto func = addrVarInst->getFunction();
+            if (!_SDA->isKernelFunc(*func) || !pdgutils::hasReadAccess(*addrVar))
+                continue;
+            auto addrVarNode = _PDG->getNode(*addrVar);
+            auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
+            for (auto taintNode : taintNodes)
             {
-                isTaintBranch = true;
+                auto taintVal = taintNode->getValue();
+                if (!taintVal)
+                    continue;
+                auto taintNodeType = taintVal->getType();
                 if (auto taintInst = dyn_cast<Instruction>(taintVal))
                 {
-                    printRiskyFieldInfo(errs(), "Risky Branch Field", tn, *func, *taintInst);
-                    printTaintTrace(*taintSourceInst, *taintInst, accessPathStr, "Branch");
+                    // check if a taint value is used as array index
+                    if (!isArrayIdxField && checkValUsedAsArrayIndex(*taintNode))
+                    {
+                        isArrayIdxField = true;
+                        classified = true;
+                        numArrayIdxFieldTaint++;
+                        *riskyFieldTaintOS << "Risky array idx (taint) " << colorize(accessPathStr, YELLOW) << ":\n";
+                        *riskyFieldTaintOS << "\ttaint source: ";
+                        pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                        *riskyFieldTaintOS << "\ttaint sink: ";
+                        pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                        printTaintTrace(*addrVarInst, *taintInst, accessPathStr, "Array Idx Field", *riskyFieldTaintOS);
+                        *riskyFieldTaintOS << "\n";
+                    }
+                    // if (!isArithField && checkValUsedInPtrArithOp(*taintNode))
+                    // {
+                    //     isArithField = true;
+                    //     classified = true;
+                    //     numArithFieldTaint++;
+                    //     *riskyFieldTaintOS << "Risky arith op (taint) " << colorize(accessPathStr, YELLOW) << ":\n";
+                    //     *riskyFieldTaintOS << "\ttaint source: ";
+                    //     pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                    //     *riskyFieldTaintOS << "\ttaint sink: ";
+                    //     pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                    //     *riskyFieldTaintOS << "\n";
+                    // }
+                    // check if a taint value is used to control sensitive branches
+                    if (!isBranchField && checkValUsedInSenBranchCond(*taintNode, *riskyFieldTaintOS))
+                    {
+                        isBranchField = true;
+                        classified = true;
+                        numSensitiveBranchFieldTaint++;
+                        *riskyFieldTaintOS << "Risky branch (taint) " << colorize(accessPathStr, YELLOW) << ":\n";
+                        *riskyFieldTaintOS << "\ttaint source: ";
+                        pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                        *riskyFieldTaintOS << "\ttaint sink: ";
+                        pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                        printTaintTrace(*addrVarInst, *taintInst, accessPathStr, "Sensitive Branch", *riskyFieldTaintOS);
+                        *riskyFieldTaintOS << "\n";
+                    }
+                    // check if a taint value is used in sensitive operations
+                    if (!isUsedInSensitiveOp && checkValUsedInSensitiveOperations(*taintNode))
+                    {
+                        isUsedInSensitiveOp = true;
+                        classified = true;
+                        numSensitiveOpsFieldTaint++;
+                        *riskyFieldTaintOS << "Risky sensitive op (taint) " << colorize(accessPathStr, YELLOW) << ":\n";
+                        *riskyFieldTaintOS << "\ttaint source: ";
+                        pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+                        *riskyFieldTaintOS << "\ttaint sink: ";
+                        pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+                        printTaintTrace(*addrVarInst, *taintInst, accessPathStr, "Sensitive Op", *riskyFieldTaintOS);
+                        *riskyFieldTaintOS << "\n";
+                    }
                 }
-                numSensitiveBranchField++;
-            }
-
-            if (!isTaintSensitiveOp && checkValUsedInSensitiveOperations(*taintNode))
-            {
-                isTaintSensitiveOp = true;
-                if (auto taintInst = dyn_cast<Instruction>(taintVal))
-                {
-                    printRiskyFieldInfo(errs(), "Risky Sensitive Ops Field", tn, *func, *taintInst);
-                    printTaintTrace(*taintSourceInst, *taintInst, accessPathStr, "SenOp");
-                }
-                numSensitiveOpsField++;
-                classified = true;
-            }
-
-            if (!isTaintMemOps && checkValUsedInPtrArithOp(*taintNode))
-            {
-                isTaintMemOps = true;
-                if (auto taintInst = dyn_cast<Instruction>(taintVal))
-                {
-                    printRiskyFieldInfo(errs(), "Risky Ptr Arith Field", tn, *func, *taintInst);
-                    printTaintTrace(*taintSourceInst, *taintInst, accessPathStr, "PtrArith");
-                }
-                numPtrArithField++;
-                classified = true;
             }
         }
     }
@@ -210,25 +518,33 @@ void pdg::RiskyFieldAnalysis::classifyRiskyField(TreeNode &tn)
     // if a node is not classified into any category, print the kernel locations that read the field
     if (!classified)
     {
-        unclassifiedField++;
+        std::string funcAttr = "";
+        if (dbgutils::isFuncPointerType(*fieldDIType))
+        {
+            funcAttr = " (fptr) ";
+            numUnclassifiedFuncPtrFieldTaint++;
+        }
+        numUnclassifiedFieldTaint++;
+        *riskyFieldTaintOS << "Unclassified field (taint) " << funcAttr << colorize(accessPathStr, RED) << "\n";
         for (auto addrVar : addrVars)
         {
-            if (Instruction *i = dyn_cast<Instruction>(addrVar))
+            if (auto inst = dyn_cast<Instruction>(addrVar))
             {
-                auto instFunc = i->getFunction();
-                if (pdgutils::hasReadAccess(*i) && _SDA->isKernelFunc(*instFunc))
+                auto f = inst->getFunction();
+                if (_SDA->isKernelFunc(*f))
                 {
-                    printRiskyFieldInfo(errs(), "Unclassified Field", tn, *instFunc, *i);
-                    errs() << " <===========================================================>\n";
+                    pdgutils::printSourceLocation(*inst, *riskyFieldOS);
                 }
             }
         }
+
+        *riskyFieldTaintOS << "\n";
     }
 }
 
-bool pdg::RiskyFieldAnalysis::checkValUsedAsArrayIndex(Node &taintNode)
+bool pdg::RiskyFieldAnalysis::checkValUsedAsArrayIndex(Node &n)
 {
-    auto taintVal = taintNode.getValue();
+    auto taintVal = n.getValue();
     if (!taintVal)
         return false;
     for (User *U : taintVal->users())
@@ -251,9 +567,9 @@ bool pdg::RiskyFieldAnalysis::checkValUsedAsArrayIndex(Node &taintNode)
     return false;
 }
 
-bool pdg::RiskyFieldAnalysis::checkValUsedInBranch(Node &taintNode)
+bool pdg::RiskyFieldAnalysis::checkValUsedInSenBranchCond(Node &n, raw_fd_ostream &OS)
 {
-    auto taintVal = taintNode.getValue();
+    auto taintVal = n.getValue();
     if (!taintVal)
         return false;
     for (auto user : taintVal->users())
@@ -263,8 +579,7 @@ bool pdg::RiskyFieldAnalysis::checkValUsedInBranch(Node &taintNode)
             // check if the loaded value is used in branch
             for (auto u : li->users())
             {
-                // if (isa<ICmpInst>(u) || isa<SwitchInst>(u))
-                if (isa<BranchInst>(u))
+                if (isa<BranchInst>(u) || isa<SwitchInst>(u))
                 {
                     auto branchNode = _PDG->getNode(*u);
                     auto branchControlDependentNodes = _PDG->findNodesReachedByEdge(*branchNode, EdgeType::CONTROL);
@@ -276,11 +591,32 @@ bool pdg::RiskyFieldAnalysis::checkValUsedInBranch(Node &taintNode)
                             auto calledFunc = pdgutils::getCalledFunc(*ci);
                             if (!calledFunc)
                                 continue;
+                            // some sensitive operations such as BUG() is translated
+                            // to inline assembly
+                            if (ci->isInlineAsm())
+                            {
+                                OS << "sen call ASM: " << *ci << "\n";
+                                pdgutils::printSourceLocation(*ci, OS);
+                                return true;
+                            }
                             auto calledFuncName = calledFunc->getName().str();
                             for (auto op : sensitiveOperations)
                             {
                                 if (calledFuncName.find(op) != std::string::npos)
+                                {
+                                    OS << "sen call: " << *ci << "\n";
+                                    pdgutils::printSourceLocation(*ci, OS);
                                     return true;
+                                }
+                            }
+                            // check if the call can reach sensitive operations
+                            auto calledFuncNode = _callGraph->getNode(*calledFunc);
+                            if (auto senOpFunc = canReachSensitiveOperations(*calledFuncNode))
+                            {
+                                OS << "sen call trans: " << *ci << "\n";
+                                OS << "sen op: " << senOpFunc->getName() << "\n";
+                                pdgutils::printSourceLocation(*ci, OS);
+                                return true;
                             }
                         }
                     }
@@ -288,37 +624,132 @@ bool pdg::RiskyFieldAnalysis::checkValUsedInBranch(Node &taintNode)
                 }
             }
         }
-    }
-    return false;
-}
-
-// check if a taint value is used as a buffer
-bool pdg::RiskyFieldAnalysis::checkValUsedInPtrArithOp(Node &taintNode)
-{
-    auto taintVal = taintNode.getValue();
-    if (!taintVal)
-        return false;
-    for (User *U : taintVal->users())
-    {
-        if (auto gep = dyn_cast<GetElementPtrInst>(U))
+        else if (auto cmpInst = dyn_cast<CmpInst>(user))
         {
-            auto gepPtrOp = gep->getPointerOperand();
-            auto gepPtrOpNode = _PDG->getNode(*gepPtrOp);
-            if (!gepPtrOp || !gepPtrOpNode)
-                continue;
-            // check if the the ptr arith is result from a field access, if so, skip
-            if (gepPtrOpNode->getDIType() && dbgutils::isStructPointerType(*gepPtrOpNode->getDIType()))
-                continue;
-            else
-                return true;
+            for (auto u : cmpInst->users())
+            {
+                if (isa<BranchInst>(u) || isa<SwitchInst>(u))
+                {
+                    auto branchNode = _PDG->getNode(*u);
+                    auto branchControlDependentNodes = _PDG->findNodesReachedByEdge(*branchNode, EdgeType::CONTROL);
+                    for (auto ctrDepNode : branchControlDependentNodes)
+                    {
+                        auto depNodeVal = ctrDepNode->getValue();
+                        if (CallInst *ci = dyn_cast<CallInst>(depNodeVal))
+                        {
+                            auto calledFunc = pdgutils::getCalledFunc(*ci);
+                            if (!calledFunc)
+                                continue;
+                            // some sensitive operations such as BUG() is translated
+                            // to inline assembly
+                            if (ci->isInlineAsm())
+                            {
+                                OS << "sen call ASM: " << *ci << "\n";
+                                pdgutils::printSourceLocation(*ci, OS);
+                                return true;
+                            }
+                            auto calledFuncName = calledFunc->getName().str();
+                            for (auto op : sensitiveOperations)
+                            {
+                                if (calledFuncName.find(op) != std::string::npos)
+                                {
+                                    OS << "sen call: " << *ci << "\n";
+                                    OS << "senstive op: " << op << "\n";
+                                    pdgutils::printSourceLocation(*ci, OS);
+                                    return true;
+                                }
+                            }
+                            // check if the call can reach sensitive operations
+                            auto calledFuncNode = _callGraph->getNode(*calledFunc);
+                            if (canReachSensitiveOperations(*calledFuncNode))
+                            {
+                                OS << "sen call trans: " << *ci << "\n";
+                                pdgutils::printSourceLocation(*ci, OS);
+                                // print path
+                                std::vector<Node *> callPath;
+                                std::unordered_set<Node *> visited;
+                                auto curFuncNode = _callGraph->getNode(*ci->getFunction());
+                                _callGraph->findPathDFS(curFuncNode, calledFuncNode, callPath, visited);
+                                _callGraph->printPath(callPath, OS);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     return false;
 }
 
-bool pdg::RiskyFieldAnalysis::checkValUsedInSensitiveOperations(Node &taintNode)
+bool pdg::RiskyFieldAnalysis::checkPtrValUsedInPtrArithOp(Node &n)
 {
-    auto taintVal = taintNode.getValue();
+    auto nodeVal = n.getValue();
+    if (!nodeVal)
+        return false;
+    if (!nodeVal->getType()->isPointerTy())
+        return false;
+    for (auto user : nodeVal->users())
+    {
+        if (auto gep = dyn_cast<GetElementPtrInst>(user))
+        {
+            auto gepPtrOp = gep->getPointerOperand();
+            auto gepPtrTy = gep->getType();
+            // check if the the ptr arith is result from a field access, if so, skip
+            if (pdgutils::isStructPointerType(*gepPtrTy))
+                continue;
+            else
+            {
+                // only if the pointer is used to derive other pointers
+                if (gepPtrOp == nodeVal)
+                    return true;
+            }
+        }
+
+        if (isa<OverflowingBinaryOperator>(user))
+            return true;
+
+        if (isa<PtrToIntInst>(user))
+        {
+            for (auto ptrToInstUser : user->users())
+            {
+                if (isa<OverflowingBinaryOperator>(ptrToInstUser))
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+// check if a taint value is used as a buffer
+bool pdg::RiskyFieldAnalysis::checkValUsedInPtrArithOp(Node &n)
+{
+    auto nodeVal = n.getValue();
+    if (!nodeVal)
+        return false;
+    for (User *U : nodeVal->users())
+    {
+        if (auto gep = dyn_cast<GetElementPtrInst>(U))
+        {
+            auto gepPtrOp = gep->getPointerOperand();
+            auto gepPtrTy = gepPtrOp->getType();
+            // check if the the ptr arith is result from a field access, if so, skip
+            if (pdgutils::isStructPointerType(*gepPtrTy))
+                continue;
+            else
+                return true;
+        }
+        // add, mul, sub etc
+        if (isa<OverflowingBinaryOperator>(U))
+            return true;
+
+    }
+    return false;
+}
+
+bool pdg::RiskyFieldAnalysis::checkValUsedInSensitiveOperations(Node &n)
+{
+    auto taintVal = n.getValue();
     if (!taintVal)
         return false;
     for (User *U : taintVal->users())
@@ -339,6 +770,23 @@ bool pdg::RiskyFieldAnalysis::checkValUsedInSensitiveOperations(Node &taintNode)
     return false;
 }
 
+Function *pdg::RiskyFieldAnalysis::canReachSensitiveOperations(Node &srcFuncNode)
+{
+    for (auto senOpFuncName : sensitiveOperations)
+    {
+        auto func = _module->getFunction(StringRef(senOpFuncName));
+        if (!func)
+            continue;
+
+        auto funcNode = _callGraph->getNode(*func);
+        if (!funcNode)
+            continue;
+        if (_callGraph->canReach(srcFuncNode, *funcNode))
+            return func;
+    }
+    return nullptr;
+}
+
 // helper and print functions
 void pdg::RiskyFieldAnalysis::printRiskyFieldInfo(raw_ostream &os, const std::string &category, pdg::TreeNode &treeNode, Function &func, Instruction &inst)
 {
@@ -349,46 +797,60 @@ void pdg::RiskyFieldAnalysis::printRiskyFieldInfo(raw_ostream &os, const std::st
     pdg::pdgutils::printSourceLocation(inst);
 }
 
-void pdg::RiskyFieldAnalysis::printTaintTrace(Instruction &source, Instruction &sink, std::string fieldHierarchyName, std::string flowType)
+void pdg::RiskyFieldAnalysis::printTaintTrace(Instruction &source, Instruction &sink, std::string fieldHierarchyName, std::string flowType, raw_fd_ostream &OS)
 {
     auto sourceFunc = source.getFunction();
     auto sourceFuncNode = _callGraph->getNode(*sourceFunc);
     auto sinkFunc = sink.getFunction();
     auto sinkFuncNode = _callGraph->getNode(*sinkFunc);
 
-    errs() << "(field: " << fieldHierarchyName << ")"
+    OS << "(field: " << fieldHierarchyName << ")"
            << "\n";
-    errs() << "flow type: " << flowType << "\n";
-    errs() << "source inst: " << source << " in func " << sourceFunc->getName() << "\n";
-    pdgutils::printSourceLocation(source);
-    errs() << "sink inst: " << sink << " in func " << sinkFunc->getName() << "\n";
-    pdgutils::printSourceLocation(sink);
+    OS << "flow type: " << flowType << "\n";
+    OS << "source inst: " << source << " in func " << sourceFunc->getName() << "\n";
+    OS << "sink inst: " << sink << " in func " << sinkFunc->getName() << "\n";
     std::vector<Node *> callPath;
     std::unordered_set<Node *> visited;
     _callGraph->findPathDFS(sourceFuncNode, sinkFuncNode, callPath, visited);
-    _callGraph->printPath(callPath);
-    errs() << "<=========================================>\n";
+    // consider taint if it propagates through return value
+    if (callPath.empty())
+    {
+        visited.clear();
+        _callGraph->findPathDFS(sinkFuncNode, sourceFuncNode, callPath, visited);
+    }
+    _callGraph->printPath(callPath, OS);
+    OS << "<=========================================>\n";
 }
 
-void pdg::RiskyFieldAnalysis::printFieldClassification()
+void pdg::RiskyFieldAnalysis::printFieldDirectUseClassification(raw_fd_ostream &OS)
 {
-    errs() << "Field Classification Table:\n";
-    errs() << "+-----------------------------+\n";
-    errs() << "|    Field            |  Count  |\n";
-    errs() << "+-----------------------------+\n";
-    errs() << "| Kernel Read Driver Updated |  "
-           << numKernelReadDriverUpdatedFields << "    |\n";
-    errs() << "| Array Index                |  " << numArrayIdxField
-           << "    |\n";
-    errs() << "| Sensitive Branch           |  " << numSensitiveBranchField
-           << "    |\n";
-    errs() << "| PtrArith Operations          |  " << numPtrArithField
-           << "    |\n";
-    errs() << "| Sensitive Operations       |  " << numSensitiveOpsField
-           << "    |\n";
-    errs() << "| Unclassified               |  " << unclassifiedField
-           << "    |\n";
-    errs() << "+-----------------------------+\n";
+    OS << "Number of kernel read driver updated fields: " << numKernelReadDriverUpdatedFields << "\n";
+    OS << "Number of pointer fields: " << numPtrField << "\n";
+    OS << "\t Number of function pointer fields: " << numFuncPtrField << "\n";
+    OS << "\t Number of data pointer fields: " << numDataPtrField << "\n";
+    OS << "\t\t Number of pointer arithmetic pointer fields: " << numPtrArithPtrField << "\n";
+    OS << "\t\t Number of dereference pointer fields: " << numDereferencePtrField << "\n";
+    OS << "\t\t Number of sensitive operation pointer fields: " << numSensitiveOpPtrField << "\n";
+    OS << "\t\t Number of branch pointer fields: " << numBranchPtrField << "\n";
+    OS << "Number of array index fields: " << numArrayIdxField << "\n";
+    OS << "Number of sensitive branch fields: " << numSensitiveBranchField << "\n";
+    OS << "Number of sensitive operation fields: " << numSensitiveOpsField << "\n";
+    OS << "Number of unclassified fields: " << numUnclassifiedField << "\n";
+    OS << "Number of unclassified func ptr fields: " << numUnclassifiedFuncPtrField << "\n";
+    OS << " <==================================================>\n";
+}
+
+void pdg::RiskyFieldAnalysis::printFieldClassificationTaint(raw_fd_ostream &OS)
+{
+    OS << "\t\tNumber of pointer arithmetic pointer fields (Taint): " << numPtrArithPtrFieldTaint << "\n";
+    OS << "\t\tNumber of dereference pointer fields (Taint): " << numDereferencePtrFieldTaint << "\n";
+    OS << "\t\tNumber of sensitive operation pointer fields (Taint): " << numSensitiveOpPtrFieldTaint << "\n";
+    OS << "\t\tNumber of branch pointer fields (Taint): " << numBranchPtrFieldTaint << "\n";
+    OS << "Number of array index fields (Taint): " << numArrayIdxFieldTaint << "\n";
+    OS << "Number of sensitive branch fields (Taint): " << numSensitiveBranchFieldTaint << "\n";
+    OS << "Number of sensitive operation fields (Taint): " << numSensitiveOpsFieldTaint << "\n";
+    OS << "Number of unclassified fields (Taint): " << numUnclassifiedFieldTaint << "\n";
+    OS << "Number of unclassified func ptr fields (Taint): " << numUnclassifiedFuncPtrFieldTaint << "\n";
 }
 
 static RegisterPass<pdg::RiskyFieldAnalysis>

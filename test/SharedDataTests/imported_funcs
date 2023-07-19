@@ -1,0 +1,6 @@
+dereference_ptr
+controlled_malloc
+free_ptr
+pointer_arithmetic
+sensitive_branch
+array_indexing

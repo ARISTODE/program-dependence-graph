@@ -13,27 +13,64 @@ namespace pdg
             llvm::StringRef getPassName() const override { return "Risky Field Analysis"; }
             bool runOnModule(llvm::Module &M) override;
             bool isDriverControlledField(TreeNode &tn);
-            void classifyRiskyField(TreeNode &tn);
+            llvm::Function *canReachSensitiveOperations(Node &srcFuncNode);
+            void classifyRiskyFieldDirectUse(TreeNode &tn);
+            void classifyRiskyFieldTaint(TreeNode &tn);
+            // pointer field checks
+            bool checkPtrValUsedInPtrArithOp(Node &n);
+            // scalar field checks
             bool checkValUsedAsArrayIndex(Node &n);
+            // generic field checks
             bool checkValUsedInPtrArithOp(Node &n);
-            bool checkValUsedInBranch(Node &n);
+            bool checkValUsedInSenBranchCond(Node &n, llvm::raw_fd_ostream &OS);
             bool checkValUsedInSecurityChecks(Node &n);
             bool checkValUsedInSensitiveOperations(Node &n);
+            // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
-            void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType);
-            void printFieldClassification();
+            void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);
+            void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
+            void printFieldClassificationTaint(llvm::raw_fd_ostream &OS);
 
         private:
+            llvm::Module *_module;
             ProgramGraph *_PDG;
             SharedDataAnalysis *_SDA;
             PDGCallGraph *_callGraph;
             // stats counting
             unsigned numKernelReadDriverUpdatedFields = 0;
-            unsigned unclassifiedField = 0;
+            unsigned numPtrField = 0;
+            unsigned numFuncPtrField = 0;
+            unsigned numDataPtrField = 0;
+            // counting based on direct uses
+            unsigned numPtrArithPtrField = 0;
+            unsigned numDereferencePtrField = 0;
+            unsigned numSensitiveOpPtrField = 0;
+            unsigned numBranchPtrField = 0;
+            // scalar field direct use
             unsigned numArrayIdxField = 0;
+            unsigned numArithField = 0;
             unsigned numSensitiveBranchField = 0;
-            unsigned numPtrArithField = 0;
             unsigned numSensitiveOpsField = 0;
+            // unclassified field direct use
+            unsigned numUnclassifiedField = 0;
+            unsigned numUnclassifiedFuncPtrField = 0;
+            // taint ptr field classification
+            unsigned numPtrArithPtrFieldTaint = 0;
+            unsigned numDereferencePtrFieldTaint = 0;
+            // unsigned numDereferencePtrFieldTaint = 0;
+            unsigned numSensitiveOpPtrFieldTaint = 0;
+            unsigned numBranchPtrFieldTaint = 0;
+            // taint scalar field classification
+            unsigned numArrayIdxFieldTaint = 0;
+            unsigned numArithFieldTaint = 0;
+            unsigned numSensitiveBranchFieldTaint = 0;
+            unsigned numSensitiveOpsFieldTaint = 0;
+            // unclassified field taint
+            unsigned numUnclassifiedFieldTaint = 0;
+            unsigned numUnclassifiedFuncPtrFieldTaint = 0;
+            // output file
+            llvm::raw_fd_ostream *riskyFieldOS;
+            llvm::raw_fd_ostream *riskyFieldTaintOS;
     };
 }
 

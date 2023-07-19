@@ -33,6 +33,8 @@ namespace pdg
       _val = &v;
       if (auto inst = llvm::dyn_cast<llvm::Instruction>(&v))
         _func = inst->getFunction();
+      else if (auto func = llvm::dyn_cast<llvm::Function>(&v))
+        _func = func;
       else
         _func = nullptr;
       _nodeType = nodeTy;

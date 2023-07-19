@@ -373,15 +373,15 @@ bool pdg::PDGCallGraph::findPathDFS(Node *src, Node *dst, std::vector<Node *> &p
   return false;
 }
 
-void pdg::PDGCallGraph::printPath(const std::vector<Node *> &path)
+void pdg::PDGCallGraph::printPath(const std::vector<Node *> &path, raw_fd_ostream &OS)
 {
   if (path.empty())
   {
-    errs() << "Empty path" << "\n";
+    OS << "Empty path" << "\n";
     return;
   }
 
-  errs() << "Call Path: \n";
+  OS << "Call Path: \n";
   for (size_t i = 0; i < path.size(); ++i)
   {
     Node* node = path[i];
@@ -389,18 +389,18 @@ void pdg::PDGCallGraph::printPath(const std::vector<Node *> &path)
     // Print the node's function name
     if (Function *f = dyn_cast<Function>(node->getValue()))
     {
-      errs() << f->getName().str();
+      OS << f->getName().str();
     }
 
     // If it's not the last node in the path, add an arrow (->)
     if (i < path.size() - 1)
     {
-      errs() << "->";
+      OS << "->";
     }
   }
 
   // Print a newline at the end of the path
-  errs() << "\n";
+  OS << "\n";
 }
 
 void pdg::PDGCallGraph::setupBuildFuncNodes(Module &M)

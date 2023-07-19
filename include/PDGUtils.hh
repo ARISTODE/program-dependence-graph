@@ -66,7 +66,7 @@ namespace pdg
     bool isUpdatedInHeader(llvm::Instruction &I);
     std::string getDemangledName(const char *mangledName);
     void readLinesFromFile(std::set<std::string> &lines, std::string fileName);
-    void printSourceLocation(llvm::Instruction &I);
+    void printSourceLocation(llvm::Instruction &I, llvm::raw_ostream &OutputStream = llvm::errs());
     unsigned getFuncUniqueId(const llvm::Function &F);
     // TODO: should consider depth as well
     unsigned computeFieldUniqueId(unsigned funcId, unsigned argIdx, unsigned fieldOffset);
