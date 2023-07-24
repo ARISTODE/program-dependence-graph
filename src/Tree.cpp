@@ -135,7 +135,13 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
         {
           auto aliasVar = aliasNode->getValue();
           // if (aliasVar && parentAddrVars.find(aliasVar) == parentAddrVars.end())
-          _addrVars.insert(aliasVar);
+          if (GetElementPtrInst *aliasGep = dyn_cast<GetElementPtrInst>(aliasVar))
+          {
+            if (pdgutils::isGEPOffsetMatchDIOffset(*_nodeDt, *aliasGep))
+            {
+              _addrVars.insert(aliasVar);
+            }
+          }
         }
       }
     }

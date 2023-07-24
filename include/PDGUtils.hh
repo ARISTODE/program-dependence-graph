@@ -26,6 +26,7 @@ namespace pdg
     llvm::Function* getCalledFunc(llvm::CallInst &callInst);
     bool hasReadAccess(llvm::Value &v);
     bool hasWriteAccess(llvm::Value &v);
+    bool hasPtrDereference(llvm::Value &v);
     bool isSentinelType(llvm::GlobalVariable &gv);
     bool isUserOfSentinelTypeVal(llvm::Value &v);
     bool isVoidPointerHasMultipleCasts(TreeNode &treeNode);
@@ -70,6 +71,8 @@ namespace pdg
     unsigned getFuncUniqueId(const llvm::Function &F);
     // TODO: should consider depth as well
     unsigned computeFieldUniqueId(unsigned funcId, unsigned argIdx, unsigned fieldOffset);
+    std::string edgeTypeToString(EdgeType edgeType);
+    std::string nodeTypeToString(GraphNodeType nodeType);
   } // namespace pdgutils
 } // namespace pdg
 #endif

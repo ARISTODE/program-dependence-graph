@@ -47,19 +47,6 @@ uint64_t pdg::pdgutils::getGEPOffsetInBits(Module &M, StructType &structTy, GetE
     return INT_MIN;
   }
   uint64_t field_bit_offset = struct_layout->getElementOffsetInBits(gep_offset);
-  // check if the gep may be used for accessing bit fields
-  // if (isGEPforBitField(gep))
-  // {
-  //   // compute the accessed bit offset here
-  //   if (auto LShrInst = dyn_cast<LShrOperator>(getLShrOnGep(gep)))
-  //   {
-  //     auto LShrOffsetOp = LShrInst->getOperand(1);
-  //     if (ConstantInt *constInst = dyn_cast<ConstantInt>(LShrOffsetOp))
-  //     {
-  //       fieldOffsetInBits += constInst->getSExtValue();
-  //     }
-  //   }
-  // }
   return field_bit_offset;
 }
 
@@ -88,6 +75,7 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
   if (gep_bit_offset < 0)
     return false;
 
+
   Value *lshr_op_inst = getLShrOnGep(gep);
   if (lshr_op_inst != nullptr)
   {
@@ -97,7 +85,18 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
       {
         auto shift_bits = lshr->getOperand(1); // constant int in llvm
         if (ConstantInt *ci = dyn_cast<ConstantInt>(shift_bits))
+        {
           gep_bit_offset += ci->getZExtValue(); // add the value as an unsigned integer
+          if (dbgutils::getSourceLevelVariableName(dt) == "__pkt_type_offset" && gep.getFunction()->getName() == "skb_checksum_help")
+          {
+            errs() << "Checking pkt type offset: " << gep_bit_offset << " - " << dt.getOffsetInBits() << " - " << ci->getZExtValue() << "\n";
+            errs() << gep << "\n";
+          }
+          if (dbgutils::getSourceLevelVariableName(dt) == "ip_summed" && gep.getFunction()->getName() == "skb_checksum_help")
+          {
+            errs() << "ip_summed offset: " << dt.getOffsetInBits() << "\n";
+          }
+        }
       }
     }
   }
@@ -180,6 +179,19 @@ bool pdg::pdgutils::hasWriteAccess(Value &v)
     }
   }
   return false;
+}
+
+bool pdg::pdgutils::hasPtrDereference(Value &v)
+{
+  if (!v.getType()->isPointerTy())
+    return false;
+
+  for (auto user : v.users())
+  {
+    if (isa<LoadInst>(user))
+      return true;
+  }
+  return false;  
 }
 
 // ==== inst iterator related funcs =====
@@ -743,7 +755,7 @@ void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &Outpu
     if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
     {
       std::string file = scope->getFilename().str();
-      OutputStream << "\t Source location: " << filePrefix << file << ":" << line << ":" << col << "\n";
+      OutputStream << filePrefix << file << "#L" << line << "\n";
     }
   }
 }
@@ -792,4 +804,79 @@ unsigned pdg::pdgutils::getFuncUniqueId(const Function &F)
 unsigned pdg::pdgutils::computeFieldUniqueId(unsigned funcId, unsigned argIdx, unsigned fieldOffset)
 {
   return ((funcId ^ argIdx) << 5) ^ fieldOffset;
+}
+
+std::string pdg::pdgutils::edgeTypeToString(EdgeType edgeType)
+{
+  switch (edgeType) {
+    case EdgeType::CALL:
+      return "CALL";
+    case EdgeType::IND_CALL:
+      return "IND_CALL";
+    case EdgeType::CONTROL:
+      return "CONTROL";
+    case EdgeType::CONTROL_FLOW:
+      return "CONTROL_FLOW";
+    case EdgeType::DATA_DEF_USE:
+      return "DATA_DEF_USE";
+    case EdgeType::DATA_RAW:
+      return "DATA_RAW";
+    case EdgeType::DATA_RAW_REV:
+      return "DATA_RAW_REV";
+    case EdgeType::DATA_READ:
+      return "DATA_READ";
+    case EdgeType::DATA_MAY_ALIAS:
+      return "DATA_MAY_ALIAS";
+    case EdgeType::DATA_MUST_ALIAS:
+      return "DATA_MUST_ALIAS";
+    case EdgeType::DATA_ALIAS:
+      return "DATA_ALIAS";
+    case EdgeType::DATA_RET:
+      return "DATA_RET";
+    case EdgeType::PARAMETER_IN:
+      return "PARAMETER_IN";
+    case EdgeType::PARAMETER_IN_REV:
+      return "PARAMETER_IN_REV";
+    case EdgeType::PARAMETER_OUT:
+      return "PARAMETER_OUT";
+    case EdgeType::PARAMETER_FIELD:
+      return "PARAMETER_FIELD";
+    case EdgeType::GLOBAL_DEP:
+      return "GLOBAL_DEP";
+    case EdgeType::VAL_DEP:
+      return "VAL_DEP";
+    default:
+      return "UNKNOWN Edge Type";
+  }
+}
+
+std::string pdg::pdgutils::nodeTypeToString(GraphNodeType type)
+{
+  switch (type)
+  {
+  case GraphNodeType::INST:
+      return "INST";
+  case GraphNodeType::FORMAL_IN:
+      return "FORMAL_IN";
+  case GraphNodeType::FORMAL_OUT:
+      return "FORMAL_OUT";
+  case GraphNodeType::ACTUAL_IN:
+      return "ACTUAL_IN";
+  case GraphNodeType::ACTUAL_OUT:
+      return "ACTUAL_OUT";
+  case GraphNodeType::RETURN:
+      return "RETURN";
+  case GraphNodeType::FUNC_ENTRY:
+      return "FUNC_ENTRY";
+  case GraphNodeType::GLOBAL_VAR:
+      return "GLOBAL_VAR";
+  case GraphNodeType::CALL:
+      return "CALL";
+  case GraphNodeType::GLOBAL_TYPE:
+      return "GLOBAL_TYPE";
+  case GraphNodeType::FUNC:
+      return "FUNC";
+  default:
+      return "Unknown GraphNodeType";
+  }
 }

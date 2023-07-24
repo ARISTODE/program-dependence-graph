@@ -64,7 +64,7 @@ namespace pdg
     // shared fields access stats
     void collectSharedFieldsAccessStats();
     void countReadWriteAccessTimes(TreeNode &treeNode);
-    void printDriverUpdateLocations(TreeNode &treeNode);
+    void printDriverUpdateLocations(TreeNode &treeNode, llvm::raw_fd_ostream &OS);
     std::string getFieldTypeStr(TreeNode &treeNode);
     bool usedInBranch(TreeNode &treeNode);
     bool isFuncPtr(TreeNode &treeNode);

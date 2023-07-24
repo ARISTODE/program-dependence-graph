@@ -467,3 +467,72 @@ void pdg::ProgramGraph::addFormalTreeNodesToGraph(FunctionWrapper &func_w)
     addTreeNodesToGraph(*formalOutTree);
   }
 }
+
+bool pdg::GenericGraph::findPathDFS(Node *src, Node *dst, std::vector<std::pair<Node *, Edge *>> &path, std::unordered_set<Node *> &visited, std::set<EdgeType> &edgeTypes)
+{
+  visited.insert(src);
+  if (src == dst)
+  {
+    path.push_back(std::make_pair(src, nullptr));  // The destination node has no outgoing edge in the path
+    return true;
+  }
+
+  std::set<Edge *> &edges = src->getOutEdgeSet();
+  for (Edge *edge : edges)
+  {
+    // Check if the edge type is in the set of allowed edge types
+    if (edgeTypes.find(edge->getEdgeType()) != edgeTypes.end())
+    {
+      Node *neighbor = edge->getDstNode();
+      if (visited.find(neighbor) == visited.end())
+      {
+        if (findPathDFS(neighbor, dst, path, visited, edgeTypes))
+        {
+          path.push_back(std::make_pair(neighbor, edge));
+          return true;
+        }
+      }
+    }
+  }
+  // If we haven't found the path, backtrack and remove the current node and edge from the path
+  if (!path.empty())
+  {
+    path.pop_back();
+  }
+  return false;
+}
+
+void pdg::GenericGraph::printPath(std::vector<std::pair<pdg::Node*, pdg::Edge*>>& path, raw_fd_ostream &OS) {
+  for (auto& pair : path) {
+    // Get the node and edge from the pair.
+    pdg::Node* node = pair.first;
+    pdg::Edge* edge = pair.second;
+
+    // Get the instruction from the node.
+    Value* val = node->getValue();
+    if (!val)
+    {
+      OS << "empty node edge: " << pdgutils::nodeTypeToString(node->getNodeType()) << " - " << pdgutils::edgeTypeToString(edge->getEdgeType()) << " - ";
+      if (edge->getEdgeType() == EdgeType::PARAMETER_IN)
+      {
+        TreeNode *tn = static_cast<TreeNode *>(node);
+        if (tn->getTree())
+          OS << tn->getTree()->getRootNode()->getSrcName();
+      }
+      OS << "\n";
+      continue;
+    }
+    if (auto inst = dyn_cast<Instruction>(val))
+    {
+      pdgutils::printSourceLocation(*inst, OS);
+      if (edge)
+      {
+        OS << " - Edge type: " << pdgutils::edgeTypeToString(edge->getEdgeType()) << "\n";
+      }
+      OS << "\t";
+      inst->print(OS);
+      OS << "\n";
+      // If there's an edge, print its type.
+    }
+  }
+}

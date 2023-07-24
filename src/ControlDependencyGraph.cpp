@@ -49,7 +49,7 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
     for (auto succ_iter = succ_begin(&BB); succ_iter != succ_end(&BB); succ_iter++)
     {
       BasicBlock *succ_bb = *succ_iter;
-      // Check if the current basic block is not the same as its successor (loop), 
+      // Check if the current basic block is not the same as its successor (loop),
       // and if the successort block doesn't postdominate the current block
       if (&BB == &*succ_bb || !_PDT->dominates(&*succ_bb, &BB))
       {
@@ -74,6 +74,7 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
             addControlDepFromNodeToBB(*condNode, *defaultBlock, EdgeType::CONTROL);
         }
 
+        // handle other branch insts
         if (BranchInst *bi = dyn_cast<BranchInst>(terminator))
         {
           if (!bi->isConditional() || !bi->getCondition())
@@ -90,10 +91,10 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
             addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROL);
           }
 
-          for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
-          {
-            addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROL);
-          }
+          // for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
+          // {
+          //   addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROL);
+          // }
         }
       }
     }

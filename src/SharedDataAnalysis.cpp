@@ -751,9 +751,9 @@ void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
 }
 
 // print out the update locations of a field in driver domain
-void pdg::SharedDataAnalysis::printDriverUpdateLocations(TreeNode &treeNode)
+void pdg::SharedDataAnalysis::printDriverUpdateLocations(TreeNode &treeNode, raw_fd_ostream &OS)
 {
-  errs() << "Driver Update Locations ( " << treeNode.getSrcHierarchyName(false) << " ): \n";
+  OS << "Driver Update Locations ( " << treeNode.getSrcHierarchyName(false) << " ): \n";
   for (auto addrVar : treeNode.getAddrVars())
   {
     if (auto inst = dyn_cast<Instruction>(addrVar))
@@ -764,12 +764,12 @@ void pdg::SharedDataAnalysis::printDriverUpdateLocations(TreeNode &treeNode)
       auto func = inst->getFunction();
       if (isDriverFunc(*func) && pdgutils::hasWriteAccess(*inst))
       {
-        errs() << "(" << func->getName() << ") ";
-        pdgutils::printSourceLocation(*inst);
+        OS << "\t(" << func->getName() << ") ";
+        pdgutils::printSourceLocation(*inst, OS);
       }
     }
   }
-  errs() << " =========================================== \n";
+  OS << " \n ============================================= \n\n";
 }
 
 std::string pdg::SharedDataAnalysis::getFieldTypeStr(TreeNode &treeNode)
