@@ -252,8 +252,10 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
             continue;
           }
           Tree *actualOutTree = call_w->getArgActualOutTree(*arg);
-          call_site_node->addNeighbor(*actualInTree->getRootNode(), EdgeType::PARAMETER_IN);
-          call_site_node->addNeighbor(*actualOutTree->getRootNode(), EdgeType::PARAMETER_OUT);
+          // call_site_node->addNeighbor(*actualInTree->getRootNode(), EdgeType::PARAMETER_IN);
+          // call_site_node->addNeighbor(*actualOutTree->getRootNode(), EdgeType::PARAMETER_OUT);
+          if (F.getName() == "__skb_linearize")
+            errs() << "connecting " << call_w->getArgIdxByVal(*arg) << "\n";
           connectActualInTreeWithAddrVars(*actualInTree, *callInst);
           connectActualOutTreeWithAddrVars(*actualOutTree, *callInst);
         }
@@ -443,17 +445,25 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actualIn
         continue;
       auto addrVarNode = _PDG->getNode(*addrVar);
       addrVarNode->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
-      auto aliasNodes = addrVarNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
-      // connect addr var node with parameter_in node
-      for (auto aliasNode : aliasNodes)
+      auto accessPath = currentNode->getSrcName();
+      if (ci.getFunction()->getName() == "__skb_linearize")
       {
-        auto aliasNodeVal = aliasNode->getValue();
-        if (aliasNodeVal != nullptr)
-        {
-          aliasNode->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
-          currentNode->addAddrVar(*aliasNodeVal);
-        }
+        errs() << "connecting data_len actual in field: " << accessPath << " in func " << ci.getFunction()->getName() << " - "
+               << "\n";
+        errs() << "\tinst: " << *addrVar << "\n";
       }
+
+      // auto aliasNodes = addrVarNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
+      // // connect addr var node with parameter_in node
+      // for (auto aliasNode : aliasNodes)
+      // {
+      //   auto aliasNodeVal = aliasNode->getValue();
+      //   if (aliasNodeVal != nullptr)
+      //   {
+      //     aliasNode->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
+      //     currentNode->addAddrVar(*aliasNodeVal);
+      //   }
+      // }
     }
 
     for (auto childNode : currentNode->getChildNodes())

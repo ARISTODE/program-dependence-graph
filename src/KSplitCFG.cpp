@@ -78,7 +78,74 @@ void pdg::KSplitCFG::build(Module &M)
     }
   }
 
-  connectControlFlowEdges(M);
+  for (auto &F : M)
+  {
+    if (F.isDeclaration() || F.empty())
+      continue;
+
+    for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
+    {
+      Instruction *curInst = &*instIter;
+      auto curInstNode = getNode(*curInst);
+      // normal case connect inst with next instruction
+      auto nextInst = instIter->getNextNonDebugInstruction();
+      if (nextInst)
+      {
+        // Assuming your Node class has an addEdge method
+        auto nextInstNode = getNode(*nextInst);
+        curInstNode->addNeighbor(*nextInstNode, EdgeType::CONTROL_FLOW);
+      }
+
+      // callinst: connect inst with the first instruction in the called function
+      if (CallInst *ci = dyn_cast<CallInst>(curInst))
+      {
+        auto calledFunc = pdgutils::getCalledFunc(*ci);
+        if (!calledFunc)
+          continue;
+        if (calledFunc->isDeclaration())
+          continue;
+        auto beginInstIter = inst_begin(*calledFunc);
+        auto beginInst = &*beginInstIter;
+        auto beginInstNode = getNode(*beginInst);
+        curInstNode->addNeighbor(*beginInstNode, EdgeType::CONTROL_FLOW);
+
+        // handle all the return instructions in the called functions
+        for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
+        {
+          auto i = &*instIter;
+          if (isa<ReturnInst>(i))
+          {
+            auto returnInstNode = getNode(*i);
+            returnInstNode->addNeighbor(*curInstNode, EdgeType::CONTROL_FLOW);
+          }
+        }
+      }
+
+      // branch/switch inst: connect inst with all the instructions in the BB
+      if (BranchInst *bi = dyn_cast<BranchInst>(curInst))
+      {
+        for (auto successor : bi->successors())
+        {
+          auto nextInst = &successor->front(); // first instruction in the BB
+          auto nextInstNode = getNode(*nextInst);
+          curInstNode->addNeighbor(*nextInstNode, EdgeType::CONTROL_FLOW);
+        }
+      }
+      // switch inst
+      if (SwitchInst *si = dyn_cast<SwitchInst>(curInst))
+      {
+        for (auto successorNum = 0; successorNum < si->getNumSuccessors(); successorNum++)
+        {
+          auto successor = si->getSuccessor(successorNum);
+          auto nextInst = &successor->front();
+          auto nextInstNode = getNode(*nextInst);
+          curInstNode->addNeighbor(*nextInstNode, EdgeType::CONTROL_FLOW);
+        }
+      }
+    }
+  }
+
+  // connectControlFlowEdges(M);
   _isBuild = true;
 }
 
@@ -117,14 +184,37 @@ std::set<pdg::Node *> pdg::KSplitCFG::searchCallNodes(pdg::Node &start_node, std
   return ret;
 }
 
-std::set<Instruction *> pdg::KSplitCFG::computeNodesBetweenPoints(Instruction &start, Instruction &end)
+void pdg::KSplitCFG::computePathConditionsBetweenNodes(Node &srcNode, Node &dstNode, std::set<Value*> &conditionValues)
 {
-  std::queue<Node*> node_q;
-  std::set<Node*> seenNodes;
-  auto start_node = _valNodeMap[&start];
-  node_q.push(start_node);
-  seenNodes.insert(start_node);
-  while (!node_q.empty())
+  std::unordered_set<Node*> visited;
+  std::vector<std::pair<Node*, Edge*>> path;
+  std::set<EdgeType> edgeTypes = {EdgeType::CONTROL_FLOW};
+  findPathDFS(&srcNode, &dstNode, path, visited, edgeTypes);
+  
+  // return value
+  for (auto p : path)
   {
+    auto node = p.first;
+    auto nodeVal = node->getValue();
+
+    if (!nodeVal)
+      continue;
+
+    if (auto inst = dyn_cast<Instruction>(nodeVal))
+    {
+      if (auto *BI = dyn_cast<BranchInst>(inst))
+      {
+        // This is a branch instruction, get its condition
+        if (BI->isConditional())
+        {
+          conditionValues.insert(BI->getCondition());
+        }
+      }
+      else if (auto *SI = dyn_cast<SwitchInst>(inst))
+      {
+        // This is a switch instruction, get its condition
+        conditionValues.insert(SI->getCondition());
+      }
+    }
   }
 }

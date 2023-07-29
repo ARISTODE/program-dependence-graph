@@ -22,7 +22,7 @@ namespace pdg
       void connectControlFlowEdges(llvm::Module &M);
       bool isBuild() { return _isBuild; }
       std::set<Node *> searchCallNodes(Node &start_node, std::string calleeName);
-      std::set<llvm::Instruction *> computeNodesBetweenPoints(llvm::Instruction &start, llvm::Instruction &end);
+      void computePathConditionsBetweenNodes(Node &srcNode, Node &dstNode, std::set<llvm::Value*> &conditionValues);
 
     private:
       bool _isBuild = false;

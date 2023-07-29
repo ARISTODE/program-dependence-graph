@@ -25,6 +25,7 @@ namespace pdg
             bool checkValUsedInSenBranchCond(Node &n, llvm::raw_fd_ostream &OS);
             bool checkValUsedInSecurityChecks(Node &n);
             bool checkValUsedInSensitiveOperations(Node &n);
+            bool isSensitiveOperation(llvm::Function &F);
             // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
             void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);
