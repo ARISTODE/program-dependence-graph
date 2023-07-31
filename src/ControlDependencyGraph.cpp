@@ -86,15 +86,19 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
           if (branch_node == nullptr)
             break;
           BasicBlock *nearestCommonDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
+          // while loop
           if (nearestCommonDominator == &BB)
           {
             addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROL);
           }
 
-          // for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
-          // {
-          //   addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROL);
-          // }
+          for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
+          {
+            // avoid adding dep to all the block that post dominate the BB
+            if (_PDT->dominates(cur, _PDT->getNode(&BB)))
+              continue;
+            addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROL);
+          }
         }
       }
     }

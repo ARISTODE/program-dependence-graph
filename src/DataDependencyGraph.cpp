@@ -39,6 +39,8 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
       addAliasEdges(*instIter);
       addRAWEdges(*instIter);
       addRAWEdgesUnderapproximate(*instIter);
+      if (StoreInst *si = dyn_cast<StoreInst>(&*instIter))
+        addStoreToEdge(*si);
     }
   }
   return false;
@@ -237,6 +239,19 @@ AliasResult pdg::DataDependencyGraph::queryMustAlias(Value &v1, Value &v2)
   }
 
   return NoAlias;
+}
+
+void pdg::DataDependencyGraph::addStoreToEdge(StoreInst &si)
+{
+  ProgramGraph &g = ProgramGraph::getInstance();
+
+  auto ptrOp = si.getPointerOperand();
+  auto valOp = si.getValueOperand();
+  auto ptrOpNode = g.getNode(*ptrOp);
+  auto valOpNode = g.getNode(*valOp);
+  if (!ptrOpNode || !valOpNode)
+    return;
+  valOpNode->addNeighbor(*ptrOpNode, EdgeType::DATA_STORE_TO);
 }
 
 void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const

@@ -20,6 +20,7 @@ namespace pdg
             bool checkPtrValUsedInPtrArithOp(Node &n);
             // scalar field checks
             bool checkValUsedAsArrayIndex(Node &n);
+            bool checkIsArrayAccess(llvm::Instruction &inst);
             // generic field checks
             bool checkValUsedInPtrArithOp(Node &n);
             bool checkValUsedInSenBranchCond(Node &n, llvm::raw_fd_ostream &OS);
@@ -31,12 +32,16 @@ namespace pdg
             void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);
             void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
             void printFieldClassificationTaint(llvm::raw_fd_ostream &OS);
+            void printTaintFieldInfo();
+            void printTaintTraceAndConditions(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType);
 
         private:
             llvm::Module *_module;
             ProgramGraph *_PDG;
             SharedDataAnalysis *_SDA;
             PDGCallGraph *_callGraph;
+            // store taint source/sink pair
+            std::set<std::tuple<Node *, Node *, std::string, std::string>> _taintTuples;
             // stats counting
             unsigned numKernelReadDriverUpdatedFields = 0;
             unsigned numPtrField = 0;
@@ -69,6 +74,8 @@ namespace pdg
             // unclassified field taint
             unsigned numUnclassifiedFieldTaint = 0;
             unsigned numUnclassifiedFuncPtrFieldTaint = 0;
+            unsigned numKernelAPIParam = 0;
+            unsigned numControlTaintTrace = 0;
             // output file
             llvm::raw_fd_ostream *riskyFieldOS;
             llvm::raw_fd_ostream *riskyFieldTaintOS;

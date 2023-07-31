@@ -127,6 +127,15 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::
     {
       if (edgeTypes.find(edge->getEdgeType()) == edgeTypes.end())
         continue;
+      // special processing for def-use edge. Avoiding concluding that operand in call instruction has def-use relation with the return value.
+      if (edge->getEdgeType() == EdgeType::DATA_DEF_USE)
+      {
+        auto dstNodeVal = edge->getDstNode()->getValue();
+        if (isBackward)
+          dstNodeVal = edge->getSrcNode()->getValue();
+        if (dstNodeVal && isa<CallInst>(dstNodeVal))
+          continue;
+      }
       if (isBackward)
         nodeQueue.push(edge->getSrcNode());
       else

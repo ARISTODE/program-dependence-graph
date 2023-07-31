@@ -38,7 +38,7 @@ namespace pdg
         Node *getSource() { return source; }
         Node *getDest() { return dest; }
         float getControlledPathPercentage() const { return controlledPathPercentage; } // Added const here
-        std::set<Value *> conditionValues;
+        std::set<llvm::Value *> conditionValues;
         bool operator<(const ControlPath &other) const
         {
             return controlledPathPercentage < other.getControlledPathPercentage();

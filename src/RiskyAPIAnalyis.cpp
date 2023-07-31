@@ -96,6 +96,17 @@ bool pdg::RiskyAPIAnalysis::runOnModule(llvm::Module &M)
 // uses old Shared Field Analysis
 void pdg::RiskyAPIAnalysis::flagKernelStructWrites(Node &f, int &numKernelStructWrites, std::set<std::string> &kOnlyField)
 {
+    // setup taint edges
+    std::set<pdg::EdgeType> taintEdges = {
+        pdg::EdgeType::PARAMETER_IN,
+        // pdg::EdgeType::PARAMETER_OUT,
+        // pdg::EdgeType::DATA_ALIAS,
+        // EdgeType::DATA_RET,
+        // pdg::EdgeType::CONTROL,
+        pdg::EdgeType::DATA_STORE_TO,
+        pdg::EdgeType::DATA_DEF_USE,
+    };
+
     Value *v = f.getValue();
     if (Function *f = dyn_cast<Function>(v))
     {
@@ -127,6 +138,14 @@ void pdg::RiskyAPIAnalysis::flagKernelStructWrites(Node &f, int &numKernelStruct
                             *riskyKUpdateAPIOS << accessFieldID << "\n";
                             pdgutils::printSourceLocation(*si, *riskyKUpdateAPIOS);
                         }
+                    }
+                    // when find an update to kernel private field, propagate taints from the update address.
+                    auto modAddrNode =  _PDG->getNode(*mod_addr);
+                    auto taintNodes = _PDG->findNodesReachedByEdges(*modAddrNode, taintEdges);
+                    // set the taint
+                    for (auto taintNode : taintNodes)
+                    {
+                        taintNode->setTaint();
                     }
                 }
             }

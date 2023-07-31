@@ -48,11 +48,14 @@ namespace pdg
     bool isBuildFuncNode(llvm::Function &F);
     std::set<CallGraphInstruction> getCallGraphInstructions(){return _callGraphInstructions;}
     llvm::Instruction* getCallGraphInstruction(Node* parent, Node* child);
+    void insertCallInstPair(llvm::Function &F, llvm::CallInst &ci);
+    std::unordered_set<llvm::CallInst*> getCallInstsForFunc(llvm::Function &F);
 
   private:
     std::set<std::string> _exclude_func_names;
     std::set<std::string> _exported_func_names;
     std::set<std::string> _driver_func_names;
+    std::unordered_map<llvm::Function *, std::unordered_set<llvm::CallInst *>> _callInstMap;
     std::set<CallGraphInstruction> _callGraphInstructions;
   };
 

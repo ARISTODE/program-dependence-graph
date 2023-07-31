@@ -13,7 +13,7 @@ int main() {
    
   int y = 20; 
   myData.ptr = &y; 
-  free_ptr(&myData);
+  // free_ptr(&myData);
 
   myData.ptr = &x;
   pointer_arithmetic(&myData);

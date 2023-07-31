@@ -109,3 +109,13 @@ pdg::Node *pdg::Node::getAbstractTreeNode()
   }
   return nullptr;
 }
+
+pdg::Node *pdg::Node::getAbstractTypeTreeNode()
+{
+  for (auto in_edge : _in_edge_set)
+  {
+    if (in_edge->getEdgeType() == EdgeType::VAL_DEP && in_edge->getSrcNode()->getNodeType() == GraphNodeType::GLOBAL_TYPE)
+      return in_edge->getSrcNode();
+  }
+  return nullptr;
+}

@@ -35,6 +35,7 @@ void pdg::PDGCallGraph::build(Module &M)
           if (callee_node != nullptr)
           {
             caller_node->addNeighbor(*callee_node, EdgeType::CALL);
+            insertCallInstPair(*called_func, *ci);
             _callGraphInstructions.insert(CallGraphInstruction(caller_node, callee_node, ci));
           }
         }
@@ -48,6 +49,8 @@ void pdg::PDGCallGraph::build(Module &M)
             if (callee_node != nullptr)
             {
               caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
+              insertCallInstPair(*ind_call_can, *ci);
+              // TODO: can remove this later
               _callGraphInstructions.insert(CallGraphInstruction(caller_node, callee_node, ci));
             }
           }
@@ -444,4 +447,17 @@ Instruction *pdg::PDGCallGraph::getCallGraphInstruction(Node *parent, Node *chil
 
   // Return nullptr if no matching CallGraphInstruction is found
   return nullptr;
+}
+
+void pdg::PDGCallGraph::insertCallInstPair(Function &F, CallInst &ci) {
+    _callInstMap[&F].insert(&ci);
+}
+
+std::unordered_set<CallInst*> pdg::PDGCallGraph::getCallInstsForFunc(llvm::Function &F) {
+    auto it = _callInstMap.find(&F);
+    if (it != _callInstMap.end()) {
+        return it->second;
+    } else {
+        return std::unordered_set<llvm::CallInst*>();  // return an empty set
+    }
 }

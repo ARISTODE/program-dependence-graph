@@ -66,7 +66,10 @@ namespace pdg
     bool hasOutNeighborWithEdgeType(Node &n, EdgeType edgeTy);
     std::set<Node *> getNeighborsWithDepType(std::set<EdgeType> edgeTypes);
     bool isAddrVarNode();
+    bool isTaint() { return _isTainted; }
+    void setTaint() { _isTainted = true; }
     Node* getAbstractTreeNode();
+    Node* getAbstractTypeTreeNode(); // shared field nodes is connected to global type tree with VAL_DEP
     virtual ~Node() = default;
     virtual void dump() { llvm::errs() << _func->getName() << " - " << *_val << "\n"; }
 
@@ -74,6 +77,7 @@ namespace pdg
     llvm::Value *_val;
     llvm::Function *_func;
     bool _is_visited;
+    bool _isTainted = false;
     EdgeSet _in_edge_set;
     EdgeSet _out_edge_set;
     GraphNodeType _nodeType;
