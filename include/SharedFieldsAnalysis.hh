@@ -29,6 +29,9 @@ namespace pdg
     void printWarningsForUnsafeTypeCastsOnInst(llvm::Instruction &i);
     void computeSharedAccessFields();
     void dumpSharedFields();
+    std::set<std::string> get_driver_access_fields(){return _driver_access_fields;}
+    std::set<std::string> get_kernel_access_fields(){return _kernel_access_fields;}
+    std::set<std::string> get_shared_fields(){return _shared_fields;}
 
   private:
     std::map<llvm::Value *, std::pair<llvm::DIType *, llvm::DIType *>> _inst_ditype_map;

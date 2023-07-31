@@ -6,6 +6,8 @@
 
 namespace pdg
 {
+  class CallGraphInstruction;
+
   class PDGCallGraph : public GenericGraph
   {
   public:
@@ -44,12 +46,37 @@ namespace pdg
     bool isDriverFunc(llvm::Function &F);
     void setupBuildFuncNodes(llvm::Module &M);
     bool isBuildFuncNode(llvm::Function &F);
+    std::set<CallGraphInstruction> getCallGraphInstructions(){return _callGraphInstructions;}
+    llvm::Instruction* getCallGraphInstruction(Node* parent, Node* child);
 
   private:
     std::set<std::string> _exclude_func_names;
     std::set<std::string> _exported_func_names;
     std::set<std::string> _driver_func_names;
+    std::set<CallGraphInstruction> _callGraphInstructions;
   };
+
+
+
+class CallGraphInstruction {
+public:
+    CallGraphInstruction(Node* parent, Node* child, llvm::Instruction* inst)
+        : parent(parent), child(child), inst(inst) {
+    }
+
+    llvm::Instruction* getInstruction() const { return inst; }
+    Node* getParent() const { return parent; }
+    Node* getChild() const { return child; }
+    bool operator<(const CallGraphInstruction& other) const {
+        return std::tie(parent, child, inst) < std::tie(other.parent, other.child, other.inst);
+    }
+
+private:
+    Node* parent;
+    Node* child;
+    llvm::Instruction* inst;
+};
+
 } // namespace pdg
 
 #endif

@@ -12,7 +12,7 @@ void pdg::PDGCallGraph::build(Module &M)
   {
     // if (F.isDeclaration() || F.empty())
     //   continue;
-    Node* n = new Node(F, GraphNodeType::FUNC);
+    Node *n = new Node(F, GraphNodeType::FUNC);
     _valNodeMap.insert(std::make_pair(&F, n));
     addNode(*n);
   }
@@ -33,7 +33,10 @@ void pdg::PDGCallGraph::build(Module &M)
         {
           auto callee_node = getNode(*called_func);
           if (callee_node != nullptr)
+          {
             caller_node->addNeighbor(*callee_node, EdgeType::CALL);
+            _callGraphInstructions.insert(CallGraphInstruction(caller_node, callee_node, ci));
+          }
         }
         else
         {
@@ -43,7 +46,10 @@ void pdg::PDGCallGraph::build(Module &M)
           {
             Node *callee_node = getNode(*ind_call_can);
             if (callee_node != nullptr)
+            {
               caller_node->addNeighbor(*callee_node, EdgeType::IND_CALL);
+              _callGraphInstructions.insert(CallGraphInstruction(caller_node, callee_node, ci));
+            }
           }
         }
       }
@@ -377,14 +383,15 @@ void pdg::PDGCallGraph::printPath(const std::vector<Node *> &path, raw_fd_ostrea
 {
   if (path.empty())
   {
-    OS << "Empty path" << "\n";
+    OS << "Empty path"
+       << "\n";
     return;
   }
 
   OS << "Call Path: \n";
   for (size_t i = 0; i < path.size(); ++i)
   {
-    Node* node = path[i];
+    Node *node = path[i];
 
     // Print the node's function name
     if (Function *f = dyn_cast<Function>(node->getValue()))
@@ -423,4 +430,18 @@ bool pdg::PDGCallGraph::isBuildFuncNode(Function &F)
 {
   auto funcNode = getNode(F);
   return (buildFuncNodes.find(funcNode) != buildFuncNodes.end());
+}
+
+Instruction *pdg::PDGCallGraph::getCallGraphInstruction(Node *parent, Node *child)
+{
+  for (const auto &cgi : _callGraphInstructions)
+  {
+    if ((parent->getValue() == cgi.getParent()->getValue()) && (child->getValue() == cgi.getChild()->getValue()))
+    {
+      return cgi.getInstruction();
+    }
+  }
+
+  // Return nullptr if no matching CallGraphInstruction is found
+  return nullptr;
 }
