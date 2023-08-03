@@ -21,10 +21,10 @@ namespace pdg
             // scalar field checks
             bool checkValUsedAsArrayIndex(Node &n);
             // generic field checks
-            bool checkValUsedInPtrArithOp(Node &n);
+            static bool checkValUsedInPtrArithOp(Node &n);
             bool checkValUsedInSenBranchCond(Node &n, llvm::raw_fd_ostream &OS);
-            bool checkValUsedInSecurityChecks(Node &n);
-            bool checkValUsedInSensitiveOperations(Node &n);
+            bool checkValInSecurityChecks(Node &n);
+            static bool checkValUsedInSensitiveOperations(Node &n);
             bool isSensitiveOperation(llvm::Function &F);
             // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
