@@ -2,9 +2,12 @@
 #define RISKY_API_ANALYSIS_H_
 #include "SharedDataAnalysis.hh"
 #include "SharedFieldsAnalysis.hh"
+#include "KSplitCFG.hh"
 
 namespace pdg
 {
+    class KFUpdateControlPath; 
+
     class RiskyAPIAnalysis : public llvm::ModulePass
     {
     public:
@@ -14,7 +17,7 @@ namespace pdg
         llvm::StringRef getPassName() const override { return "Risky Field Analysis"; }
         bool runOnModule(llvm::Module &M) override;
         void flagKernelStructWritesSDA(Node &f, int &numKernelStructWrites);
-        void flagKernelStructWrites(Node &f, int &numKernelStructWrites, std::set<std::string> &kOnlyField);
+        std::set<KFUpdateControlPath> flagKernelStructWrites(Node &f, Node &API, int &numKernelStructWrites, std::set<std::string> &kOnlyField);
         void matchAllocToFree(Node &f);
         bool isSinkMM(Node &f, bool Alloc);
         void flagMemoryManagement(Node &f, int &numAllocs, int &numFrees);
@@ -26,28 +29,34 @@ namespace pdg
         SharedDataAnalysis *_SDA;
         SharedFieldsAnalysis *_SFA;
         PDGCallGraph *_callGraph;
+        KSplitCFG *_CFG;
         // output file
         llvm::raw_fd_ostream *riskyKUpdateAPIOS;
         llvm::raw_fd_ostream *riskyMMAPIOS;
+        llvm::raw_fd_ostream *riskyKUpdateCountOS;
     };
 
-    class ControlPath
+    class KFUpdateControlPath
     {
     public:
-        ControlPath(Node *source, Node *dest) : source(source), dest(dest), controlledPathPercentage(0){};
-        Node *getSource() { return source; }
-        Node *getDest() { return dest; }
-        float getControlledPathPercentage() const { return controlledPathPercentage; } // Added const here
-        std::set<llvm::Value *> conditionValues;
-        bool operator<(const ControlPath &other) const
+        KFUpdateControlPath(Node *source, Node *dest) : source(source), dest(dest), controlledConditionalPercentage(0), updateInstructions({}){};
+        Node *getSource() const{ return source; }
+        Node *getDest() const{ return dest; }
+        std::set<std::tuple<llvm::Instruction*, std::string>> getUpdateInstructions() {return updateInstructions;}
+        float getControlledConditionalPercentage() const { return controlledConditionalPercentage; } // Added const here
+        std::set<llvm::Value*> conditionValues;
+        bool operator<(const KFUpdateControlPath &other) const
         {
-            return controlledPathPercentage < other.getControlledPathPercentage();
+            return controlledConditionalPercentage < other.getControlledConditionalPercentage();
         }
+        void addUpdateInstruction(llvm::Instruction* i, std::string fieldID){updateInstructions.insert(tuple<llvm::Instruction*, std::string>(i,fieldID));}
+        void setControlledConditionalPercentage(float controlledConditionalPercentage) {this->controlledConditionalPercentage = controlledConditionalPercentage; } // Added const here
 
     private:
         Node *source;
         Node *dest;
-        float controlledPathPercentage;
+        float controlledConditionalPercentage;
+        std::set<std::tuple<llvm::Instruction*, std::string>> updateInstructions;
     };
 }
 
