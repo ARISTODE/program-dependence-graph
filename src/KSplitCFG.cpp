@@ -96,6 +96,20 @@ void pdg::KSplitCFG::build(Module &M)
         curInstNode->addNeighbor(*nextInstNode, EdgeType::CONTROL_FLOW);
       }
 
+      if (curInst->isTerminator())
+      {
+        for (auto succId = 0; succId < curInst->getNumSuccessors(); ++succId)
+        {
+          auto succBB = curInst->getSuccessor(succId);
+          auto firstBBInst = succBB->getFirstNonPHI();
+          auto firstBBInstNode = getNode(*firstBBInst);
+          if (firstBBInstNode)
+          {
+            curInstNode->addNeighbor(*firstBBInstNode, EdgeType::CONTROL_FLOW);
+          }
+        }
+      }
+
       // callinst: connect inst with the first instruction in the called function
       if (CallInst *ci = dyn_cast<CallInst>(curInst))
       {

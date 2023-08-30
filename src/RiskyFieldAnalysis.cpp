@@ -474,6 +474,7 @@ void pdg::RiskyFieldAnalysis::classifyRiskyFieldTaint(TreeNode &tn)
                   auto taintVal = taintNode->getValue();
                   if (!taintVal)
                       continue;
+                  errs() << "t: " << *taintVal << " - " << func->getName() << "\n";
                   if (auto taintInst = dyn_cast<Instruction>(taintVal))
                   {
                       auto taintNodeType = taintVal->getType();
@@ -541,11 +542,13 @@ void pdg::RiskyFieldAnalysis::classifyRiskyFieldTaint(TreeNode &tn)
               continue;
           auto addrVarNode = _PDG->getNode(*addrVar);
           auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
+
           for (auto taintNode : taintNodes)
           {
               auto taintVal = taintNode->getValue();
               if (!taintVal)
                   continue;
+              taintNode->setTaint();
 
               auto taintNodeType = taintVal->getType();
               if (auto taintInst = dyn_cast<Instruction>(taintVal))
@@ -724,7 +727,7 @@ bool pdg::RiskyFieldAnalysis::checkValUsedInSenBranchCond(Node &n, raw_fd_ostrea
                       {
                           if (checkIsArrayAccess(*i))
                           {
-                              OS << "arrary access in branch: ";
+                              OS << "array access in branch: ";
                               pdgutils::printSourceLocation(*i, OS);
                               return true;
                           }
@@ -942,13 +945,20 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
   auto addrVarInst = cast<Instruction>(srcNode.getValue());
   auto taintInst = cast<Instruction>(dstNode.getValue());
 
+    // common starting
+  *riskyFieldTaintOS << " ---------------- [Start of Case] ------------------- \n";
+  *riskyFieldTaintOS << "Risky " << taintType << " (ptr|taint) " << colorize(accessPathStr, RED) << ":\n";
+  *riskyFieldTaintOS << "\ttaint source: ";
+  pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
+  *riskyFieldTaintOS << "\ttaint sink: ";
+  pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+
   // obtain path conditions
   auto cfgAddrVarNode = cfg.getNode(*addrVarInst);
   auto cfgTaintVarNode = cfg.getNode(*taintInst);
   std::set<Value *> conditionVals;
   cfg.computePathConditionsBetweenNodes(*cfgAddrVarNode, *cfgTaintVarNode, conditionVals);
-  *riskyFieldTaintOS << " ----------------------------------- \n";
-  *riskyFieldTaintOS << " conditions along path: \n";
+  *riskyFieldTaintOS << "\n [ conditions along path ]: \n";
 
   bool isControlledPath = true;
   // check if path conditions are all tainted, which indicates a feasible path
@@ -956,43 +966,51 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
   {
       if (!isControlledPath)
           break;
+      bool isCurBranchTaint = false;
+      auto condInstNode = _PDG->getNode(*v);
+      if (!condInstNode->isTaint())
+      {
+        isControlledPath = false;
+        break;
+      }
+
       if (auto inst = dyn_cast<Instruction>(v))
       {
-          for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i)
-          {
-              llvm::Value *operand = inst->getOperand(i);
-              auto opNode = _PDG->getNode(*operand);
-              if (!opNode)
-                  break;
-              if (!opNode->isTaint())
-              {
-                  isControlledPath = false;
-                  break;
-              }
-              // if a condition is sanity check of the sink value, which is used in risky operations
-              // skip this trace
-              // check if an operand of the conditions is the taint value.
-              // if (isSanityCheck())
-          }
-
           *riskyFieldTaintOS << *inst;
           pdgutils::printSourceLocation(*inst, *riskyFieldTaintOS);
       }
+      //   if (auto inst = dyn_cast<Instruction>(v))
+      //   {
+      //       for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i)
+      //       {
+      //           llvm::Value *operand = inst->getOperand(i);
+      //           auto opNode = _PDG->getNode(*operand);
+      //           if (!opNode)
+      //               continue;
+      //           if (opNode->isTaint())
+      //               isCurBranchTaint = true;
+      //           // if a condition is sanity check of the sink value, which is used in risky operations
+      //           // skip this trace
+      //           // check if an operand of the conditions is the taint value.
+      //           // if (isSanityCheck())
+      //       }
+      //       if (!isCurBranchTaint)
+      //       {
+      //         isControlledPath = false;
+      //         break;
+      //       }
+
+      //   }
   }
 
   if (!isControlledPath)
   {
-      *riskyFieldTaintOS << "--------- [End of Case] --------- \n\n";
+      *riskyFieldTaintOS << "--------- [infeasible - End of Case] --------- \n\n";
       return;
   }
 
   numControlTaintTrace++;
   // if all the conditions are tainted, we proceed to compute the taints
-  *riskyFieldTaintOS << "Risky " << taintType << " (ptr|taint) " << colorize(accessPathStr, RED) << ":\n";
-  *riskyFieldTaintOS << "\ttaint source: ";
-  pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
-  *riskyFieldTaintOS << "\ttaint sink: ";
-  pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
   printTaintTrace(*addrVarInst, *taintInst, accessPathStr, taintType, *riskyFieldTaintOS);
   auto n = srcNode.getAbstractTreeNode();
 

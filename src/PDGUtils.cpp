@@ -757,6 +757,10 @@ void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &Outpu
       std::string file = scope->getFilename().str();
       OutputStream << filePrefix << file << "#L" << line << "\n";
     }
+    else
+    {
+      OutputStream << "\n";
+    }
   }
 }
 

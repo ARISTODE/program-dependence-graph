@@ -3,24 +3,27 @@
 #include <stdio.h>
 
 void dereference_ptr(struct data* input) {
-  int x = *(input->ptr); // Dereference ptr  
+	int x = *(input->ptr); // Dereference ptr  
 }
 
 void controlled_malloc(struct data* input) {
-  int* ptr = malloc(input->size); // Controlled malloc size
+	int* ptr = malloc(input->size); // Controlled malloc size
 }
 
 void free_ptr(struct data* input) {
-  free(input->ptr); // Free pointer
+	free(input->ptr); // Free pointer
 }
 
 void pointer_arithmetic(struct data* input) {
-  int* ptr = input->ptr;
-  ptr++; // Pointer arithmetic
+	int* ptr = input->ptr;
+	int a = 10;
+	if (a > input->size) {
+		ptr++; // Pointer arithmetic
+	}
 }
 
 void fSize(int* size) {
-  free(size);
+	free(size);
 }
 
 void sensitive_branch(struct data* input) { 
