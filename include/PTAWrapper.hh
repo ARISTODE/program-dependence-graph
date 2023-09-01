@@ -24,9 +24,8 @@ namespace pdg
     void setupPTA(llvm::Module &M);
     bool hasPTASetup() { return (_ander_pta != nullptr); }
     llvm::AliasResult queryAlias(llvm::Value &v1, llvm::Value &v2);
-
-  private:
     SVF::AndersenWaveDiff *_ander_pta;
+    
   };
 } // namespace pdg
 

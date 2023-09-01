@@ -22,6 +22,7 @@ namespace pdg
         // Statistics fields for a specific subsystem
         int kernelInterfaceAPIs = 0;
         int riskyAPIs = 0;
+        int riskyAPIsConditional = 0;
         int directlyInvokedRiskyAPIs = 0;
         int transitivelyInvokedRiskyAPIs = 0;
         int memoryManagement = 0;
@@ -46,7 +47,8 @@ namespace pdg
             std::cout << "Risky Kernel API Statistics:\n";
             std::cout << "  No. kernel interface APIs: " << kernelInterfaceAPIs << "\n";
             std::cout << "  No. risky APIs: " << riskyAPIs << "\n";
-            std::cout << "  No. directly invoked risky APIs: " << directlyInvokedRiskyAPIs  << "\n";
+            std::cout << "  No. risky APIs with conditionals enforced: " << riskyAPIs << "\n";
+            std::cout << "  No. directly invoked risky APIs: " << directlyInvokedRiskyAPIs << "\n";
             std::cout << "  No. transitively invoked risky APIs: " << transitivelyInvokedRiskyAPIs << " (Conditional: " << transitivelyInvokedRiskyAPIsConditional << ")\n";
             std::cout << "  - Memory management: " << memoryManagement << " (Conditional: " << memoryManagementConditional << ")\n";
             std::cout << "  - Concurrency management: " << concurrencyManagement << " (Conditional: " << concurrencyManagementConditional << ")\n";
@@ -66,8 +68,9 @@ namespace pdg
         void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
         llvm::StringRef getPassName() const override { return "KSplit taint analysis"; }
         bool runOnModule(llvm::Module &M) override;
-        void analyzeRiskyAPICalls();
-        void analyzePrivateStateUpdate();
+        void analyzeRiskyAPICalls(bool conditionals);
+        void analyzePrivateStateUpdate(bool conditionals);
+        void analyzePrivateStateUpdateWithConditionals();
         void analyzeSharedStateCorruption();
         void propagateTaintsPrivateState();
 
@@ -89,12 +92,14 @@ namespace pdg
 
         bool canReachSensitiveOperations(Node &callerNode);
 
-        void incrementRiskyAPIFields(std::string& className);
+        void incrementRiskyAPIFields(std::string &className);
+        void incrementRiskyAPIFieldsConditional(std::string &className);
         void reportTaintResults();
 
         // private states set
         std::unordered_set<llvm::StoreInst *> storeInstsUpdatePrivateStates;
         llvm::DenseMap<llvm::Function *, std::unordered_set<llvm::StoreInst *>> privateStateUpdateMap;
+        llvm::DenseMap<llvm::Function *, std::unordered_set<llvm::StoreInst *>> privateStateUpdateConditionalMap;
         RiskyAPIStatsCollector riskyAPICollector;
 
     private:
@@ -106,8 +111,9 @@ namespace pdg
         std::unordered_set<Node *> _taintSources;
         std::unordered_map<Node *, std::vector<Node *>> _taintMap; // map taint trace to taint sink node
         llvm::raw_fd_ostream *privateStateUpdateLogOS;
+        llvm::raw_fd_ostream *privateStateUpdateConditionalsLogOS;
+        std::set<llvm::Value *> taintedPathConds;
     };
-
 
 }
 
