@@ -90,7 +90,7 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::N
   {
     Node *currentNode = nodeQueue.front();
     nodeQueue.pop();
-    if (visited.find(currentNode) != visited.end())
+    if (!currentNode || visited.find(currentNode) != visited.end())
       continue;
     visited.insert(currentNode);
     ret.insert(currentNode);

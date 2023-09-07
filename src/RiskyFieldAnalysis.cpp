@@ -932,6 +932,9 @@ void pdg::RiskyFieldAnalysis::printTaintFieldInfo()
       auto riskyFieldStr = std::get<3>(tuple);
       printTaintTraceAndConditions(*srcNode, *dstNode, accessPathStr, riskyFieldStr);
   }
+  std::ofstream jsonFile("output.json");
+  jsonFile << taintTracesJson.dump(2);
+  jsonFile.close();
 }
 
 // helper and print functions
@@ -945,13 +948,21 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
   auto addrVarInst = cast<Instruction>(srcNode.getValue());
   auto taintInst = cast<Instruction>(dstNode.getValue());
 
-    // common starting
+  // create json object for storing traces 
+  nlohmann::ordered_json traceJsonObj;
+
   *riskyFieldTaintOS << " ---------------- [Start of Case] ------------------- \n";
   *riskyFieldTaintOS << "Risky " << taintType << " (ptr|taint) " << colorize(accessPathStr, RED) << ":\n";
+  std::string taintTypeStr = taintType;
   *riskyFieldTaintOS << "\ttaint source: ";
   pdgutils::printSourceLocation(*addrVarInst, *riskyFieldTaintOS);
   *riskyFieldTaintOS << "\ttaint sink: ";
   pdgutils::printSourceLocation(*taintInst, *riskyFieldTaintOS);
+  
+  traceJsonObj["risky"] = taintType;
+  traceJsonObj["acc_path"] = accessPathStr;
+  traceJsonObj["src"] = pdgutils::getSourceLocationStr(*taintInst);
+  traceJsonObj["dst"] = pdgutils::getSourceLocationStr(*taintInst);
 
   // obtain path conditions
   auto cfgAddrVarNode = cfg.getNode(*addrVarInst);
@@ -959,7 +970,7 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
   std::set<Value *> conditionVals;
   cfg.computePathConditionsBetweenNodes(*cfgAddrVarNode, *cfgTaintVarNode, conditionVals);
   *riskyFieldTaintOS << "\n [ conditions along path ]: \n";
-
+  traceJsonObj["cond_num"] = std::to_string(conditionVals.size());
   bool isControlledPath = true;
   // check if path conditions are all tainted, which indicates a feasible path
   for (auto v : conditionVals)
@@ -968,6 +979,10 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
           break;
       bool isCurBranchTaint = false;
       auto condInstNode = _PDG->getNode(*v);
+      
+      if (!condInstNode)
+        continue;
+
       if (!condInstNode->isTaint())
       {
         isControlledPath = false;
@@ -979,39 +994,21 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
           *riskyFieldTaintOS << *inst;
           pdgutils::printSourceLocation(*inst, *riskyFieldTaintOS);
       }
-      //   if (auto inst = dyn_cast<Instruction>(v))
-      //   {
-      //       for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i)
-      //       {
-      //           llvm::Value *operand = inst->getOperand(i);
-      //           auto opNode = _PDG->getNode(*operand);
-      //           if (!opNode)
-      //               continue;
-      //           if (opNode->isTaint())
-      //               isCurBranchTaint = true;
-      //           // if a condition is sanity check of the sink value, which is used in risky operations
-      //           // skip this trace
-      //           // check if an operand of the conditions is the taint value.
-      //           // if (isSanityCheck())
-      //       }
-      //       if (!isCurBranchTaint)
-      //       {
-      //         isControlledPath = false;
-      //         break;
-      //       }
-
-      //   }
   }
-
+  
   if (!isControlledPath)
   {
       *riskyFieldTaintOS << "--------- [infeasible - End of Case] --------- \n\n";
+      traceJsonObj["isControl"] = "0";
       return;
   }
+  else
+      traceJsonObj["isControl"] = "1";
 
   numControlTaintTrace++;
   // if all the conditions are tainted, we proceed to compute the taints
   printTaintTrace(*addrVarInst, *taintInst, accessPathStr, taintType, *riskyFieldTaintOS);
+
   auto n = srcNode.getAbstractTreeNode();
 
   if (n == nullptr)
@@ -1031,9 +1028,23 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
   std::vector<std::pair<Node *, Edge *>> path;
   std::unordered_set<Node *> visited;
   _PDG->findPathDFS(&srcNode, &dstNode, path, visited, taintEdges);
-  _PDG->printPath(path, *riskyFieldTaintOS);
+  
+  // TODO: fill in taint traces
+//   std::string s;
+//   raw_string_ostream os(s);
+//   getTraceStr(*addrVarInst, *taintInst, accessPathStr, taintType, os);
+//   os.flush();
+//   traceJsonObj["t_trace"] = os.str();
+//   s.clear();
+
+  // _PDG->printPath(path, *riskyFieldTaintOS);
 
   *riskyFieldTaintOS << "--------- [End of Case] --------- \n\n";
+
+  traceJsonObj["isTrue"] = "-";
+  traceJsonObj["atk_reason"] = "";
+  traceJsonObj["defense"] = "";
+  taintTracesJson.push_back(traceJsonObj);
 }
 
 void pdg::RiskyFieldAnalysis::printRiskyFieldInfo(raw_ostream &os, const std::string &category, pdg::TreeNode &treeNode, Function &func, Instruction &inst)
@@ -1073,11 +1084,11 @@ void pdg::RiskyFieldAnalysis::printTaintTrace(Instruction &source, Instruction &
   if (numDriverCall == 0)
       OS << "empty driver call Locs\n";
 
-  OS << "(field: " << fieldHierarchyName << ")"
-     << "\n";
-  OS << "flow type: " << flowType << "\n";
-  OS << "source inst: " << source << " in func " << sourceFunc->getName() << "\n";
-  OS << "sink inst: " << sink << " in func " << sinkFunc->getName() << "\n";
+//   OS << "(field: " << fieldHierarchyName << ")"
+//      << "\n";
+//   OS << "flow type: " << flowType << "\n";
+//   OS << "source inst: " << source << " in func " << sourceFunc->getName() << "\n";
+//   OS << "sink inst: " << sink << " in func " << sinkFunc->getName() << "\n";
   std::vector<Node *> callPath;
   std::unordered_set<Node *> visited;
   _callGraph->findPathDFS(sourceFuncNode, sinkFuncNode, callPath, visited);
@@ -1089,6 +1100,35 @@ void pdg::RiskyFieldAnalysis::printTaintTrace(Instruction &source, Instruction &
   }
   _callGraph->printPath(callPath, OS);
   OS << "<=========================================>\n";
+}
+
+void pdg::RiskyFieldAnalysis::getTraceStr(Instruction &source, Instruction &sink, std::string fieldHierarchyName, std::string flowType, raw_string_ostream &OS)
+{
+    auto sourceFunc = source.getFunction();
+    auto sourceFuncNode = _callGraph->getNode(*sourceFunc);
+    auto sinkFunc = sink.getFunction();
+    auto sinkFuncNode = _callGraph->getNode(*sinkFunc);
+    std::vector<Node *> callPath;
+    std::unordered_set<Node *> visited;
+    _callGraph->findPathDFS(sourceFuncNode, sinkFuncNode, callPath, visited);
+    // consider taint if it propagates through return value
+    if (callPath.empty())
+    {
+        visited.clear();
+        _callGraph->findPathDFS(sinkFuncNode, sourceFuncNode, callPath, visited);
+    }
+
+    // for (auto node : callPath)
+    // {
+    //     std::string s = "";
+    //     auto nodeVal = node->getValue();
+    //     if (auto i = dyn_cast<Instruction>(nodeVal))
+    //     {
+    //         auto instLoc = pdgutils::getSourceLocationStr(*i);
+    //         s += instLoc;
+    //     }
+    //     OS << path << "\n";
+    // }
 }
 
 void pdg::RiskyFieldAnalysis::printFieldDirectUseClassification(raw_fd_ostream &OS)

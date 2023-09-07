@@ -1,6 +1,7 @@
 #ifndef RISKY_FIELD_ANALYSIS_H_
 #define RISKY_FIELD_ANALYSIS_H_
 #include "SharedDataAnalysis.hh"
+#include "json.hpp"
 
 namespace pdg
 {
@@ -30,6 +31,7 @@ namespace pdg
             // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
             void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);
+            void getTraceStr(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_string_ostream &OS);
             void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
             void printFieldClassificationTaint(llvm::raw_fd_ostream &OS);
             void printTaintFieldInfo();
@@ -79,6 +81,7 @@ namespace pdg
             // output file
             llvm::raw_fd_ostream *riskyFieldOS;
             llvm::raw_fd_ostream *riskyFieldTaintOS;
+            nlohmann::ordered_json taintTracesJson = nlohmann::ordered_json::array();
     };
 }
 

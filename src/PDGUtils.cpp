@@ -764,6 +764,24 @@ void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &Outpu
   }
 }
 
+std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
+{
+  std::string outStr = "";
+  if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
+  {
+    unsigned line = debugLoc.getLine();
+    // unsigned col = debugLoc.getCol();
+    llvm::MDNode *scopeNode = debugLoc.getScope();
+    std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
+
+    if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
+    {
+      std::string file = scope->getFilename().str();
+      outStr = outStr + filePrefix + file + "#L" + std::to_string(line);
+    }
+  }
+  return outStr;
+}
 
 bool pdg::pdgutils::isUpdatedInHeader(Instruction &I)
 {
