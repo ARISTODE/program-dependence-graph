@@ -185,6 +185,10 @@ bool pdg::pdgutils::hasPtrDereference(Value &v)
 {
   if (!v.getType()->isPointerTy())
     return false;
+ 
+  // ignore cases that load from stack address
+  if (isa<AllocaInst>(&v))
+    return false;
 
   for (auto user : v.users())
   {
@@ -767,12 +771,13 @@ void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &Outpu
 std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
 {
   std::string outStr = "";
+  std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
+
   if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
   {
     unsigned line = debugLoc.getLine();
     // unsigned col = debugLoc.getCol();
     llvm::MDNode *scopeNode = debugLoc.getScope();
-    std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
 
     if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
     {
@@ -780,6 +785,20 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
       outStr = outStr + filePrefix + file + "#L" + std::to_string(line);
     }
   }
+
+  if (outStr.empty())
+  {
+    std::string s;
+    raw_string_ostream ss(s);
+    I.print(ss);
+    // obtain function debugging loc
+    auto func = I.getFunction();
+    auto DISubprog = func->getSubprogram();
+    unsigned line = DISubprog->getLine();
+    std::string file = DISubprog->getFilename().str();
+    outStr = filePrefix + file + "#L" + std::to_string(line) + " | "  + ss.str();
+  }
+
   return outStr;
 }
 
@@ -798,6 +817,17 @@ bool pdg::pdgutils::isUpdatedInHeader(Instruction &I)
     }
   }
   return false;
+}
+
+bool pdg::pdgutils::isFuncDefinedInHeaderFile(Function &F)
+{ 
+  auto DISubprog = F.getSubprogram();
+  auto fileName = DISubprog->getFilename().str();
+  if (fileName.empty())
+    return false;
+  size_t pos = fileName.rfind(".h");
+  // Check if the last occurrence is at the end of the string
+  return pos != std::string::npos && pos == fileName.length() - 2;
 }
 
 unsigned pdg::pdgutils::getFuncUniqueId(const Function &F)
@@ -855,6 +885,8 @@ std::string pdg::pdgutils::edgeTypeToString(EdgeType edgeType)
       return "DATA_ALIAS";
     case EdgeType::DATA_RET:
       return "DATA_RET";
+    case EdgeType::DATA_STORE_TO:
+      return "DATA_ST";
     case EdgeType::PARAMETER_IN:
       return "PARAMETER_IN";
     case EdgeType::PARAMETER_IN_REV:

@@ -65,6 +65,7 @@ namespace pdg
     bool isPrecedeInst(llvm::Instruction &i1, llvm::Instruction &i2, llvm::Function &F);
     void printTreeNodeAddrVars(TreeNode &treeNode);
     bool isUpdatedInHeader(llvm::Instruction &I);
+    bool isFuncDefinedInHeaderFile(llvm::Function &func);
     std::string getDemangledName(const char *mangledName);
     void readLinesFromFile(std::set<std::string> &lines, std::string fileName);
     void printSourceLocation(llvm::Instruction &I, llvm::raw_ostream &OutputStream = llvm::errs());

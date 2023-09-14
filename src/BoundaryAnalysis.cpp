@@ -53,13 +53,38 @@ void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)
   for (auto &F : M)
   {
     if (F.isDeclaration())
+      continue;
+    if (pdgutils::isFuncDefinedInHeaderFile(F))
+      continue;
+    for (auto iIter = inst_begin(F); iIter != inst_end(F); ++iIter)
     {
-      std::string funcName = F.getName().str();
-      funcName = pdgutils::stripFuncNameVersionNumber(funcName);
-      if (isBlackListFunc(funcName))
-        continue;
-      _importedFuncs.push_back(funcName);
+      if (auto CI = dyn_cast<CallInst>(&*iIter))
+      {
+        auto calledFunc = pdgutils::getCalledFunc(*CI);
+        if (!calledFunc)
+          continue;
+        if (calledFunc->isDeclaration())
+        {
+          std::string funcName = calledFunc->getName().str();
+          funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+          if (isBlackListFunc(funcName))
+            continue;
+          
+          if (std::find(_importedFuncs.begin(), _importedFuncs.end(), funcName) == _importedFuncs.end())
+          {
+            _importedFuncs.push_back(funcName);
+          }
+        }
+      }
     }
+    // if (F.isDeclaration())
+    // {
+    //   std::string funcName = F.getName().str();
+    //   funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+    //   if (isBlackListFunc(funcName))
+    //     continue;
+    //   _importedFuncs.push_back(funcName);
+    // }
   }
 }
 
@@ -183,17 +208,27 @@ void pdg::BoundaryAnalysis::computeExportedFuncSymbols(Module &M)
 
 void pdg::BoundaryAnalysis::dumpToFiles()
 {
-  errs() << "dumping to files\n";
-  dumpToFile("imported_funcs", _importedFuncs);
-  dumpToFile("driver_funcs", _driverDomainFuncs);
-  dumpToFile("exported_funcs", _exportedFuncs);
-  dumpToFile("exported_func_ptrs", _exportedFuncPtrs);
-  dumpToFile("sentinel_fields", _sentinelFields);
-  dumpToFile("driver_globalvar_names", _driverGlobalVarNames);
+  sys::fs::file_status status;
+  sys::fs::status("boundaryFiles", status);
+  if (!sys::fs::exists(status) || !sys::fs::is_directory(status))
+  {
+    // Directory does not exist, create it
+    sys::fs::create_directory("boundaryFiles", sys::fs::perms::all_all);
+  }
+
+  // Dump data to files
+  dumpToFile("boundaryFiles/imported_funcs", _importedFuncs);
+  dumpToFile("boundaryFiles/driver_funcs", _driverDomainFuncs);
+  dumpToFile("boundaryFiles/exported_funcs", _exportedFuncs);
+  dumpToFile("boundaryFiles/exported_func_ptrs", _exportedFuncPtrs);
+  dumpToFile("boundaryFiles/sentinel_fields", _sentinelFields);
+  dumpToFile("boundaryFiles/driver_globalvar_names", _driverGlobalVarNames);
+
   std::vector<std::string> exported_func_symbols(_exportedFuncSymbols.begin(), _exportedFuncSymbols.end());
-  dumpToFile("driver_exported_func_symbols", exported_func_symbols);
+  dumpToFile("boundaryFiles/driver_exported_func_symbols", exported_func_symbols);
+
   std::vector<std::string> global_op_struct_names(_globalOpStructNames.begin(), _globalOpStructNames.end());
-  dumpToFile("global_op_struct_names", global_op_struct_names);
+  dumpToFile("boundaryFiles/global_op_struct_names", global_op_struct_names);
 }
 
 void pdg::BoundaryAnalysis::dumpToFile(std::string fileName, std::vector<std::string> &names)

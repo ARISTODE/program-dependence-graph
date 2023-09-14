@@ -181,7 +181,8 @@ std::set<pdg::KFUpdateControlPath> pdg::RiskyAPIAnalysis::flagKernelStructWrites
                                         _callGraph->findPathDFS(&API, &f, callPath, visited);
                                         if (callPath.size() < 4)
                                         {
-                                            if (RiskyFieldAnalysis::checkValUsedInSensitiveOperations(*_PDG->getNode(*si->getPointerOperand())))
+                                            std::string senOpName = "";
+                                            if (RiskyFieldAnalysis::checkValUsedInSensitiveOperations(*_PDG->getNode(*si->getPointerOperand()), senOpName))
                                             {
                                                 *riskyKUpdateAPIOS << "sense operation"
                                                                    << "\n";
@@ -457,4 +458,4 @@ void pdg::RiskyAPIAnalysis::computeSensitiveInstructionFromDriverCalls()
 }
 
 static RegisterPass<pdg::RiskyAPIAnalysis>
-    RiskyFieldAnalysis("risky-API", "Risky API Analysis", false, true);
+    RiskyAPIAnalysis("risky-API", "Risky API Analysis", false, true);

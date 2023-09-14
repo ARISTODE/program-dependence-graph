@@ -73,7 +73,7 @@ void pdg::SharedDataAnalysis::setupExportedFuncPtrFieldNames()
 
 void pdg::SharedDataAnalysis::setupDriverFuncs(Module &M)
 {
-  _driverDomainFuncs = readFuncsFromFile("driver_funcs", M);
+  _driverDomainFuncs = readFuncsFromFile("driver_funcs", M, "boundaryFiles");
 }
 
 void pdg::SharedDataAnalysis::readDriverGlobalStrucTypes()
@@ -109,8 +109,8 @@ void pdg::SharedDataAnalysis::setupKernelFuncs(Module &M)
 
 void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
 {
-  auto imported_funcs = readFuncsFromFile("imported_funcs", M);
-  auto exported_funcs = readFuncsFromFile("exported_funcs", M);
+  auto imported_funcs = readFuncsFromFile("imported_funcs", M, "boundaryFiles");
+  auto exported_funcs = readFuncsFromFile("exported_funcs", M, "boundaryFiles");
 
   if (EnableAnalysisStats)
   {
@@ -132,10 +132,20 @@ void pdg::SharedDataAnalysis::setupBoundaryFuncs(Module &M)
   }
 }
 
-std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string fileName, Module &M)
+std::set<Function *> pdg::SharedDataAnalysis::readFuncsFromFile(std::string fileName, Module &M, std::string dir)
 {
   std::set<Function *> ret;
-  std::ifstream ReadFile(fileName);
+  sys::fs::file_status status;
+  sys::fs::status("boundaryFiles", status);
+  if (!dir.empty() && !sys::fs::exists(status) || !sys::fs::is_directory(status))
+  {
+    errs() << "boundary files don't exist, please run boundary analysis pass (-output-boundary-info) first\n";
+    return ret;
+  }
+
+
+  auto fullPath = dir + "/" + fileName;
+  std::ifstream ReadFile(fullPath);
   for (std::string line; std::getline(ReadFile, line);)
   {
     Function *f = M.getFunction(StringRef(line));
@@ -558,7 +568,15 @@ void pdg::SharedDataAnalysis::dumpSharedFieldID()
 
 void pdg::SharedDataAnalysis::readSentinelFields()
 {
-  std::ifstream ReadFile("sentinel_fields");
+  sys::fs::file_status status;
+  sys::fs::status("boundaryFiles", status);
+  if (!sys::fs::exists(status) || !sys::fs::is_directory(status))
+  {
+    errs() << "boundary files don't exist, please run boundary analysis pass (-output-boundary-info) first\n";
+    return;
+  }
+
+  std::ifstream ReadFile("boundaryFiles/sentinel_fields");
   for (std::string line; std::getline(ReadFile, line);)
   {
     _sentinelFields.insert(line);
@@ -567,7 +585,15 @@ void pdg::SharedDataAnalysis::readSentinelFields()
 
 void pdg::SharedDataAnalysis::readGlobalFuncOpStructNames()
 {
-  std::ifstream ReadFile("global_op_struct_names");
+  sys::fs::file_status status;
+  sys::fs::status("boundaryFiles", status);
+  if (!sys::fs::exists(status) || !sys::fs::is_directory(status))
+  {
+    errs() << "boundary files don't exist, please run boundary analysis pass (-output-boundary-info) first\n";
+    return;
+  }
+
+  std::ifstream ReadFile("boundaryFiles/global_op_struct_names");
   for (std::string line; std::getline(ReadFile, line);)
   {
     _driver_func_op_struct_names.insert(line);
@@ -770,6 +796,25 @@ void pdg::SharedDataAnalysis::printDriverUpdateLocations(TreeNode &treeNode, raw
     }
   }
   OS << " \n ============================================= \n\n";
+}
+
+void pdg::SharedDataAnalysis::getDriverUpdateLocStr(TreeNode &treeNode, raw_string_ostream &ss)
+{
+  for (auto addrVar : treeNode.getAddrVars())
+  {
+    if (auto inst = dyn_cast<Instruction>(addrVar))
+    {
+      // igonore cases in which header path is updated in the header files
+      if (pdgutils::isUpdatedInHeader(*inst))
+        continue;
+      auto func = inst->getFunction();
+      if (isDriverFunc(*func) && pdgutils::hasWriteAccess(*inst))
+      {
+        auto sourceLocStr = pdgutils::getSourceLocationStr(*inst);
+        ss << "[ (" << func->getName() << ")" << sourceLocStr << " ], ";
+      }
+    }
+  }
 }
 
 std::string pdg::SharedDataAnalysis::getFieldTypeStr(TreeNode &treeNode)
@@ -1049,7 +1094,6 @@ bool pdg::SharedDataAnalysis::usedInBranch(TreeNode &treeNode)
 //   }
 //   return false;
 // }
-
 
 // void pdg::SharedDataAnalysis::findGlobalAlias(Node &node, std::unordered_set<Node *> &aliasNodes)
 // {
