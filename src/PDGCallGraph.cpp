@@ -453,7 +453,7 @@ void pdg::PDGCallGraph::insertCallInstPair(Function &F, CallInst &ci) {
     _callInstMap[&F].insert(&ci);
 }
 
-std::unordered_set<CallInst*> pdg::PDGCallGraph::getCallInstsForFunc(llvm::Function &F) {
+std::unordered_set<CallInst*> pdg::PDGCallGraph::getFunctionCallSites(llvm::Function &F) {
     auto it = _callInstMap.find(&F);
     if (it != _callInstMap.end()) {
         return it->second;

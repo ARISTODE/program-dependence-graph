@@ -1,6 +1,7 @@
 #ifndef RISKY_FIELD_ANALYSIS_H_
 #define RISKY_FIELD_ANALYSIS_H_
 #include "SharedDataAnalysis.hh"
+#include "json.hpp"
 
 namespace pdg
 {
@@ -23,17 +24,20 @@ namespace pdg
             bool checkIsArrayAccess(llvm::Instruction &inst);
             // generic field checks
             static bool checkValUsedInPtrArithOp(Node &n);
-            bool checkValUsedInSenBranchCond(Node &n, llvm::raw_fd_ostream &OS);
+            bool checkValUsedInSenBranchCond(Node &n, llvm::raw_fd_ostream &OS, std::string &senTypeStr);
             bool checkValInSecurityChecks(Node &n);
-            static bool checkValUsedInSensitiveOperations(Node &n);
+            static bool checkValUsedInSensitiveOperations(Node &n, std::string &senOpName);
+            bool checkValUsedInInlineAsm(Node &n);
+
             bool isSensitiveOperation(llvm::Function &F);
             // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
             void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);
+            void getTraceStr(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_string_ostream &OS);
             void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
             void printFieldClassificationTaint(llvm::raw_fd_ostream &OS);
             void printTaintFieldInfo();
-            void printTaintTraceAndConditions(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType);
+            void printTaintTraceAndConditions(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId);
 
         private:
             llvm::Module *_module;
@@ -79,6 +83,10 @@ namespace pdg
             // output file
             llvm::raw_fd_ostream *riskyFieldOS;
             llvm::raw_fd_ostream *riskyFieldTaintOS;
+            nlohmann::ordered_json taintTracesJson = nlohmann::ordered_json::array();
+            nlohmann::ordered_json taintTracesJsonNoConds = nlohmann::ordered_json::array();
+            nlohmann::ordered_json unclassifiedFieldsJson = nlohmann::ordered_json::array();
+            unsigned unclassifiedFieldCount = 0;
     };
 }
 

@@ -45,6 +45,7 @@ namespace pdg
     std::unordered_set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edgeTypes, bool isBackward = false);
     bool findPathDFS(Node *src, Node *dst, std::vector<std::pair<Node *, Edge *>> &path, std::unordered_set<Node *> &visited, std::set<EdgeType> &edgeTypes);
     void printPath(std::vector<std::pair<Node *, Edge *>> &path, llvm::raw_fd_ostream &OS);
+    void convertPathToString(std::vector<std::pair<Node *, Edge *>> &path, llvm::raw_string_ostream &ss);
     ValueNodeMap &getValueNodeMap() { return _valNodeMap; }
 
   protected:

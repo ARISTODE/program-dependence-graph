@@ -109,6 +109,10 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
     {
       // _addrVars.insert(user);
       auto instNode = programGraph.getNode(*user);
+
+      if (!instNode)
+        return;
+
       auto aliasNodes = programGraph.findNodesReachedByEdge(*instNode, EdgeType::DATA_ALIAS);
       for (auto aliasNode : aliasNodes)
       {

@@ -90,7 +90,7 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::N
   {
     Node *currentNode = nodeQueue.front();
     nodeQueue.pop();
-    if (visited.find(currentNode) != visited.end())
+    if (!currentNode || visited.find(currentNode) != visited.end())
       continue;
     visited.insert(currentNode);
     ret.insert(currentNode);
@@ -545,6 +545,43 @@ void pdg::GenericGraph::printPath(std::vector<std::pair<pdg::Node*, pdg::Edge*>>
       inst->print(OS);
       OS << "\n";
       // If there's an edge, print its type.
+    }
+  }
+}
+
+void pdg::GenericGraph::convertPathToString(std::vector<std::pair<pdg::Node *, pdg::Edge *>> &path, raw_string_ostream &ss)
+{
+  for (auto &pair : std::vector<std::pair<pdg::Node *, pdg::Edge *>>(path.rbegin(), path.rend()))
+  {
+    // Get the node and edge from the pair.
+    pdg::Node *node = pair.first;
+    pdg::Edge *edge = pair.second;
+    if (!node || !edge)
+      continue;
+
+    // Get the instruction from the node.
+    Value *val = node->getValue();
+    std::string nodeTypeStr = pdgutils::nodeTypeToString(node->getNodeType());
+    std::string edgeTypeStr = pdgutils::edgeTypeToString(edge->getEdgeType());
+
+    // parameter tree node
+    if (!val)
+    {
+      ss << "[ " << nodeTypeStr <<  " || " << edgeTypeStr;
+
+      if (edge->getEdgeType() == EdgeType::PARAMETER_IN)
+      {
+        TreeNode *tn = static_cast<TreeNode *>(node);
+        if (tn->getTree())
+          ss << tn->getTree()->getRootNode()->getSrcName() << " ] -> ";
+      }
+      else
+        ss << "] -> ";
+    }
+    else if (auto inst = dyn_cast<Instruction>(val))
+    {
+      std::string sourceLocStr = pdgutils::getSourceLocationStr(*inst);
+      ss << "[ " << nodeTypeStr << " || " << edgeTypeStr << " || " << sourceLocStr << " ] -> ";
     }
   }
 }

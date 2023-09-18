@@ -49,7 +49,7 @@ namespace pdg
     std::set<CallGraphInstruction> getCallGraphInstructions(){return _callGraphInstructions;}
     llvm::Instruction* getCallGraphInstruction(Node* parent, Node* child);
     void insertCallInstPair(llvm::Function &F, llvm::CallInst &ci);
-    std::unordered_set<llvm::CallInst*> getCallInstsForFunc(llvm::Function &F);
+    std::unordered_set<llvm::CallInst*> getFunctionCallSites(llvm::Function &F);
 
   private:
     std::set<std::string> _exclude_func_names;

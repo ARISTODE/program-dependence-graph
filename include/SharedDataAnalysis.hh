@@ -34,7 +34,7 @@ namespace pdg
     std::set<std::string> &getSharedStructTypeNames() { return _shared_struct_type_names; }
     bool isSentinelField(std::string &s) { return _sentinelFields.find(s) != _sentinelFields.end(); }
     bool isGlobalOpStruct(std::string &s) { return _driver_func_op_struct_names.find(s) != _driver_func_op_struct_names.end(); }
-    std::set<llvm::Function *> readFuncsFromFile(std::string fileName, llvm::Module &M);
+    std::set<llvm::Function *> readFuncsFromFile(std::string fileName, llvm::Module &M, std::string dir = "");
     std::unordered_set<llvm::Function *> computeBoundaryTransitiveClosure();
     bool isBoundaryFuncName(std::string funcName) { return _boundary_func_names.find(funcName) != _boundary_func_names.end(); }
     void computeSharedStructDITypes();
@@ -65,6 +65,7 @@ namespace pdg
     void collectSharedFieldsAccessStats();
     void countReadWriteAccessTimes(TreeNode &treeNode);
     void printDriverUpdateLocations(TreeNode &treeNode, llvm::raw_fd_ostream &OS);
+    void getDriverUpdateLocStr(TreeNode &treeNode, llvm::raw_string_ostream &ss);
     std::string getFieldTypeStr(TreeNode &treeNode);
     bool usedInBranch(TreeNode &treeNode);
     bool isFuncPtr(TreeNode &treeNode);
