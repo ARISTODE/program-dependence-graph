@@ -147,9 +147,11 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::
 
 // PDG Specific
 void pdg::ProgramGraph::build(Module &M) {
+
   buildGlobalVariables(M);
   buildFunctions(M);
   buildCallGraphAndCallSites(M);
+
   _isBuild = true;
 }
 
@@ -182,6 +184,7 @@ void pdg::ProgramGraph::buildFunctions(Module &M)
   auto &call_g = PDGCallGraph::getInstance();
   for (auto &F : M)
   {
+
     if (F.isDeclaration() || F.empty())
       continue;
     // if (!call_g.isBuildFuncNode(F))

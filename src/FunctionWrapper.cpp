@@ -14,7 +14,8 @@ void pdg::FunctionWrapper::addInst(Instruction &i)
     _dbgDeclareInsts.push_back(dbi);
   if (CallInst *ci = dyn_cast<CallInst>(&i))
   {
-    if (!isa<DbgDeclareInst>(&i)) _callInsts.push_back(ci);
+    if (!isa<DbgDeclareInst>(&i))
+      _callInsts.push_back(ci);
   }
   if (ReturnInst *reti = dyn_cast<ReturnInst>(&i))
     _returnInsts.push_back(reti);
@@ -37,8 +38,8 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
 {
   for (auto arg : _argList)
   {
-    DILocalVariable* di_local_var = getArgDILocalVar(*arg);
-    AllocaInst* arg_alloca_inst = getArgAllocaInst(*arg);
+    DILocalVariable *di_local_var = getArgDILocalVar(*arg);
+    AllocaInst *arg_alloca_inst = getArgAllocaInst(*arg);
     if (di_local_var == nullptr || arg_alloca_inst == nullptr)
     {
       errs() << "empty di local var: " << _func->getName().str() << (di_local_var == nullptr) << " - " << (arg_alloca_inst == nullptr) << "\n";
@@ -58,9 +59,9 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
     _argFormalInTreeMap.insert(std::make_pair(arg, arg_formal_in_tree));
     // build formal_out tree by copying fromal_in tree
 
-    Tree* formalOutTree = new Tree(*arg_formal_in_tree);
+    Tree *formalOutTree = new Tree(*arg_formal_in_tree);
     formalOutTree->setBaseVal(*arg);
-    TreeNode* formal_out_root_node = formalOutTree->getRootNode();
+    TreeNode *formal_out_root_node = formalOutTree->getRootNode();
     // copy address variables
     for (auto addrVar : formal_in_root_node->getAddrVars())
     {
@@ -74,9 +75,9 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs()
 
 void pdg::FunctionWrapper::buildFormalTreesForRetVal()
 {
-  Tree* ret_formal_in_tree = new Tree();
-  DIType* funcRetDt = dbgutils::getFuncRetDIType(*_func);
-  TreeNode* ret_formal_in_tree_root_node = new TreeNode(*_func, funcRetDt, 0, nullptr, ret_formal_in_tree, GraphNodeType::FORMAL_IN);
+  Tree *ret_formal_in_tree = new Tree();
+  DIType *funcRetDt = dbgutils::getFuncRetDIType(*_func);
+  TreeNode *ret_formal_in_tree_root_node = new TreeNode(*_func, funcRetDt, 0, nullptr, ret_formal_in_tree, GraphNodeType::FORMAL_IN);
   for (auto ret_inst : _returnInsts)
   {
     auto ret_val = ret_inst->getReturnValue();
@@ -90,20 +91,25 @@ void pdg::FunctionWrapper::buildFormalTreesForRetVal()
       }
     }
   }
+  errs() << "l2\n";
   ret_formal_in_tree->setRootNode(*ret_formal_in_tree_root_node);
   ret_formal_in_tree->build();
-  _retValFormalInTree = ret_formal_in_tree;
-
-  Tree* ret_formal_out_tree = new Tree(*ret_formal_in_tree);
-  TreeNode *ret_formal_out_tree_root_node = ret_formal_out_tree->getRootNode();
-  // copy address variables
-  for (auto addrVar : ret_formal_in_tree_root_node->getAddrVars())
+  errs() << "l2.5\n";
+  if ((_retValFormalInTree = ret_formal_in_tree))
   {
-    ret_formal_out_tree_root_node->addAddrVar(*addrVar);
+
+    Tree *ret_formal_out_tree = new Tree(*ret_formal_in_tree);
+    TreeNode *ret_formal_out_tree_root_node = ret_formal_out_tree->getRootNode();
+    // copy address variables
+    for (auto addrVar : ret_formal_in_tree_root_node->getAddrVars())
+    {
+      ret_formal_out_tree_root_node->addAddrVar(*addrVar);
+    }
+    ret_formal_out_tree->setTreeNodeType(GraphNodeType::FORMAL_OUT);
+    ret_formal_out_tree->build();
+    _retValFormalOutTree = ret_formal_out_tree;
   }
-  ret_formal_out_tree->setTreeNodeType(GraphNodeType::FORMAL_OUT);
-  ret_formal_out_tree->build();
-  _retValFormalOutTree = ret_formal_out_tree;
+  errs() << "l3\n";
 }
 
 DILocalVariable *pdg::FunctionWrapper::getArgDILocalVar(Argument &arg)
@@ -129,14 +135,14 @@ AllocaInst *pdg::FunctionWrapper::getArgAllocaInst(Argument &arg)
       continue;
     if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
     {
-      if (AllocaInst* ai = dyn_cast<AllocaInst>(dbg_declare_inst->getVariableLocation()))
+      if (AllocaInst *ai = dyn_cast<AllocaInst>(dbg_declare_inst->getVariableLocation()))
         return ai;
     }
   }
   return nullptr;
 }
 
-pdg::Tree *pdg::FunctionWrapper::getArgFormalInTree(Argument& arg)
+pdg::Tree *pdg::FunctionWrapper::getArgFormalInTree(Argument &arg)
 {
   auto iter = _argFormalInTreeMap.find(&arg);
   if (iter == _argFormalInTreeMap.end())
@@ -145,7 +151,7 @@ pdg::Tree *pdg::FunctionWrapper::getArgFormalInTree(Argument& arg)
   return _argFormalInTreeMap[&arg];
 }
 
-pdg::Tree *pdg::FunctionWrapper::getArgFormalOutTree(Argument& arg)
+pdg::Tree *pdg::FunctionWrapper::getArgFormalOutTree(Argument &arg)
 {
   auto iter = _argFormalOutTreeMap.find(&arg);
   if (iter == _argFormalOutTreeMap.end())

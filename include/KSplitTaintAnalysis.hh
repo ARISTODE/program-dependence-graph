@@ -45,20 +45,101 @@ namespace pdg
         void printStatistics() const
         {
             std::cout << "Risky Kernel API Statistics:\n";
-            std::cout << "  No. kernel interface APIs: " << kernelInterfaceAPIs << "\n";
-            std::cout << "  No. risky APIs: " << riskyAPIs << "\n";
-            std::cout << "  No. risky APIs with conditionals enforced: " << riskyAPIs << "\n";
-            std::cout << "  No. directly invoked risky APIs: " << directlyInvokedRiskyAPIs << "\n";
-            std::cout << "  No. transitively invoked risky APIs: " << transitivelyInvokedRiskyAPIs << " (Conditional: " << transitivelyInvokedRiskyAPIsConditional << ")\n";
-            std::cout << "  - Memory management: " << memoryManagement << " (Conditional: " << memoryManagementConditional << ")\n";
-            std::cout << "  - Concurrency management: " << concurrencyManagement << " (Conditional: " << concurrencyManagementConditional << ")\n";
-            std::cout << "  - Reference counting: " << referenceCounting << " (Conditional: " << referenceCountingConditional << ")\n";
-            std::cout << "  - Timer management: " << timerManagement << " (Conditional: " << timerManagementConditional << ")\n";
-            std::cout << "  - I/O ports management: " << ioPortsManagement << " (Conditional: " << ioPortsManagementConditional << ")\n";
-            std::cout << "  - DMA: " << dma << " (Conditional: " << dmaConditional << ")\n";
+            std::cout << "  No. kernel interface APIs, " << kernelInterfaceAPIs << "\n";
+            std::cout << "  No. risky APIs, " << riskyAPIs << "\n";
+            std::cout << "  No. risky APIs with conditionals enforced, " << riskyAPIsConditional << "\n";
+            std::cout << "  No. directly invoked risky APIs, " << directlyInvokedRiskyAPIs << "\n";
+            std::cout << "  No. transitively invoked risky APIs, " << transitivelyInvokedRiskyAPIs << "\n";
+            std::cout << "  No. transitively invoked risky APIs Conditional, " << transitivelyInvokedRiskyAPIsConditional << "\n";
+            std::cout << "  - Memory management, " << memoryManagement << "\n";
+            std::cout << "  - Memory management Conditonal, " << memoryManagementConditional << "\n";
+            std::cout << "  - Concurrency management, " << concurrencyManagement << "\n";
+            std::cout << "  - Concurrency management conditional, " << concurrencyManagementConditional << "\n";
+            std::cout << "  - Reference counting, " << referenceCounting << "\n";
+            std::cout << "  - Reference counting conditional, " << referenceCountingConditional << "\n";
+            std::cout << "  - Timer management, " << timerManagement << "\n";
+            std::cout << "  - Timer management conditional," << timerManagementConditional << "\n";
+            std::cout << "  - I/O ports management, " << ioPortsManagement << "\n";
+            std::cout << "  - I/O ports management conditional, " << ioPortsManagementConditional << "\n";
+            std::cout << "  - DMA, " << dma << "\n";
+            std::cout << "  - DMA conditional, " << dmaConditional << "\n";
+        }
+
+        void writeStatistics(llvm::raw_fd_ostream &statsOS) const
+        {
+
+            statsOS << "Risky Kernel API Statistics:\n";
+            statsOS << "  No. kernel interface APIs, " << kernelInterfaceAPIs << "\n";
+            statsOS << "  No. risky APIs, " << riskyAPIs << "\n";
+            statsOS << "  No. risky APIs with conditionals enforced, " << riskyAPIs << "\n";
+            statsOS << "  No. directly invoked risky APIs, " << directlyInvokedRiskyAPIs << "\n";
+            statsOS << "  No. transitively invoked risky APIs, " << transitivelyInvokedRiskyAPIs << "\n";
+            statsOS << "  No. transitively invoked risky APIs Conditional, " << transitivelyInvokedRiskyAPIsConditional << "\n";
+            statsOS << "  - Memory management, " << memoryManagement << "\n";
+            statsOS << "  - Memory management Conditonal, " << memoryManagementConditional << "\n";
+            statsOS << "  - Concurrency management, " << concurrencyManagement << "\n";
+            statsOS << "  - Concurrency management conditional, " << concurrencyManagementConditional << "\n";
+            statsOS << "  - Reference counting, " << referenceCounting << "\n";
+            statsOS << "  - Reference counting conditional, " << referenceCountingConditional << "\n";
+            statsOS << "  - Timer management, " << timerManagement << "\n";
+            statsOS << "  - Timer management conditional," << timerManagementConditional << "\n";
+            statsOS << "  - I/O ports management, " << ioPortsManagement << "\n";
+            statsOS << "  - I/O ports management conditional, " << ioPortsManagementConditional << "\n";
+            statsOS << "  - DMA, " << dma << "\n";
+            statsOS << "  - DMA conditional, " << dma << "\n";
         }
     };
 
+    class RiskyKPUpdateCollector
+    {
+    public:
+        int taintedStateCount = 0;
+        int taintedStateCountConditional = 0;
+
+        // Statistics fields for a specific subsystem
+        int kernelPrivateUpdates = 0;
+        int stackUpdate = 0;
+        int globalUpdate = 0;
+        int heapUpdate = 0;
+        int numPrivate = 0;
+
+        // Corresponding conditional versions
+        int kernelPrivateUpdatesConditional = 0;
+        int stackUpdateConditional = 0;
+        int globalUpdateConditional = 0;
+        int heapUpdateConditional = 0;
+
+        // Method to print the collected statistics
+        void printStatistics() const
+        {
+            std::cout << "Risky Kernel private state update statistics\n";
+            std::cout << "-  No. Tainted Kernel Private States, " << taintedStateCount << "\n";
+            std::cout << "-  No. Tainted Kernel Private States Conditional, " << taintedStateCount << "\n";
+            std::cout << "-  No. Tainted Kernel Private Updates, " << kernelPrivateUpdates << "\n";
+            std::cout << "-  No. Tainted Kernel Private Updates Conditional, " << kernelPrivateUpdatesConditional << "\n";
+            std::cout << "-  No. Tainted Kernel Private Stack Updates, " << stackUpdate << "\n";
+            std::cout << "-  No. Tainted Kernel Private Stack Updates Conditional, " << stackUpdateConditional << "\n";
+            std::cout << "-  No. Tainted Kernel Private Global Updates, " << globalUpdate << "\n";
+            std::cout << "-  No. Tainted Kernel Private Global Updates Conditional, " << globalUpdateConditional << "\n";
+            std::cout << "-  No. Tainted Kernel Private Heap Updates, " << heapUpdate << "\n";
+            std::cout << "-  No. Tainted Kernel Private Heap Updates Conditional, " << heapUpdateConditional << "\n";
+        }
+
+        void writeStatistics(llvm::raw_fd_ostream &statsOS) const
+        {
+            statsOS << "Risky Kernel private state update statistics\n";
+            statsOS << "-  No. Tainted Kernel Private States, " << taintedStateCount << "\n";
+            statsOS << "-  No. Tainted Kernel Private States Conditional, " << taintedStateCount << "\n";
+            statsOS << "-  No. Tainted Kernel Private Updates, " << kernelPrivateUpdates << "\n";
+            statsOS << "-  No. Tainted Kernel Private Updates Conditional, " << kernelPrivateUpdatesConditional << "\n";
+            statsOS << "-  No. Tainted Kernel Private Stack Updates, " << stackUpdate << "\n";
+            statsOS << "-  No. Tainted Kernel Private Stack Updates Conditional, " << stackUpdateConditional << "\n";
+            statsOS << "-  No. Tainted Kernel Private Global Updates, " << globalUpdate << "\n";
+            statsOS << "-  No. Tainted Kernel Private Global Updates Conditional, " << globalUpdateConditional << "\n";
+            statsOS << "-  No. Tainted Kernel Private Heap Updates, " << heapUpdate << "\n";
+            statsOS << "-  No. Tainted Kernel Private Heap Updates Conditional, " << heapUpdateConditional << "\n";
+        }
+    };
     // analysis pass
     class KSplitTaintAnalysis : public llvm::ModulePass
     {
@@ -101,6 +182,7 @@ namespace pdg
         llvm::DenseMap<llvm::Function *, std::unordered_set<llvm::StoreInst *>> privateStateUpdateMap;
         llvm::DenseMap<llvm::Function *, std::unordered_set<llvm::StoreInst *>> privateStateUpdateConditionalMap;
         RiskyAPIStatsCollector riskyAPICollector;
+        RiskyKPUpdateCollector riskyKPUpdateCollector;
 
     private:
         std::set<std::tuple<Node *, Node *, std::string, std::string>> _taintTuples;
@@ -112,6 +194,10 @@ namespace pdg
         std::unordered_map<Node *, std::vector<Node *>> _taintMap; // map taint trace to taint sink node
         llvm::raw_fd_ostream *privateStateUpdateLogOS;
         llvm::raw_fd_ostream *privateStateUpdateConditionalsLogOS;
+
+        llvm::raw_fd_ostream *riskyAPILogOS;
+        llvm::raw_fd_ostream *statsAPIOS;
+        llvm::raw_fd_ostream *statsKPUOS;
         std::set<llvm::Value *> taintedPathConds;
     };
 

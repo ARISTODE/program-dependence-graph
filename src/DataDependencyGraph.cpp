@@ -8,17 +8,18 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
 {
   _module = &M;
 
+
   PDGCallGraph &call_g = PDGCallGraph::getInstance();
   if (!call_g.isBuild())
   {
     call_g.build(M);
     call_g.setupBuildFuncNodes(M);
   }
+
   // setup SVF
   PTAWrapper &ptaw = PTAWrapper::getInstance();
   if (!ptaw.hasPTASetup())
     ptaw.setupPTA(M);
-
   ProgramGraph &g = ProgramGraph::getInstance();
   if (!g.isBuild())
   {
@@ -35,6 +36,7 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
     _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
     for (auto instIter = inst_begin(F); instIter != inst_end(F); instIter++)
     {
+
       addDefUseEdges(*instIter);
       addAliasEdges(*instIter);
       addRAWEdges(*instIter);

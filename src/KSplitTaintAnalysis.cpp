@@ -64,6 +64,22 @@ bool pdg::KSplitTaintAnalysis::runOnModule(Module &M)
   analyzePrivateStateUpdate(true);
   analyzeRiskyAPICalls(true);
   riskyAPICollector.printStatistics();
+  riskyKPUpdateCollector.printStatistics();
+
+  std::error_code EC;
+  statsAPIOS = new raw_fd_ostream("statsAPIOS.log", EC, sys::fs::OF_Text);
+  statsKPUOS = new raw_fd_ostream("statsKPUOS.log", EC, sys::fs::OF_Text);
+  if (EC)
+  {
+    delete statsKPUOS;
+    delete statsAPIOS;
+    errs() << "cannot open stats logs\n";
+    return false;
+  }
+  riskyAPICollector.writeStatistics(*statsAPIOS);
+  riskyKPUpdateCollector.writeStatistics(*statsKPUOS);
+  statsAPIOS->close();
+  statsKPUOS->close();
 
   // analyze shared data corruption
   // initTaintSources();
@@ -112,6 +128,19 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
   if (!cfg.isBuild())
     cfg.build(*_module);
 
+  if (conditionals)
+  {
+    std::error_code EC;
+    riskyAPILogOS = new raw_fd_ostream("riskyAPI.json", EC, sys::fs::OF_Text);
+    if (EC)
+    {
+      delete riskyAPILogOS;
+      errs() << "cannot open privateState log\n";
+      return;
+    }
+    *riskyAPILogOS << "[\n";
+  }
+
   for (auto boundaryFunc : _SDA->getBoundaryFuncs())
   {
     if (_SDA->isDriverFunc(*boundaryFunc))
@@ -154,16 +183,17 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
         {
           if (conditionals)
           {
+
             Node *cfgTransNode = nullptr;
             Node *cfgBoundaryNode = nullptr;
 
-            BasicBlock& boundaryFBB = boundaryFunc->getEntryBlock();
+            BasicBlock &boundaryFBB = boundaryFunc->getEntryBlock();
             auto boundaryFirstInstruction = boundaryFBB.getFirstNonPHIOrDbg();
             cfgBoundaryNode = cfg.getNode(*boundaryFirstInstruction);
-          
+
             if (!transFunc->isDeclaration())
             {
-              BasicBlock& transFBB = transFunc->getEntryBlock();
+              BasicBlock &transFBB = transFunc->getEntryBlock();
               auto transFirstInstruction = transFBB.getFirstNonPHIOrDbg();
               cfgTransNode = cfg.getNode(*transFirstInstruction);
             }
@@ -176,10 +206,6 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
               cfgTransNode = _PDG->getNode(*_callGraph->getCallGraphInstruction(callPath[callPath.size() - 2], transFuncNode));
             }
 
-            if(!cfgBoundaryNode || !cfgTransNode){
-              errs()<<"panic\n";
-            }
-            
             if (cfgTransNode && cfgBoundaryNode)
             {
               // see if path conditions are shared fields
@@ -188,8 +214,10 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
 
               if (std::includes(taintedPathConds.begin(), taintedPathConds.end(), pathConditions.begin(), pathConditions.end()))
               {
+                *riskyAPILogOS << "{\n";
                 riskyAPICollector.transitivelyInvokedRiskyAPIsConditional++;
                 incrementRiskyAPIFieldsConditional(it->second);
+                *riskyAPILogOS << "}\n";
               }
             }
           }
@@ -202,6 +230,9 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
         }
       }
     }
+  }
+  if (conditionals){
+    *riskyAPILogOS << "]";
   }
 }
 void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
@@ -229,6 +260,7 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
     cfg.build(*_module);
   // 2. obtain all the kernel APIs called by the driver, compute store insts reachable by attacker without any checks
   std::set<llvm::Value *> pathCondsCopy;
+  std::set<llvm::Value *> kpstate_updated;
   do
   {
     pathCondsCopy = taintedPathConds;
@@ -264,40 +296,53 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
 
           for (auto storeInst : storeInsts)
           {
-            if (conditionals)
+            if (!conditionals)
             {
-              auto storeInstCFGNode = cfg.getNode(*storeInst);
-              std::set<Value *> pathConds;
-              cfg.computePathConditionsBetweenNodes(*boundaryFfristInstCFGNode, *storeInstCFGNode, pathConds);
-              // if no path condition, we consider this is an attacker directly reachable store inst from the boundary function
-              if (std::includes(taintedPathConds.begin(), taintedPathConds.end(), pathConds.begin(), pathConds.end()))
-              {
-                privateStateUpdateMap[boundaryF].insert(storeInst);
-                taintedPathConds.insert(storeInst->getPointerOperand());
-                if (!pathConds.empty())
-                {
-                  errs() << "burger\n";
-                }
-              }
-            }
-            else
-            {
+              riskyKPUpdateCollector.kernelPrivateUpdates++;
               privateStateUpdateMap[boundaryF].insert(storeInst);
+              kpstate_updated.insert(storeInst->getPointerOperand());
+              continue;
+            }
+            auto storeInstCFGNode = cfg.getNode(*storeInst);
+            std::set<Value *> pathConds;
+            cfg.computePathConditionsBetweenNodes(*boundaryFfristInstCFGNode, *storeInstCFGNode, pathConds);
+            // if no path condition, we consider this is an attacker directly reachable store inst from the boundary function
+            if (std::includes(taintedPathConds.begin(), taintedPathConds.end(), pathConds.begin(), pathConds.end()))
+            {
+              riskyKPUpdateCollector.kernelPrivateUpdatesConditional++;
+              privateStateUpdateConditionalMap[boundaryF].insert(storeInst);
+              taintedPathConds.insert(storeInst->getPointerOperand());
             }
           }
         }
       }
     }
   } while ((taintedPathConds != pathCondsCopy) && conditionals);
+
+  llvm::DenseMap<llvm::Function *, std::unordered_set<llvm::StoreInst *>> map;
+
+  if (conditionals)
+  {
+    riskyKPUpdateCollector.taintedStateCountConditional = taintedPathConds.size();
+    map = privateStateUpdateConditionalMap;
+  }
+
+  else
+  {
+    riskyKPUpdateCollector.taintedStateCount = kpstate_updated.size();
+    map = privateStateUpdateMap;
+  }
+
   // 3. for unchecked store insts, classify based on modification on stack/heap objects, and print out the location
   PTAWrapper &ptaw = PTAWrapper::getInstance();
-  auto globalTree = _SDA->getGlobalStructDTMap();
-  for (auto funcPair : privateStateUpdateMap)
+  if (!ptaw.hasPTASetup())
+    ptaw.setupPTA(*_module);
+
+  for (auto funcPair : map)
   {
     auto boundaryF = funcPair.first;
     auto reachedStoreInsts = funcPair.second;
-    if (!ptaw.hasPTASetup())
-      ptaw.setupPTA(*_module);
+
     for (auto si : reachedStoreInsts)
     {
       if (!si->getDebugLoc())
@@ -308,37 +353,59 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
       TreeNode *valDepNode = nullptr;
       for (auto inEdge : ptrOpNode->getInEdgeSet())
       {
-        if (inEdge->getEdgeType() == pdg::EdgeType::PARAMETER_IN)
-        {
-          // global
-        }
         if (inEdge->getEdgeType() == pdg::EdgeType::VAL_DEP)
         {
-          valDepNode = static_cast<TreeNode *>(inEdge->getSrcNode());
+          if ((valDepNode = static_cast<TreeNode *>(inEdge->getSrcNode())))
+          {
+            std::string fieldId = pdgutils::computeTreeNodeID(*valDepNode);
+            if (valDepNode->isShared || _SDA->isSharedFieldID(fieldId))
+            {
+              continue;
+            }
+          }
         }
-      }
-      if (valDepNode)
-      {
-        std::string fieldId = pdgutils::computeTreeNodeID(*valDepNode);
-        if (valDepNode->isShared || _SDA->isSharedFieldID(fieldId))
+
+        else if (inEdge->getEdgeType() == pdg::EdgeType::PARAMETER_IN && inEdge->getSrcNode()->getNodeType() == pdg::GraphNodeType::GLOBAL_VAR)
         {
-          continue;
+          if (conditionals)
+          {
+            riskyKPUpdateCollector.globalUpdateConditional++;
+          }
+          else
+          {
+            riskyKPUpdateCollector.globalUpdate++;
+          }
         }
       }
 
       SVF::NodeID nodeId = ptaw._ander_pta->getPAG()->getValueNode(ptrOp);
       SVF::PointsTo pointsToInfo = ptaw._ander_pta->getPts(nodeId);
+      bool heapFound = false;
       for (auto memObjID = pointsToInfo.begin(); memObjID != pointsToInfo.end(); memObjID++)
       {
         if (ptaw._ander_pta->getPAG()->getObject(*memObjID)->isHeap())
         {
+          heapFound = true;
+          if (conditionals)
+          {
+            riskyKPUpdateCollector.heapUpdateConditional++;
+          }
+          else
+          {
+            riskyKPUpdateCollector.heapUpdate++;
+          }
+          break;
         }
-        else if (ptaw._ander_pta->getPAG()->getObject(*memObjID)->isStack())
+      }
+      if (!heapFound)
+      {
+        if (conditionals)
         {
+          riskyKPUpdateCollector.stackUpdateConditional++;
         }
         else
         {
-          // errs() << "stack2\n";
+          riskyKPUpdateCollector.stackUpdate++;
         }
       }
       // 2. classify the usage of the store instruction
