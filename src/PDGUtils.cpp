@@ -3,7 +3,8 @@
 using namespace llvm;
 
 static std::set<std::string> dataWriteLibFuncs = {
-    "__memcpy"};
+    "__memcpy",
+    "snprintf"};
 
 static std::set<std::string> asmWriteOpcode = {
     "bts"};

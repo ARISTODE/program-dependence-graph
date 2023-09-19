@@ -28,8 +28,8 @@ namespace pdg
             bool checkValInSecurityChecks(Node &n);
             static bool checkValUsedInSensitiveOperations(Node &n, std::string &senOpName);
             bool checkValUsedInInlineAsm(Node &n);
-
             bool isSensitiveOperation(llvm::Function &F);
+            bool hasUpdateInDrv(TreeNode &n);
             // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
             void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);

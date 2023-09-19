@@ -18,6 +18,7 @@ namespace pdg
     DATA_ALIAS,
     DATA_RET,
     DATA_STORE_TO,
+    DATA_EQUL_OBJ,
     PARAMETER_IN,
     PARAMETER_IN_REV,
     PARAMETER_OUT,

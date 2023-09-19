@@ -123,6 +123,7 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::
       edgeSet = currentNode->getInEdgeSet();
     else 
       edgeSet = currentNode->getOutEdgeSet();
+
     for (auto edge : edgeSet)
     {
       if (edgeTypes.find(edge->getEdgeType()) == edgeTypes.end())
@@ -131,8 +132,8 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::
       if (edge->getEdgeType() == EdgeType::DATA_DEF_USE)
       {
         auto dstNodeVal = edge->getDstNode()->getValue();
-        if (isBackward)
-          dstNodeVal = edge->getSrcNode()->getValue();
+        // if (isBackward)
+        //   dstNodeVal = edge->getSrcNode()->getValue();
         if (dstNodeVal && isa<CallInst>(dstNodeVal))
           continue;
       }

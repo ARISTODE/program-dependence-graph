@@ -20,7 +20,8 @@ namespace pdg
     void addRAWEdges(llvm::Instruction &inst);
     void addRAWEdgesUnderapproximate(llvm::Instruction &inst);
     void addAliasEdges(llvm::Instruction &inst);
-    void addStoreToEdge(llvm::StoreInst &inst);
+    void addStoreToEdge(llvm::StoreInst &si);
+    void addEqualObjEdge(llvm::LoadInst &li);
     llvm::AliasResult queryMustAlias(llvm::Value &v1, llvm::Value &v2);
 
   private:

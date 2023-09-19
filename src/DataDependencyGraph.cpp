@@ -43,6 +43,8 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
       addRAWEdgesUnderapproximate(*instIter);
       if (StoreInst *si = dyn_cast<StoreInst>(&*instIter))
         addStoreToEdge(*si);
+      if (LoadInst *li = dyn_cast<LoadInst>(&*instIter))
+        addEqualObjEdge(*li);
     }
   }
   return false;
@@ -55,12 +57,6 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
   Function *func = inst.getFunction();
 
   auto instIter = inst_begin(func);
-  while (&*instIter != &inst)
-  {
-    if (instIter == inst_end(func))
-      break;
-    instIter++;
-  }
 
   for (; instIter != inst_end(func); instIter++)
   {
@@ -194,25 +190,44 @@ AliasResult pdg::DataDependencyGraph::queryMustAlias(Value &v1, Value &v2)
     if (bci->getOperand(0) == &v2)
       return MustAlias;
   }
+
+  // check load-store pattern
+  for (auto user : v1.users())
+  {
+    if (LoadInst *li = dyn_cast<LoadInst>(user))
+    {
+      for (auto loadValUser : li->users())
+      {
+        if (StoreInst *si = dyn_cast<StoreInst>(loadValUser))
+        {
+          if (si->getPointerOperand() == &v2)
+            return MustAlias;
+        }
+      }
+    }
+  }
+
   // handle load instruction
   if (LoadInst *li = dyn_cast<LoadInst>(&v1))
   {
     auto load_addr = li->getPointerOperand();
     for (auto user : load_addr->users())
     {
+      // check if two loads can load form the same address
       if (isa<LoadInst>(user))
       {
         if (user == &v2)
           return MustAlias;
       }
-      if (StoreInst *si = dyn_cast<StoreInst>(user))
-      {
-        if (si->getPointerOperand() == load_addr)
-        {
-          if (si->getValueOperand() == &v2)
-            return MustAlias;
-        }
-      }
+      // // check 
+      // if (StoreInst *si = dyn_cast<StoreInst>(user))
+      // {
+      //   if (si->getPointerOperand() == load_addr)
+      //   {
+      //     if (si->getValueOperand() == &v2)
+      //       return MustAlias;
+      //   }
+      // }
     }
   }
 
@@ -254,6 +269,38 @@ void pdg::DataDependencyGraph::addStoreToEdge(StoreInst &si)
   if (!ptrOpNode || !valOpNode)
     return;
   valOpNode->addNeighbor(*ptrOpNode, EdgeType::DATA_STORE_TO);
+}
+
+// load instructon is used to load objects from pointer
+void pdg::DataDependencyGraph::addEqualObjEdge(LoadInst &li)
+{
+  ProgramGraph &g = ProgramGraph::getInstance();
+  // search for object load from the same address
+  auto loadAddr = li.getPointerOperand();
+  for (auto user : li.users())
+  {
+    if (auto si = dyn_cast<StoreInst>(user))
+    {
+      // check if the object is being stored to another SSA register
+      if (si->getValueOperand() == &li)
+      {
+        auto storeAddr = si->getPointerOperand();
+        // for the stored SSA register, check the load from the address, the loaded object is the equavalent
+        // object of li
+        for (auto storeAddrUser : storeAddr->users())
+        {
+          if (isa<LoadInst>(storeAddrUser))
+          {
+            auto srcObjNode = g.getNode(li);
+            auto dstObjNode = g.getNode(*storeAddrUser);
+            if (!srcObjNode || !dstObjNode)
+              continue;
+            srcObjNode->addNeighbor(*dstObjNode, EdgeType::DATA_EQUL_OBJ);
+          }
+        }
+      }
+    }
+  }
 }
 
 void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
