@@ -170,6 +170,9 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
               DIType *nodeDIType = n->getDIType();
               if (nodeDIType == nullptr)
                   continue;
+              // skip analyzing parameters that don't have update in the driver domain, as they are not controlled by the attacker
+              if (!hasUpdateInDrv(*n))
+                continue;
               classifyRiskyFieldTaint(*n);
               for (auto childNode : n->getChildNodes())
               {
@@ -226,10 +229,9 @@ bool pdg::RiskyFieldAnalysis::isDriverControlledField(TreeNode &tn)
                   kernelReadTimes++;
               if (pdgutils::hasWriteAccess(*i))
                   kernelWriteTimes++;
-          
+          } 
       }
-    // if (driverWriteTimes > 0 && kernelReadTimes > 0)
-    if (driverWriteTimes > 0 || driverReadTimes > 0 && kernelReadTimes > 0 || kernelWriteTimes > 0)
+      if (driverWriteTimes > 0 && kernelReadTimes > 0)
           return true;
   }
   return false;
@@ -478,6 +480,13 @@ void pdg::RiskyFieldAnalysis::classifyRiskyFieldTaint(TreeNode &tn)
           {
               auto addrVarInst = cast<Instruction>(addrVar);
               auto func = addrVarInst->getFunction();
+
+            //   if (func->getName() == "edac_mc_handle_error")
+            //   {
+            //     errs() << "addr var checking: " << tn.getSrcName() << " - " << *addrVar << "\n";
+            //     pdgutils::printSourceLocation(*addrVarInst);
+            //   }
+
               if (!_SDA->isKernelFunc(*func) || !pdgutils::hasReadAccess(*addrVar))
                   continue;
               auto addrVarNode = _PDG->getNode(*addrVar);
@@ -982,6 +991,48 @@ bool pdg::RiskyFieldAnalysis::isSensitiveOperation(Function &F)
     return false;
 }
 
+bool pdg::RiskyFieldAnalysis::hasUpdateInDrv(pdg::TreeNode &n)
+{
+    std::set<EdgeType> edges = {
+        EdgeType::PARAMETER_IN,
+        EdgeType::DATA_ALIAS,
+        EdgeType::DATA_DEF_USE,
+        EdgeType::DATA_EQUL_OBJ
+    };
+
+    auto treeNodeFunc = n.getTree()->getFunc();
+
+    auto reachedNodes = _PDG->findNodesReachedByEdges(n, edges, true);
+    for (auto node : reachedNodes)
+    {
+        if (!node->getValue() || !node->getFunc())
+            continue;
+        auto func = node->getFunc();
+        // skip nodes that are not in driver
+        if (!_SDA->isDriverFunc(*func))
+            continue;
+        if (treeNodeFunc->getName() == "kmalloc_order")
+        {
+            if (node->getValue())
+            {
+                if (auto inst = dyn_cast<Instruction>(node->getValue()))
+                {
+                    errs() << "kamlloc order " << inst->getFunction()->getName() << " - " << *inst << "\n";
+                    pdgutils::printSourceLocation(*inst);
+                }
+            }
+        }
+
+        if (auto inst = dyn_cast<Instruction>(node->getValue()))
+        {
+            // pdgutils::printSourceLocation(*inst);
+            if (pdgutils::hasWriteAccess(*inst) && !isa<AllocaInst>(inst))
+                return true;
+        }
+    }
+    return false;
+}
+
 Function *pdg::RiskyFieldAnalysis::canReachSensitiveOperations(Node &srcFuncNode)
 {
     for (auto senOpFuncName : sensitiveOperations)
@@ -1072,42 +1123,118 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
     traceJsonObj["src"] = pdgutils::getSourceLocationStr(*addrVarInst);
     traceJsonObj["dst"] = pdgutils::getSourceLocationStr(*taintInst);
 
-    // compute the call chain from boundary to the target function
-    std::string callPathStr = "";
-    auto targetFunc = taintInst->getFunction();
-    auto targetFuncNode = _callGraph->getNode(*targetFunc);
+    auto parameterTreeNode = srcNode.getAbstractTreeNode();
+    auto typeTreeNode = srcNode.getAbstractTypeTreeNode();
 
-    std::string callPaths = "";
-    for (auto boundaryFunc : _SDA->getBoundaryFuncs())
+    if (!parameterTreeNode && !typeTreeNode)
+        return;
+
+    // if the source node is a parameter
+    if (parameterTreeNode)
     {
-        if (_SDA->isDriverFunc(*boundaryFunc))
-            continue;
-        auto boundaryFuncNode = _callGraph->getNode(*boundaryFunc);
-        std::vector<Node *> path;
-        std::unordered_set<Node *> visited;
-        if (_callGraph->findPathDFS(boundaryFuncNode, targetFuncNode, path, visited))
+        if (TreeNode *tn = static_cast<TreeNode *>(parameterTreeNode))
         {
-            for (size_t i = 0; i < path.size(); ++i)
+            // print the call site of the function
+            Function *kernelBoundaryFunc = tn->getTree()->getFunc();
+            auto funcCallSites = _callGraph->getFunctionCallSites(*kernelBoundaryFunc);
+            std::string drvCallerStr = "";
+            std::string callPaths = "";
+
+            for (CallInst *callsite : funcCallSites)
             {
-                Node *node = path[i];
+                auto callerFunc = callsite->getFunction();
+                if (callerFunc && _SDA->isDriverFunc(*callerFunc) && !pdgutils::isFuncDefinedInHeaderFile(*callerFunc))
+                {
+                    std::string callSiteLocStr = pdgutils::getSourceLocationStr(*callsite);
+                    std::string callLocStr = "[ " + callerFunc->getName().str() + " | " + callSiteLocStr + " ], ";
+                    drvCallerStr = drvCallerStr + callLocStr;
 
-                // Print the node's function name
-                if (Function *f = dyn_cast<Function>(node->getValue()))
-                    callPathStr = callPathStr + f->getName().str();
+                    // generate call path from the driver domain that reach the target kernel func
 
-                if (i < path.size() - 1)
-                    callPathStr = callPathStr + "->";
+                    std::string callPathStr = "";
+                    auto targetFunc = taintInst->getFunction();
+                    auto targetFuncNode = _callGraph->getNode(*targetFunc);
+                    auto drvFuncNode = _callGraph->getNode(*callerFunc);
+                    std::vector<Node *> path;
+                    std::unordered_set<Node *> visited;
+                    if (_callGraph->findPathDFS(drvFuncNode, targetFuncNode, path, visited))
+                    {
+                        for (size_t i = 0; i < path.size(); ++i)
+                        {
+                            Node *node = path[i];
+
+                            // Print the node's function name
+                            if (Function *f = dyn_cast<Function>(node->getValue()))
+                                callPathStr = callPathStr + f->getName().str();
+
+                            if (i < path.size() - 1)
+                                callPathStr = callPathStr + "->";
+                        }
+
+                        // here, we only consider one valid path
+                        if (!callPathStr.empty())
+                        {
+                            callPaths = callPaths + " [" + callPathStr + "] ";
+                            break;
+                        }
+                    }
+                }
             }
 
-            // here, we only consider one valid path
-            if (!callPathStr.empty())
-            {
-                callPaths = callPaths + " [" + callPathStr + "] ";
-                break;
-            }
+            traceJsonObj["drv caller (param)"] = drvCallerStr;
+            traceJsonObj["call path (param)"] = callPaths;
         }
     }
-    traceJsonObj["call path"] = callPaths;
+
+    // add driver update locations for fields
+    if (typeTreeNode)
+    {
+        if (TreeNode *tn = static_cast<TreeNode *>(typeTreeNode))
+        {
+            std::string drvUpdateLocStr = "";
+            raw_string_ostream drvUpdateLocSS(drvUpdateLocStr);
+            _SDA->getDriverUpdateLocStr(*tn, drvUpdateLocSS);
+            drvUpdateLocSS.flush();
+            traceJsonObj["drv_update loc (shared field)"] = drvUpdateLocSS.str();
+        }
+
+        // compute the call chain from boundary to the target function
+        std::string callPathStr = "";
+        auto targetFunc = taintInst->getFunction();
+        auto targetFuncNode = _callGraph->getNode(*targetFunc);
+
+        std::string callPaths = "";
+        for (auto boundaryFunc : _SDA->getBoundaryFuncs())
+        {
+            if (_SDA->isDriverFunc(*boundaryFunc))
+                continue;
+            auto boundaryFuncNode = _callGraph->getNode(*boundaryFunc);
+            std::vector<Node *> path;
+            std::unordered_set<Node *> visited;
+            if (_callGraph->findPathDFS(boundaryFuncNode, targetFuncNode, path, visited))
+            {
+                for (size_t i = 0; i < path.size(); ++i)
+                {
+                    Node *node = path[i];
+
+                    // Print the node's function name
+                    if (Function *f = dyn_cast<Function>(node->getValue()))
+                        callPathStr = callPathStr + f->getName().str();
+
+                    if (i < path.size() - 1)
+                        callPathStr = callPathStr + "->";
+                }
+
+                // here, we only consider one valid path
+                if (!callPathStr.empty())
+                {
+                    callPaths = callPaths + " [" + callPathStr + "] ";
+                    break;
+                }
+            }
+        }
+        traceJsonObj["call path (type)"] = callPaths;
+    }
 
     // obtain path conditions
     auto cfgAddrVarNode = cfg.getNode(*addrVarInst);
@@ -1136,7 +1263,6 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
         }
     }
 
-
     if (!isControlledPath)
     {
         traceJsonObj["isControl"] = "0";
@@ -1147,60 +1273,8 @@ void pdg::RiskyFieldAnalysis::printTaintTraceAndConditions(Node &srcNode, Node &
         traceJsonObj["isControl"] = "1";
 
     numControlTaintTrace++;
+
     // if all the conditions are tainted, we proceed to compute the taints
-    auto parameterTreeNode = srcNode.getAbstractTreeNode();
-    auto typeTreeNode = srcNode.getAbstractTypeTreeNode();
-
-    if (!parameterTreeNode && !typeTreeNode)
-    {
-        return;
-    }
-
-    // if the source node is a parameter
-    if (parameterTreeNode)
-    {
-        if (TreeNode *tn = static_cast<TreeNode *>(parameterTreeNode))
-        {
-            // print the call site of the function
-            Function* kernelBoundaryFunc = tn->getTree()->getFunc();
-            auto funcCallSites = _callGraph->getFunctionCallSites(*kernelBoundaryFunc);
-            std::string drvCallerStr = "";
-            for (CallInst *callsite : funcCallSites)
-            {
-                auto callerFunc = callsite->getFunction();
-                if (callerFunc && _SDA->isDriverFunc(*callerFunc) && !pdgutils::isFuncDefinedInHeaderFile(*callerFunc))
-                {
-                    std::string callSiteLocStr = pdgutils::getSourceLocationStr(*callsite);
-                    std::string callLocStr = "[ " + callerFunc->getName().str() + " | " + callSiteLocStr + " ], ";
-                    drvCallerStr = drvCallerStr + callLocStr;
-                }
-            }
-
-            traceJsonObj["drv caller (param)"] = drvCallerStr;
-        }
-    }
-
-    // add driver update locations for fields
-    if (typeTreeNode)
-    {
-        if (TreeNode *tn = static_cast<TreeNode *>(typeTreeNode))
-        {
-            std::string drvUpdateLocStr = "";
-            raw_string_ostream drvUpdateLocSS(drvUpdateLocStr);
-            _SDA->getDriverUpdateLocStr(*tn, drvUpdateLocSS);
-            drvUpdateLocSS.flush();
-            traceJsonObj["drv_update loc (shared field)"] = drvUpdateLocSS.str();
-        }
-    }
-    
-    // add kernel read locations for shared fields, and check if the read can be reached from the boundary
-    if (typeTreeNode)
-    {
-        if (TreeNode *tn = static_cast<TreeNode *>(typeTreeNode))
-        {
-        }
-    }
-
     std::vector<std::pair<Node *, Edge *>> path;
     std::unordered_set<Node *> visited;
     _PDG->findPathDFS(&srcNode, &dstNode, path, visited, taintEdges);

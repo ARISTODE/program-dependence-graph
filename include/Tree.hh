@@ -30,6 +30,7 @@ namespace pdg
       std::unordered_set<llvm::Value *> &getAddrVars() { return _addrVars; }
       void computeDerivedAddrVarsFromParent();
       TreeNode *getParentNode() { return _parentNode; }
+      void setTree(Tree &tree) { _tree = &tree; }
       Tree *getTree() { return _tree; }
       int getDepth() { return _depth; }
       void addAccessTag(AccessTag accTag) { _acc_tag_set.insert(accTag); }

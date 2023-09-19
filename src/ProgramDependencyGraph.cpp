@@ -254,8 +254,6 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
           Tree *actualOutTree = call_w->getArgActualOutTree(*arg);
           // call_site_node->addNeighbor(*actualInTree->getRootNode(), EdgeType::PARAMETER_IN);
           // call_site_node->addNeighbor(*actualOutTree->getRootNode(), EdgeType::PARAMETER_OUT);
-          if (F.getName() == "__skb_linearize")
-            errs() << "connecting " << call_w->getArgIdxByVal(*arg) << "\n";
           connectActualInTreeWithAddrVars(*actualInTree, *callInst);
           connectActualOutTreeWithAddrVars(*actualOutTree, *callInst);
         }
@@ -436,23 +434,19 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actualIn
     for (auto addrVar : currentNode->getAddrVars())
     {
       // only connect addrVar that are pred to the call site
-      if (Instruction *i = dyn_cast<Instruction>(addrVar))
-      {
-        if (insts_before_ci.find(i) == insts_before_ci.end())
-          continue;
-      }
+      // if (Instruction *i = dyn_cast<Instruction>(addrVar))
+      // {
+      //   if (insts_before_ci.find(i) == insts_before_ci.end())
+      //     continue;
+      // }
       if (!_PDG->hasNode(*addrVar))
         continue;
       auto addrVarNode = _PDG->getNode(*addrVar);
       addrVarNode->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
-      auto accessPath = currentNode->getSrcName();
-      if (ci.getFunction()->getName() == "__skb_linearize")
-      {
-        errs() << "connecting data_len actual in field: " << accessPath << " in func " << ci.getFunction()->getName() << " - "
-               << "\n";
-        errs() << "\tinst: " << *addrVar << "\n";
-      }
-
+      // auto accessPath = currentNode->getSrcName();
+      // errs() << "connecting " << accessPath << " - " << ci.getFunction()->getName() << " - " << *addrVar << "\n";
+      // if (auto inst = dyn_cast<Instruction>(addrVar))
+      //   pdgutils::printSourceLocation(*inst);
       // auto aliasNodes = addrVarNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);
       // // connect addr var node with parameter_in node
       // for (auto aliasNode : aliasNodes)

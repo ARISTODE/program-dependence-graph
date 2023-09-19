@@ -191,6 +191,7 @@ pdg::Tree::Tree(const Tree &src_tree)
 {
   TreeNode *src_tree_root_node = src_tree.getRootNode();
   TreeNode *new_root_node = new TreeNode(*src_tree_root_node);
+  new_root_node->setTree(*this);
   _rootNode = new_root_node;
   _size = 0;
 }
