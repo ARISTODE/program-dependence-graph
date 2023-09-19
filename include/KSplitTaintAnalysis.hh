@@ -1,6 +1,7 @@
 #ifndef _KSPLIT_TAINT_ANALYSIS_
 #define _KSPLIT_TAINT_ANALYSIS_
 #include "SharedDataAnalysis.hh"
+#include "json.hpp"
 
 namespace pdg
 {
@@ -192,8 +193,9 @@ namespace pdg
         PDGCallGraph *_callGraph;
         std::unordered_set<Node *> _taintSources;
         std::unordered_map<Node *, std::vector<Node *>> _taintMap; // map taint trace to taint sink node
-        llvm::raw_fd_ostream *privateStateUpdateLogOS;
-        llvm::raw_fd_ostream *privateStateUpdateConditionalsLogOS;
+        int idAPI = 0;
+        int idKPU = 0;
+
 
         llvm::raw_fd_ostream *riskyAPILogOS;
         llvm::raw_fd_ostream *statsAPIOS;

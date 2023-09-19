@@ -124,22 +124,11 @@ void pdg::KSplitTaintAnalysis::incrementRiskyAPIFieldsConditional(std::string &c
 
 void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
 {
+  nlohmann::json riskyAPIUpdateJson = nlohmann::json::array();
+
   auto &cfg = KSplitCFG::getInstance();
   if (!cfg.isBuild())
     cfg.build(*_module);
-
-  if (conditionals)
-  {
-    std::error_code EC;
-    riskyAPILogOS = new raw_fd_ostream("riskyAPI.json", EC, sys::fs::OF_Text);
-    if (EC)
-    {
-      delete riskyAPILogOS;
-      errs() << "cannot open privateState log\n";
-      return;
-    }
-    *riskyAPILogOS << "[\n";
-  }
 
   for (auto boundaryFunc : _SDA->getBoundaryFuncs())
   {
@@ -163,7 +152,6 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
     }
 
     // count transitively invoked risky APIs
-    // TODO: we need to consider path conditions
     auto boundaryFNode = _callGraph->getNode(*boundaryFunc);
     if (!boundaryFNode)
       continue;
@@ -214,10 +202,53 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
 
               if (std::includes(taintedPathConds.begin(), taintedPathConds.end(), pathConditions.begin(), pathConditions.end()))
               {
-                *riskyAPILogOS << "{\n";
                 riskyAPICollector.transitivelyInvokedRiskyAPIsConditional++;
                 incrementRiskyAPIFieldsConditional(it->second);
-                *riskyAPILogOS << "}\n";
+                nlohmann::json riskyAPIEntry;
+
+                std::vector<Node *> callPath;
+                std::unordered_set<Node *> visited;
+                string callPathStr, callPaths = "";
+                if (_callGraph->findPathDFS(boundaryFNode, transFuncNode, callPath, visited))
+                {
+                  for (size_t i = 0; i < callPath.size(); ++i)
+                  {
+                    Node *node = callPath[i];
+
+                    // Print the node's function name
+                    if (Function *f = dyn_cast<Function>(node->getValue()))
+                      callPathStr = callPathStr + f->getName().str();
+
+                    if (i < callPath.size() - 1)
+                      callPathStr = callPathStr + "->";
+                  }
+
+                  // here, we only consider one valid path
+                  if (!callPathStr.empty())
+                  {
+                    callPaths = callPaths + " [" + callPathStr + "] ";
+                    break;
+                  }
+                }
+
+                string kernel_interface_call_sites = "[";
+                for (auto n : cfgBoundaryNode->getInNeighbors())
+                {
+                  if (auto ci = _callGraph->getCallGraphInstruction(n, cfgBoundaryNode))
+                  {
+                    kernel_interface_call_sites += pdgutils::getSourceLocationStr(*ci) + " | ";
+                  }
+                }
+                kernel_interface_call_sites += "]";
+
+                riskyAPIEntry["id"] = idAPI++;
+                riskyAPIEntry["risky operation"] = transFunc->getName().str();
+                riskyAPIEntry["path"] = callPaths; // pathConditions;
+                riskyAPIEntry["depth"] = callPath.size();
+                riskyAPIEntry["kernel_interface_call_sites"] = kernel_interface_call_sites;
+                riskyAPIEntry["num_conditionals"] = pathConditions.size();
+
+                riskyAPIUpdateJson.push_back(riskyAPIEntry);
               }
             }
           }
@@ -231,34 +262,22 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
       }
     }
   }
-  if (conditionals){
-    *riskyAPILogOS << "]";
-  }
 }
+
 void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
 {
   // 1. open log file for private states
   std::error_code EC;
-  if (conditionals)
-  {
-    privateStateUpdateLogOS = new raw_fd_ostream("privateStateUpdateConditionals.log", EC, sys::fs::OF_Text);
-  }
-  else
-  {
-    privateStateUpdateLogOS = new raw_fd_ostream("privateStateUpdate.log", EC, sys::fs::OF_Text);
-  }
-  if (EC)
-  {
-    delete privateStateUpdateLogOS;
-    errs() << "cannot open privateState log\n";
-    return;
-  }
+  nlohmann::json privateStateUpdateJson = nlohmann::json::array();
 
   // obtain cfg, used to check path condition in later steps
   auto &cfg = KSplitCFG::getInstance();
   if (!cfg.isBuild())
     cfg.build(*_module);
   // 2. obtain all the kernel APIs called by the driver, compute store insts reachable by attacker without any checks
+  PTAWrapper &ptaw = PTAWrapper::getInstance();
+  if (!ptaw.hasPTASetup())
+    ptaw.setupPTA(*_module);
   std::set<llvm::Value *> pathCondsCopy;
   std::set<llvm::Value *> kpstate_updated;
   do
@@ -311,7 +330,17 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
             {
               riskyKPUpdateCollector.kernelPrivateUpdatesConditional++;
               privateStateUpdateConditionalMap[boundaryF].insert(storeInst);
-              taintedPathConds.insert(storeInst->getPointerOperand());
+              SVF::NodeID nodeId = ptaw._ander_pta->getPAG()->getValueNode(storeInst->getPointerOperand());
+              SVF::PointsTo pointsToInfo = ptaw._ander_pta->getPts(nodeId);
+              bool heapFound = false;
+              for (auto memObjID = pointsToInfo.begin(); memObjID != pointsToInfo.end(); memObjID++)
+              {
+                if (ptaw._ander_pta->getPAG()->getObject(*memObjID)->isHeap())
+                {
+                  taintedPathConds.insert(storeInst->getPointerOperand());
+                }
+              }
+              
             }
           }
         }
@@ -334,9 +363,6 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
   }
 
   // 3. for unchecked store insts, classify based on modification on stack/heap objects, and print out the location
-  PTAWrapper &ptaw = PTAWrapper::getInstance();
-  if (!ptaw.hasPTASetup())
-    ptaw.setupPTA(*_module);
 
   for (auto funcPair : map)
   {
@@ -347,7 +373,6 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
     {
       if (!si->getDebugLoc())
         continue;
-      // TODO: 1. classify based on heap/stack/global, here, we can use SVF to classify
       auto ptrOp = si->getPointerOperand();
       auto ptrOpNode = _PDG->getNode(*ptrOp);
       TreeNode *valDepNode = nullptr;
@@ -409,20 +434,42 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
         }
       }
       // 2. classify the usage of the store instruction
-      *privateStateUpdateLogOS << " ---------------------------------------------- \n";
       // to achieve this, inspect the updated address (pointer), and check the alias of the pointer
+      nlohmann::json riskyKPUEntry;
       std::vector<Node *> callPath;
       std::unordered_set<Node *> visited;
       auto sourceFuncNode = _callGraph->getNode(*boundaryF);
       auto sinkFuncNode = _callGraph->getNode(*si->getFunction());
-      _callGraph->findPathDFS(sourceFuncNode, sinkFuncNode, callPath, visited);
-      _callGraph->printPath(callPath, *privateStateUpdateLogOS);
+      string callPathStr, callPaths = "";
+      if (_callGraph->findPathDFS(sourceFuncNode, sinkFuncNode, callPath, visited))
+      {
+        for (size_t i = 0; i < callPath.size(); ++i)
+        {
+          Node *node = callPath[i];
 
-      *privateStateUpdateLogOS << "Update func: " << si->getFunction()->getName().str() << "\n";
-      *privateStateUpdateLogOS << *si << "\n";
-      *privateStateUpdateLogOS << "Loc: ";
-      pdgutils::printSourceLocation(*si, *privateStateUpdateLogOS);
-      *privateStateUpdateLogOS << " --------------- [End of Case] ---------------- \n";
+          // Print the node's function name
+          if (Function *f = dyn_cast<Function>(node->getValue()))
+            callPathStr = callPathStr + f->getName().str();
+
+          if (i < callPath.size() - 1)
+            callPathStr = callPathStr + "->";
+        }
+
+        // here, we only consider one valid path
+        if (!callPathStr.empty())
+        {
+          callPaths = callPaths + " [" + callPathStr + "] ";
+          break;
+        }
+      }
+
+      riskyKPUEntry["id"] = idKPU++;
+      riskyKPUEntry["risky"] = "";
+      riskyKPUEntry["access_path"] = pdgutils::getSourceLocationStr(*si); //??
+      riskyKPUEntry["num_conditionals"] = 0;
+      riskyKPUEntry["call_path"] = callPaths;
+
+      privateStateUpdateJson.push_back(riskyKPUEntry);
     }
   }
 }
