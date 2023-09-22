@@ -61,8 +61,11 @@ bool pdg::KSplitTaintAnalysis::runOnModule(Module &M)
   // analyze private states update caused by kernel interface invocation
   analyzePrivateStateUpdate(false);
   analyzeRiskyAPICalls(false);
+  _taintTuples = {};
   analyzePrivateStateUpdate(true);
   analyzeRiskyAPICalls(true);
+  writeControlFlowJSONFiles();
+
   riskyAPICollector.printStatistics();
   riskyKPUpdateCollector.printStatistics();
 
@@ -124,7 +127,6 @@ void pdg::KSplitTaintAnalysis::incrementRiskyAPIFieldsConditional(std::string &c
 
 void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
 {
-  nlohmann::json riskyAPIUpdateJson = nlohmann::json::array();
 
   auto &cfg = KSplitCFG::getInstance();
   if (!cfg.isBuild())
@@ -204,11 +206,12 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
               {
                 riskyAPICollector.transitivelyInvokedRiskyAPIsConditional++;
                 incrementRiskyAPIFieldsConditional(it->second);
-                nlohmann::json riskyAPIEntry;
+                
 
                 std::vector<Node *> callPath;
                 std::unordered_set<Node *> visited;
                 string callPathStr, callPaths = "";
+
                 if (_callGraph->findPathDFS(boundaryFNode, transFuncNode, callPath, visited))
                 {
                   for (size_t i = 0; i < callPath.size(); ++i)
@@ -241,14 +244,15 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
                 }
                 kernel_interface_call_sites += "]";
 
+                nlohmann::json riskyAPIEntry;
                 riskyAPIEntry["id"] = idAPI++;
-                riskyAPIEntry["risky operation"] = transFunc->getName().str();
+                riskyAPIEntry["risky operation"] = cfgTransNode->getFunc()->getName().str();
                 riskyAPIEntry["path"] = callPaths; // pathConditions;
                 riskyAPIEntry["depth"] = callPath.size();
                 riskyAPIEntry["kernel_interface_call_sites"] = kernel_interface_call_sites;
                 riskyAPIEntry["num_conditionals"] = pathConditions.size();
 
-                riskyAPIUpdateJson.push_back(riskyAPIEntry);
+                riskyAPIJson.push_back(riskyAPIEntry);
               }
             }
           }
@@ -262,13 +266,17 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
       }
     }
   }
+  if (conditionals)
+  {
+
+  }
 }
 
 void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
 {
   // 1. open log file for private states
-  std::error_code EC;
-  nlohmann::json privateStateUpdateJson = nlohmann::json::array();
+
+  
 
   // obtain cfg, used to check path condition in later steps
   auto &cfg = KSplitCFG::getInstance();
@@ -330,17 +338,15 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
             {
               riskyKPUpdateCollector.kernelPrivateUpdatesConditional++;
               privateStateUpdateConditionalMap[boundaryF].insert(storeInst);
-              SVF::NodeID nodeId = ptaw._ander_pta->getPAG()->getValueNode(storeInst->getPointerOperand());
-              SVF::PointsTo pointsToInfo = ptaw._ander_pta->getPts(nodeId);
-              bool heapFound = false;
-              for (auto memObjID = pointsToInfo.begin(); memObjID != pointsToInfo.end(); memObjID++)
-              {
-                if (ptaw._ander_pta->getPAG()->getObject(*memObjID)->isHeap())
-                {
-                  taintedPathConds.insert(storeInst->getPointerOperand());
-                }
-              }
-              
+              //SVF::NodeID nodeId = ptaw._ander_pta->getPAG()->getValueNode(storeInst->getPointerOperand());
+              //SVF::PointsTo pointsToInfo = ptaw._ander_pta->getPts(nodeId);
+              // for (auto memObjID = pointsToInfo.begin(); memObjID != pointsToInfo.end(); memObjID++)
+              //{
+              // if (ptaw._ander_pta->getPAG()->getObject(*memObjID)->isHeap())
+              //{
+              taintedPathConds.insert(storeInst->getPointerOperand());
+              //}
+              //}
             }
           }
         }
@@ -422,6 +428,7 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
           break;
         }
       }
+
       if (!heapFound)
       {
         if (conditionals)
@@ -435,7 +442,7 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
       }
       // 2. classify the usage of the store instruction
       // to achieve this, inspect the updated address (pointer), and check the alias of the pointer
-      nlohmann::json riskyKPUEntry;
+     
       std::vector<Node *> callPath;
       std::unordered_set<Node *> visited;
       auto sourceFuncNode = _callGraph->getNode(*boundaryF);
@@ -462,17 +469,71 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
           break;
         }
       }
+      std::set<string> riskyClassification = classifyUsageTaint(*ptrOpNode);
+      string riskyClassifications = "";
+      for (auto r : riskyClassification)
+      {
+        riskyClassifications = r + ", ";
+      }
+      string riskyTaints = "";
+      for (auto tt : _taintTuples)
+      {
+        if (std::get<0>(tt) == ptrOpNode)
+        {
+          riskyTaints += std::get<3>(tt) + ": " + std::get<2>(tt) + "| ";
+        }
+      }
 
+      nlohmann::json riskyKPUEntry;
       riskyKPUEntry["id"] = idKPU++;
-      riskyKPUEntry["risky"] = "";
+      riskyKPUEntry["risky"] = riskyClassifications;
+      riskyKPUEntry["taints"] = riskyTaints;
       riskyKPUEntry["access_path"] = pdgutils::getSourceLocationStr(*si); //??
-      riskyKPUEntry["num_conditionals"] = 0;
+      riskyKPUEntry["num_conditionals"] = 0;  //need to add this to map
       riskyKPUEntry["call_path"] = callPaths;
 
       privateStateUpdateJson.push_back(riskyKPUEntry);
     }
-  }
+  } 
 }
+
+void pdg::KSplitTaintAnalysis::writeControlFlowJSONFiles(){
+    SmallString<128> dirPath("logs");
+    if (!sys::fs::exists(dirPath))
+    {
+      std::error_code EC = sys::fs::create_directory(dirPath, true, sys::fs::perms::all_all);
+      if (EC)
+      {
+        std::cerr << "Error: Failed to create directory. " << EC.message() << "\n";
+      }
+    }
+
+    //write Kernel Private Update Json
+    SmallString<128> jsonKPUpdateFilePath = dirPath;
+    sys::path::append(jsonKPUpdateFilePath, "kpupdate.json");
+
+    std::ofstream jsonKPUpdateFile(jsonKPUpdateFilePath.c_str());
+    if (!jsonKPUpdateFile.is_open())
+    {
+      std::cerr << "Error: Failed to open json trace file.\n";
+    }
+    jsonKPUpdateFile << privateStateUpdateJson.dump(2);
+    jsonKPUpdateFile.close();
+  
+
+    //write Risky API Json
+    SmallString<128> jsonRiskyAPIFilePath = dirPath;
+    sys::path::append(jsonRiskyAPIFilePath, "riskyapi.json");
+
+    std::ofstream jsonRiskyAPIFile(jsonRiskyAPIFilePath.c_str());
+    if (!jsonRiskyAPIFile.is_open())
+    {
+      std::cerr << "Error: Failed to open json trace file.\n";
+    }
+    jsonRiskyAPIFile << riskyAPIJson.dump(2);
+    jsonRiskyAPIFile.close();
+}
+
 
 void pdg::KSplitTaintAnalysis::initTaintSourcesSharedState()
 {

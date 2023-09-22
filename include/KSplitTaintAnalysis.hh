@@ -156,6 +156,8 @@ namespace pdg
         void analyzeSharedStateCorruption();
         void propagateTaintsPrivateState();
 
+        void writeControlFlowJSONFiles();
+
         void initTaintSourcesSharedState();
         void propagateTaintsSharedState();
 
@@ -195,9 +197,8 @@ namespace pdg
         std::unordered_map<Node *, std::vector<Node *>> _taintMap; // map taint trace to taint sink node
         int idAPI = 0;
         int idKPU = 0;
-
-
-        llvm::raw_fd_ostream *riskyAPILogOS;
+        nlohmann::json riskyAPIJson = nlohmann::json::array();
+        nlohmann::json privateStateUpdateJson = nlohmann::json::array();
         llvm::raw_fd_ostream *statsAPIOS;
         llvm::raw_fd_ostream *statsKPUOS;
         std::set<llvm::Value *> taintedPathConds;

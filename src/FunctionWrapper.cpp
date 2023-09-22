@@ -91,10 +91,8 @@ void pdg::FunctionWrapper::buildFormalTreesForRetVal()
       }
     }
   }
-  errs() << "l2\n";
   ret_formal_in_tree->setRootNode(*ret_formal_in_tree_root_node);
   ret_formal_in_tree->build();
-  errs() << "l2.5\n";
   if ((_retValFormalInTree = ret_formal_in_tree))
   {
 
@@ -109,7 +107,6 @@ void pdg::FunctionWrapper::buildFormalTreesForRetVal()
     ret_formal_out_tree->build();
     _retValFormalOutTree = ret_formal_out_tree;
   }
-  errs() << "l3\n";
 }
 
 DILocalVariable *pdg::FunctionWrapper::getArgDILocalVar(Argument &arg)
