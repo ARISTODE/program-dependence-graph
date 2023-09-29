@@ -15,6 +15,7 @@
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/IR/Operator.h"
 
 // opt option shared among passes
 namespace pdg

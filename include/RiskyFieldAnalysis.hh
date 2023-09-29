@@ -1,6 +1,7 @@
 #ifndef RISKY_FIELD_ANALYSIS_H_
 #define RISKY_FIELD_ANALYSIS_H_
 #include "SharedDataAnalysis.hh"
+#include "TaintUtils.hpp"
 #include "json.hpp"
 
 namespace pdg
@@ -17,6 +18,9 @@ namespace pdg
             llvm::Function *canReachSensitiveOperations(Node &srcFuncNode);
             void classifyRiskyFieldDirectUse(TreeNode &tn);
             void classifyRiskyFieldTaint(TreeNode &tn);
+            void classifyRiskyField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
+            bool classifyRiskyPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
+            bool classifyRiskyNonPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
             // pointer field checks
             bool checkPtrValUsedInPtrArithOp(Node &n);
             // scalar field checks
@@ -33,11 +37,14 @@ namespace pdg
             // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
             void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);
+            void printJsonToFile(nlohmann::ordered_json& json, std::string logFileName);
             void getTraceStr(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_string_ostream &OS);
             void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
             void printFieldClassificationTaint(llvm::raw_fd_ostream &OS);
             void printTaintFieldInfo();
-            void printTaintTraceAndConditions(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId);
+            nlohmann::ordered_json generateTraceJsonObj(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId);
+            void updateRiskyFieldCounters(std::set<RiskyDataType> &riskyDataTypes);
+            void updateRiskyParamCounters(std::set<RiskyDataType> &riskyDataTypes);
 
         private:
             llvm::Module *_module;
@@ -46,47 +53,23 @@ namespace pdg
             PDGCallGraph *_callGraph;
             // store taint source/sink pair
             std::set<std::tuple<Node *, Node *, std::string, std::string>> _taintTuples;
+            std::set<std::tuple<Node *, Node *, std::string, std::string>> _structTaintTuples; // used to store taint for struct field
             // stats counting
             unsigned numKernelReadDriverUpdatedFields = 0;
             unsigned numPtrField = 0;
             unsigned numFuncPtrField = 0;
             unsigned numDataPtrField = 0;
-            // counting based on direct uses
-            unsigned numPtrArithPtrField = 0;
-            unsigned numDereferencePtrField = 0;
-            unsigned numSensitiveOpPtrField = 0;
-            unsigned numBranchPtrField = 0;
-            // scalar field direct use
-            unsigned numArrayIdxField = 0;
-            unsigned numArithField = 0;
-            unsigned numSensitiveBranchField = 0;
-            unsigned numSensitiveOpsField = 0;
-            // unclassified field direct use
-            unsigned numUnclassifiedField = 0;
-            unsigned numUnclassifiedFuncPtrField = 0;
-            // taint ptr field classification
-            unsigned numPtrArithPtrFieldTaint = 0;
-            unsigned numDereferencePtrFieldTaint = 0;
-            // unsigned numDereferencePtrFieldTaint = 0;
-            unsigned numSensitiveOpPtrFieldTaint = 0;
-            unsigned numBranchPtrFieldTaint = 0;
-            // taint scalar field classification
-            unsigned numArrayIdxFieldTaint = 0;
-            unsigned numArithFieldTaint = 0;
-            unsigned numSensitiveBranchFieldTaint = 0;
-            unsigned numSensitiveOpsFieldTaint = 0;
-            // unclassified field taint
-            unsigned numUnclassifiedFieldTaint = 0;
-            unsigned numUnclassifiedFuncPtrFieldTaint = 0;
             unsigned numKernelAPIParam = 0;
             unsigned numControlTaintTrace = 0;
+            unsigned numBoundaryArg = 0;
             // output file
             llvm::raw_fd_ostream *riskyFieldOS;
             llvm::raw_fd_ostream *riskyFieldTaintOS;
+            std::unordered_map<RiskyDataType, int> totalRiskyFieldCounters;
+            std::unordered_map<RiskyDataType, int> totalRiskyParamCounters;
             nlohmann::ordered_json taintTracesJson = nlohmann::ordered_json::array();
             nlohmann::ordered_json taintTracesJsonNoConds = nlohmann::ordered_json::array();
             nlohmann::ordered_json unclassifiedFieldsJson = nlohmann::ordered_json::array();
-            unsigned unclassifiedFieldCount = 0;
     };
 }
 

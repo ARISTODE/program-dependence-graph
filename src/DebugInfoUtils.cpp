@@ -694,3 +694,11 @@ unsigned pdg::dbgutils::computeStructTypeStorageSize(DIType &dt, unsigned depth)
   }
   return storageSize;
 }
+
+unsigned pdg::dbgutils::computeStructFieldNum(llvm::DIType &dt)
+{
+  if (!isStructType(dt))
+    return -1;
+  auto diNodeArr = dyn_cast<DICompositeType>(&dt)->getElements(); 
+  return diNodeArr.size();
+}

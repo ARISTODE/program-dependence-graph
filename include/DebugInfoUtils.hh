@@ -44,6 +44,7 @@ namespace pdg
     std::string getFuncSigName(llvm::DIType &dt, llvm::Function &F, std::string funcPtrName);
     unsigned computeDeepCopyFields(llvm::DIType &dt, bool onlyCountPointer = false);
     unsigned computeStructTypeStorageSize(llvm::DIType &dt, unsigned depth = 1);
+    unsigned computeStructFieldNum(llvm::DIType &dt);
   } // namespace dbgutils
 } // namespace pdg
 
