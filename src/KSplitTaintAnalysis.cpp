@@ -251,7 +251,6 @@ void pdg::KSplitTaintAnalysis::analyzeRiskyAPICalls(bool conditionals)
                 riskyAPIEntry["depth"] = callPath.size();
                 riskyAPIEntry["kernel_interface_call_sites"] = kernel_interface_call_sites;
                 riskyAPIEntry["num_conditionals"] = pathConditions.size();
-                errs() << "got json "  << riskyAPIEntry.dump(2);
                 riskyAPIJson.push_back(riskyAPIEntry);
               }
             }
@@ -361,7 +360,6 @@ void pdg::KSplitTaintAnalysis::analyzePrivateStateUpdate(bool conditionals)
     riskyKPUpdateCollector.taintedStateCountConditional = taintedPathConds.size();
     map = privateStateUpdateConditionalMap;
   }
-
   else
   {
     riskyKPUpdateCollector.taintedStateCount = kpstate_updated.size();

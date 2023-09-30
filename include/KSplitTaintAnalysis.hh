@@ -6,8 +6,7 @@
 namespace pdg
 {
     // risky types enum
-    enum class RiskyTypes
-    {
+    enum class RiskyTypes {
         PTRARITH,
         PTRDEREF,
         ARRAYACC,

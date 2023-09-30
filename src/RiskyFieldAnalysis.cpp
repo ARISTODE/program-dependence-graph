@@ -173,7 +173,7 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
         taintJsonObjs.insert(taintJsonObjs.begin(), structStatJson);
 
         // dump all the json to field
-        printJsonToFile(taintJsonObjs, "perStructTaint.log");
+        taintutils::printJsonToFile(taintJsonObjs, "perStructTaint.json");
     }
 
     // TODO: taint the return value of driver interface functions
@@ -222,7 +222,7 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
             
             caseId++;
             numBoundaryArg++;
-            printJsonToFile(taintJsonObjs, "boundaryParamTaint.log");
+            taintutils::printJsonToFile(taintJsonObjs, "boundaryParamTaint.json");
         }
     }
 
@@ -590,7 +590,7 @@ void pdg::RiskyFieldAnalysis::classifyRiskyField(TreeNode &tn, std::set<pdg::Ris
 
         traceJson["Kernel read"] = readLocs;
         traceJson["Drv update"] = updateLocs;
-        printJsonToFile(traceJson, "unclassifiedFields.json");
+        taintutils::printJsonToFile(traceJson, "unclassifiedFields.json");
     }
 }
 
@@ -619,7 +619,6 @@ bool pdg::RiskyFieldAnalysis::hasUpdateInDrv(pdg::TreeNode &n)
             {
                 if (auto inst = dyn_cast<Instruction>(node->getValue()))
                 {
-                    errs() << "kamlloc order " << inst->getFunction()->getName() << " - " << *inst << "\n";
                     pdgutils::printSourceLocation(*inst);
                 }
             }
@@ -650,43 +649,6 @@ Function *pdg::RiskyFieldAnalysis::canReachSensitiveOperations(Node &srcFuncNode
             return func;
     }
     return nullptr;
-}
-
-void pdg::RiskyFieldAnalysis::printJsonToFile(nlohmann::ordered_json &traceJsonObjs, std::string logFileName)
-{
-    // record the opend files
-    static std::unordered_set<std::string> openedFiles;
-
-    // create and output log files
-    SmallString<128> dirPath("logs");
-    if (!sys::fs::exists(dirPath))
-    {
-        std::error_code EC = sys::fs::create_directory(dirPath, true, sys::fs::perms::all_all);
-        if (EC)
-        {
-            std::cerr << "Error: Failed to create directory. " << EC.message() << "\n";
-        }
-    }
-
-    // overwrite the whole file
-    SmallString<128> jsonTraceCondFilePath = dirPath;
-    sys::path::append(jsonTraceCondFilePath, logFileName);
-
-    std::ios_base::openmode mode = std::ios::app;
-    // If the file has not been opened before, clear its content
-    if (openedFiles.find(logFileName) == openedFiles.end())
-    {
-        mode = std::ios::out;
-        openedFiles.insert(logFileName);
-    }
-
-    std::ofstream traceLogFile(jsonTraceCondFilePath.c_str(), mode);
-    if (!traceLogFile.is_open())
-    {
-        std::cerr << "Error: Failed to open json trace file.\n";
-    }
-    traceLogFile << traceJsonObjs.dump(2) << "\n";
-    traceLogFile.close();
 }
 
 // void pdg::RiskyFieldAnalysis::printTaintFieldInfo()
@@ -943,38 +905,25 @@ void pdg::RiskyFieldAnalysis::printRiskyFieldInfo(raw_ostream &os, const std::st
     pdg::pdgutils::printSourceLocation(inst);
 }
 
-void pdg::RiskyFieldAnalysis::printFieldDirectUseClassification(raw_fd_ostream &OS)
-{
-    OS << "\t\t Number of pointer arithmetic pointer fields: " << numPtrArithPtrField << "\n";
-    OS << "\t\t Number of dereference pointer fields: " << numDereferencePtrField << "\n";
-    OS << "\t\t Number of sensitive operation pointer fields: " << numSensitiveOpPtrField << "\n";
-    OS << "\t\t Number of branch pointer fields: " << numBranchPtrField << "\n";
-    OS << "Number of array index fields: " << numArrayIdxField << "\n";
-    OS << "Number of sensitive branch fields: " << numSensitiveBranchField << "\n";
-    OS << "Number of sensitive operation fields: " << numSensitiveOpsField << "\n";
-    OS << "Number of unclassified fields: " << numUnclassifiedField << "\n";
-    OS << "Number of unclassified func ptr fields: " << numUnclassifiedFuncPtrField << "\n";
-    OS << " <==================================================>\n";
-}
 
 void pdg::RiskyFieldAnalysis::printFieldClassificationTaint(raw_fd_ostream &OS)
 {
-    OS << "Number of kernel read driver updated fields: " << numKernelReadDriverUpdatedFields << "\n";
-    OS << "Number of pointer fields: " << numPtrField << "\n";
-    OS << "\tNumber of function pointer fields: " << numFuncPtrField << "\n";
-    OS << "\tNumber of data pointer fields: " << numDataPtrField << "\n";
-    OS << "\t\tNo.pointer arithmetic pointer fields (Taint): " << numPtrArithPtrFieldTaint << "\n";
-    OS << "\t\tNo.dereference pointer fields (Taint): " << numDereferencePtrFieldTaint << "\n";
-    OS << "\t\tNo.sensitive operation pointer fields (Taint): " << numSensitiveOpPtrFieldTaint << "\n";
-    OS << "\t\tNo.branch pointer fields (Taint): " << numBranchPtrFieldTaint << "\n";
-    OS << "No.array index fields (Taint): " << numArrayIdxFieldTaint << "\n";
-    OS << "No.arith op fields (Taint): " << numArithFieldTaint << "\n";
-    OS << "No.sensitive branch fields (Taint): " << numSensitiveBranchFieldTaint << "\n";
-    OS << "No.sensitive operation fields (Taint): " << numSensitiveOpsFieldTaint << "\n";
-    OS << "No.unclassified fields (Taint): " << numUnclassifiedFieldTaint << "\n";
-    OS << "No.unclassified func ptr fields (Taint): " << numUnclassifiedFuncPtrFieldTaint << "\n";
-    OS << "No.kernel API params: " << numKernelAPIParam << "\n";
-    OS << "No.control taint trace: " << numControlTaintTrace << "\n";
+    // OS << "Number of kernel read driver updated fields: " << numKernelReadDriverUpdatedFields << "\n";
+    // OS << "Number of pointer fields: " << numPtrField << "\n";
+    // OS << "\tNumber of function pointer fields: " << numFuncPtrField << "\n";
+    // OS << "\tNumber of data pointer fields: " << numDataPtrField << "\n";
+    // OS << "\t\tNo.pointer arithmetic pointer fields (Taint): " << numPtrArithPtrFieldTaint << "\n";
+    // OS << "\t\tNo.dereference pointer fields (Taint): " << numDereferencePtrFieldTaint << "\n";
+    // OS << "\t\tNo.sensitive operation pointer fields (Taint): " << numSensitiveOpPtrFieldTaint << "\n";
+    // OS << "\t\tNo.branch pointer fields (Taint): " << numBranchPtrFieldTaint << "\n";
+    // OS << "No.array index fields (Taint): " << numArrayIdxFieldTaint << "\n";
+    // OS << "No.arith op fields (Taint): " << numArithFieldTaint << "\n";
+    // OS << "No.sensitive branch fields (Taint): " << numSensitiveBranchFieldTaint << "\n";
+    // OS << "No.sensitive operation fields (Taint): " << numSensitiveOpsFieldTaint << "\n";
+    // OS << "No.unclassified fields (Taint): " << numUnclassifiedFieldTaint << "\n";
+    // OS << "No.unclassified func ptr fields (Taint): " << numUnclassifiedFuncPtrFieldTaint << "\n";
+    // OS << "No.kernel API params: " << numKernelAPIParam << "\n";
+    // OS << "No.control taint trace: " << numControlTaintTrace << "\n";
 
     nlohmann::ordered_json fieldStatJson;
     fieldStatJson["KRDU fields"] = numKernelReadDriverUpdatedFields;
@@ -987,7 +936,7 @@ void pdg::RiskyFieldAnalysis::printFieldClassificationTaint(raw_fd_ostream &OS)
         auto typeStr = taintutils::riskyDataTypeToString(it->first);
         fieldStatJson[typeStr] = it->second;
     }
-    printJsonToFile(fieldStatJson, "riskyDataStat.log");
+    taintutils::printJsonToFile(fieldStatJson, "riskyDataStat.json");
 
     nlohmann::ordered_json boundaryParamStatJson;
     boundaryParamStatJson["num boundary arg"] = numBoundaryArg;
@@ -997,7 +946,7 @@ void pdg::RiskyFieldAnalysis::printFieldClassificationTaint(raw_fd_ostream &OS)
         boundaryParamStatJson[typeStr] = it->second;
     }
 
-    printJsonToFile(boundaryParamStatJson, "riskyDataStat.log");
+    taintutils::printJsonToFile(boundaryParamStatJson, "riskyDataStat.json");
 }
 
 static RegisterPass<pdg::RiskyFieldAnalysis>

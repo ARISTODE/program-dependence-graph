@@ -77,14 +77,6 @@ void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)
         }
       }
     }
-    // if (F.isDeclaration())
-    // {
-    //   std::string funcName = F.getName().str();
-    //   funcName = pdgutils::stripFuncNameVersionNumber(funcName);
-    //   if (isBlackListFunc(funcName))
-    //     continue;
-    //   _importedFuncs.push_back(funcName);
-    // }
   }
 }
 

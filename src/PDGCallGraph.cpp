@@ -413,6 +413,33 @@ void pdg::PDGCallGraph::printPath(const std::vector<Node *> &path, raw_fd_ostrea
   OS << "\n";
 }
 
+std::string pdg::PDGCallGraph::generatePathStr(const std::vector<Node *> &path)
+{
+  if (path.empty())
+  {
+    return "empty path";
+  }
+
+  std::string callPathStr = "";
+  for (size_t i = 0; i < path.size(); ++i)
+  {
+    Node *node = path[i];
+
+    // Print the node's function name
+    if (Function *f = dyn_cast<Function>(node->getValue()))
+    {
+      callPathStr += f->getName().str();
+    }
+
+    // If it's not the last node in the path, add an arrow (->)
+    if (i < path.size() - 1)
+    {
+      callPathStr += "->";
+    }
+  }
+  return callPathStr;
+}
+
 void pdg::PDGCallGraph::setupBuildFuncNodes(Module &M)
 {
   // setup white list functions required for PDG construction

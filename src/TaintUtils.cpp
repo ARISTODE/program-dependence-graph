@@ -1,4 +1,4 @@
-#include "TaintUtils.hpp"
+#include "TaintUtils.hh"
 
 using namespace llvm;
 
@@ -24,6 +24,44 @@ static std::unordered_set<std::string> sensitiveOperations = {
     "kobject_put",
     "kobject_create_and_add",
 };
+
+// classes of the risky operations
+static std::unordered_map<std::string, std::string> RiskyFuncToClassMap = {
+    // Memory Management
+    {"kmalloc", "memory"},
+    {"kzalloc", "memory"},
+    {"kfree", "memory"},
+    {"vmalloc", "memory"},
+    {"vzalloc", "memory"},
+    {"vfree", "memory"},
+    // Concurrency Management
+    {"spin_lock", "concurrency"},
+    {"spin_unlock", "concurrency"},
+    {"mutex_lock", "concurrency"},
+    {"mutex_unlock", "concurrency"},
+    // Reference Counting
+    {"atomic_inc", "refCount"},
+    {"atomic_dec", "refCount"},
+    {"kref_get", "refCount"},
+    {"kref_put", "refCount"},
+    {"kobject_put", "refCount"},
+    {"kobject_get", "refCount"},
+    // Timer Management
+    {"add_timer", "timer"},
+    {"mod_timer", "timer"},
+    {"del_timer", "timer"},
+    {"hrtimer_start", "timer"},
+    // I/O Ports Management
+    {"inb", "ioPorts"},
+    {"outb", "ioPorts"},
+    {"ioread32", "ioPorts"},
+    {"iowrite32", "ioPorts"},
+    // Direct Memory Access (DMA)
+    {"dma_alloc_coherent", "dma"},
+    {"dma_free_coherent", "dma"},
+    {"dma_map_single", "dma"},
+    {"dma_unmap_single", "dma"}};
+
 
 // check if the pointer is dereferneced
 bool pdg::taintutils::isPointerRead(Node &n)
@@ -209,6 +247,58 @@ bool pdg::taintutils::isValueInSensitiveAPI(Node &n, std::string &senOpName)
   return false;
 }
 
+// helper functions
+void pdg::taintutils::printJsonToFile(nlohmann::ordered_json &traceJsonObjs, std::string logFileName)
+{
+  if (traceJsonObjs.empty())
+    return;
+  // record the opend files
+  static std::unordered_set<std::string> openedFiles;
+
+  // create and output log files
+  SmallString<128> dirPath("logs");
+  if (!sys::fs::exists(dirPath))
+  {
+    std::error_code EC = sys::fs::create_directory(dirPath, true, sys::fs::perms::all_all);
+    if (EC)
+    {
+      errs() << "Error: Failed to create directory. " << EC.message() << "\n";
+    }
+  }
+
+  // overwrite the whole file
+  SmallString<128> jsonTraceCondFilePath = dirPath;
+  sys::path::append(jsonTraceCondFilePath, logFileName);
+
+  std::ios_base::openmode mode = std::ios::app;
+  // If the file has not been opened before, clear its content
+  if (openedFiles.find(logFileName) == openedFiles.end())
+  {
+    mode = std::ios::out;
+    openedFiles.insert(logFileName);
+  }
+
+  std::ofstream traceLogFile(jsonTraceCondFilePath.c_str(), mode);
+  if (!traceLogFile.is_open())
+  {
+    errs() << "Error: Failed to open json trace file.\n";
+  }
+  traceLogFile << traceJsonObjs.dump(2) << "\n";
+  traceLogFile.close();
+}
+
+void pdg::taintutils::propagateTaints(pdg::Node &srcNode, std::set<pdg::EdgeType> &edgeTypes, std::set<Node *> &taintNodes)
+{
+  ProgramGraph &PDG = ProgramGraph::getInstance();
+  auto reachedNodes = PDG.findNodesReachedByEdges(srcNode, edgeTypes);
+  for (auto node : reachedNodes)
+  {
+    if (!node->isTaint())
+      taintNodes.insert(node);
+    node->setTaint();
+  }
+}
+
 std::string pdg::taintutils::riskyDataTypeToString(pdg::RiskyDataType type)
 {
   switch (type)
@@ -238,4 +328,26 @@ std::string pdg::taintutils::riskyDataTypeToString(pdg::RiskyDataType type)
   default:
     return "";
   }
+}
+
+bool pdg::taintutils::isRiskyFunc(std::string funcName)
+{
+  std::string s = pdgutils::stripVersionTag(funcName);
+  for (auto iter = RiskyFuncToClassMap.begin(); iter != RiskyFuncToClassMap.end(); ++iter)
+  {
+    if (iter->first.find(s) != std::string::npos)
+      return true;
+  }
+  return false;
+}
+
+std::string pdg::taintutils::getRiskyClassStr(std::string funcName)
+{
+  std::string s = pdgutils::stripVersionTag(funcName);
+  for (auto iter = RiskyFuncToClassMap.begin(); iter != RiskyFuncToClassMap.end(); ++iter)
+  {
+    if (iter->first.find(s) != std::string::npos)
+      return iter->second;
+  }
+  return "";
 }

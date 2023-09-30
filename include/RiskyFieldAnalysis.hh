@@ -1,7 +1,7 @@
 #ifndef RISKY_FIELD_ANALYSIS_H_
 #define RISKY_FIELD_ANALYSIS_H_
 #include "SharedDataAnalysis.hh"
-#include "TaintUtils.hpp"
+#include "TaintUtils.hh"
 #include "json.hpp"
 
 namespace pdg

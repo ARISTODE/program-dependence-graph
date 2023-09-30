@@ -33,6 +33,7 @@ namespace pdg
     bool canReach(Node &src, Node &sink, std::set<std::vector<llvm::Function *>> &allPaths, bool recordPath);
     void bfs(Node *currentNode, Node &sink, std::unordered_set<Node *> &visited, std::vector<llvm::Function *> &currentPath, std::set<std::vector<llvm::Function *>> &allPaths, bool recordPath);
     void printPath(const std::vector<Node *> &path, llvm::raw_fd_ostream &OS);
+    std::string generatePathStr(const std::vector<Node *> &path);
     void dump();
     void printPaths(Node &src, Node &sink);
     PathVecs computePaths(Node &src, Node &sink); // compute all pathes
