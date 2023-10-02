@@ -20,6 +20,7 @@ namespace pdg
   class GenericGraph
   {
   public:
+    using PathVecs = std::vector<std::vector<llvm::Value *>>;
     typedef std::unordered_map<llvm::Value *, Node *> ValueNodeMap;
     typedef std::set<Edge *> EdgeSet;
     typedef std::set<Node *> NodeSet;
@@ -44,6 +45,8 @@ namespace pdg
     std::unordered_set<Node *> findNodesReachedByEdge(Node &src, EdgeType edgeTy);
     std::unordered_set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edgeTypes, bool isBackward = false);
     bool findPathDFS(Node *src, Node *dst, std::vector<std::pair<Node *, Edge *>> &path, std::unordered_set<Node *> &visited, std::set<EdgeType> &edgeTypes);
+    PathVecs computePaths(Node &src, Node &sink); // compute all pathes
+    void computePathsHelper(PathVecs &path_vecs, Node &src, Node &sink, std::vector<llvm::Value *> cur_path, std::unordered_set<llvm::Value *> visited_vals, bool &found_path);
     void printPath(std::vector<std::pair<Node *, Edge *>> &path, llvm::raw_fd_ostream &OS);
     void convertPathToString(std::vector<std::pair<Node *, Edge *>> &path, llvm::raw_string_ostream &ss);
     ValueNodeMap &getValueNodeMap() { return _valNodeMap; }

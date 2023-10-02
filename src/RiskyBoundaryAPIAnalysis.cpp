@@ -9,12 +9,21 @@ void pdg::RiskyBoundaryAPIAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
   AU.setPreservesAll();
 }
 
-static std::set<pdg::EdgeType> taintPropEdges = {
+static std::set<pdg::EdgeType> PtrValTaintPropEdges = {
+    pdg::EdgeType::PARAMETER_IN,
     pdg::EdgeType::DATA_DEF_USE,
     pdg::EdgeType::DATA_ALIAS,
     pdg::EdgeType::DATA_STORE_TO,
-    pdg::EdgeType::PARAMETER_IN,
+    pdg::EdgeType::DATA_RAW,
 };
+
+static std::set<pdg::EdgeType> ValTaintPropEdges = {
+    pdg::EdgeType::PARAMETER_IN,
+    pdg::EdgeType::DATA_DEF_USE,
+    pdg::EdgeType::DATA_STORE_TO,
+    pdg::EdgeType::DATA_EQUL_OBJ,
+};
+
 
 bool pdg::RiskyBoundaryAPIAnalysis::runOnModule(Module &M)
 {
@@ -31,13 +40,42 @@ bool pdg::RiskyBoundaryAPIAnalysis::runOnModule(Module &M)
     _CFG->build(M);
 
   // analyze private states update
-  analyzeKernelPrivateStatesUpdate();
+  // analyzeKernelPrivateStatesUpdate();
+  for (auto boundaryFunc : _SDA->getBoundaryFuncs())
+  {
+    // only propagate through kernel boundary func
+    if (_SDA->isDriverFunc(*boundaryFunc))
+      continue;
+    propagateBoundaryParameterTaints(boundaryFunc);
+  }
 
   // analyze the risky kernel boundary APIs
   nlohmann::ordered_json riskyAPIJsonObjs = nlohmann::json::array();
   analyzeRiskyBoundaryKernelAPIs(riskyAPIJsonObjs);
   taintutils::printJsonToFile(riskyAPIJsonObjs, "RiskyBoundaryAPI.json");
+  auto classificationJson = countRiskyAPIClasses(riskyAPIJsonObjs);
+  taintutils::printJsonToFile(classificationJson, "BoundaryAPICounts.json");
   return false;
+}
+
+
+// propagate taints through parameters passed across isolation boundary
+// this allowuing us to track the path conditions that are controlled by the attacker
+void pdg::RiskyBoundaryAPIAnalysis::propagateBoundaryParameterTaints(Function *boundaryFunc)
+{
+  auto funcW = _PDG->getFuncWrapper(*boundaryFunc);
+  if (!funcW)
+    return;
+
+  for (auto arg : funcW->getArgList())
+  {
+    Tree *formalInTree = funcW->getArgFormalInTree(*arg);
+    if (!formalInTree)
+      continue;
+    // For each node in the tree, propagate taints through the node
+    std::set<Node*> taintNodes;
+    taintutils::propagateTaints(*formalInTree->getRootNode(), ValTaintPropEdges, taintNodes);
+  }
 }
 
 // handle the analysis of kernel risky API that are directly invoked by the driver
@@ -98,7 +136,7 @@ void pdg::RiskyBoundaryAPIAnalysis::handleTransitiveRiskyAPI(Function *boundaryF
         caseID++;
         kernelAPIJson["kernel boundary func name"] = funcName;
         kernelAPIJson["risky func"] = transFuncName;
-        kernelAPIJson["Risky API class"] = taintutils::getRiskyClassStr(transFuncName);
+        kernelAPIJson["Risky API Class"] = taintutils::getRiskyClassStr(transFuncName);
         // populate call path
         std::vector<Node *> callPath;
         std::unordered_set<Node *> visited;
@@ -123,22 +161,30 @@ void pdg::RiskyBoundaryAPIAnalysis::handleTransitiveRiskyAPI(Function *boundaryF
             // to the call site of the risky operation
             auto firstBoundaryFuncInst = &*inst_begin(*boundaryFunc);
             auto firstBoundaryFuncInstControlNode = _CFG->getNode(*firstBoundaryFuncInst);
-            auto CSControlNode = _CFG->getNode(*CS);
-            std::set<Value *> pathConditions = {};
-            _CFG->computePathConditionsBetweenNodes(*firstBoundaryFuncInstControlNode, *CSControlNode, pathConditions);
-            bool isControllablePath = true;
-            for (auto cond : pathConditions)
+            auto riskyFuncCallSites = _callGraph->getFunctionCallSites(*transFunc);
+            for (auto riskyFuncCS : riskyFuncCallSites)
             {
-              if (!_PDG->getNode(*cond)->isTaint())
-                isControllablePath = false;
+              auto riskyFuncCSControlNode = _CFG->getNode(*riskyFuncCS);
+              std::set<Value *> pathConditions = {};
+              _CFG->computePathConditionsBetweenNodes(*firstBoundaryFuncInstControlNode, *riskyFuncCSControlNode, pathConditions);
+              bool isControllablePath = true;
+              for (auto cond : pathConditions)
+              {
+                if (!_PDG->getNode(*cond)->isTaint())
+                  isControllablePath = false;
+              }
+
+              if (isControllablePath)
+                kernelAPIJson["Is Controlled Path"] = 1;
+              else
+              {
+                if (kernelAPIJson["Is Controlled Path"] != 0)
+                  kernelAPIJson["Is Controlled Path"] = 0;
+              }
+
+              if (pathConditions.size() > 0)
+                kernelAPIJson["No. path cond"] = pathConditions.size();
             }
-
-            if (isControllablePath)
-              kernelAPIJson["Is Controlled Path"] = 1;
-            else
-              kernelAPIJson["Is Controlled Path"] = 0;
-
-            kernelAPIJson["No. path cond"] = pathConditions.size();
           }
           visited.clear();
           callPath.clear();
@@ -282,12 +328,11 @@ void pdg::RiskyBoundaryAPIAnalysis::analyzeBoundaryFuncStateUpdates(llvm::Functi
         {
           storeInstJson["Is Controlled Path"] = 1;
           std::set<Node *> taintNodes;
-          taintutils::propagateTaints(*ptrOpNode, taintPropEdges, taintNodes);
+          taintutils::propagateTaints(*ptrOpNode, PtrValTaintPropEdges, taintNodes);
         }
         else
         {
-          // track the store inst with the path conditions required to reach the store inst
-          // only record the ones that are not controllable at the beginning.
+          // track the store inst with the path conditions required to reach the store inst only record the ones that are not controllable at the beginning.
           // then iteratively taint the nodes and update the controllable path in the fix point calculation
           storeInstCondMap[si] = pathConditions;
           storeInstJson["Is Controlled Path"] = 0;
@@ -347,7 +392,7 @@ std::set<pdg::Node *> pdg::RiskyBoundaryAPIAnalysis::propagateTaintsForPointerOp
   auto ptrOp = si->getPointerOperand();
   auto ptrOpNode = _PDG->getNode(*ptrOp);
   std::set<Node *> taintNodes;
-  taintutils::propagateTaints(*ptrOpNode, taintPropEdges, taintNodes);
+  taintutils::propagateTaints(*ptrOpNode, PtrValTaintPropEdges, taintNodes);
   return taintNodes;
 }
 
@@ -389,6 +434,33 @@ void pdg::RiskyBoundaryAPIAnalysis::analyzeKernelPrivateStatesUpdate()
     }
     taintutils::printJsonToFile(privateStatesUpdateJsons, "privateStatesUpdate.json");
   }
+}
+
+// counting methods
+nlohmann::ordered_json pdg::RiskyBoundaryAPIAnalysis::countRiskyAPIClasses(const nlohmann::ordered_json &riskyAPIJsonObjs)
+{
+  // Create an unordered_map to store the count of each Risky API Class
+  std::unordered_map<std::string, int> riskyAPIClassCount;
+
+  // Iterate through the JSON array
+  for (const auto &jsonObj : riskyAPIJsonObjs)
+  {
+    // Extract the "Risky API Class" value from each JSON object
+    std::string riskyAPIClass = jsonObj.at("Risky API Class").get<std::string>();
+
+    // Increment the count for this Risky API Class
+    riskyAPIClassCount[riskyAPIClass]++;
+  }
+
+  // Create a JSON object to store the counts
+  nlohmann::ordered_json outputJson;
+
+  for (const auto &pair : riskyAPIClassCount)
+  {
+    outputJson[pair.first] = pair.second;
+  }
+
+  return outputJson;
 }
 
 static RegisterPass<pdg::RiskyBoundaryAPIAnalysis>

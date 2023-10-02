@@ -24,10 +24,13 @@ void pdg::KSplitCFG::connectControlFlowEdges(Module &M)
       {
         if (func->isDeclaration())
           continue;
+        // for all possibly called function, connect the call instruction
+        // with the first instruction in the called function
         auto instIter = inst_begin(*func);
         auto first_inst = &*instIter;
         auto first_inst_node = _valNodeMap[first_inst];
         instNode->addNeighbor(*first_inst_node, EdgeType::CONTROL_FLOW);
+        // process the return instruction in the callee
         while (instIter != inst_end(*func))
         {
           if (isa<ReturnInst>(&*instIter))
@@ -39,8 +42,6 @@ void pdg::KSplitCFG::connectControlFlowEdges(Module &M)
         }
       }
     }
-    // for all possibly called function, connect the call instruction
-    // with the first instruction in the called function
     // else connect the instruction with the next inst
     // handle branch inst
     if (BranchInst *bi = dyn_cast<BranchInst>(val))
@@ -78,6 +79,8 @@ void pdg::KSplitCFG::build(Module &M)
     }
   }
 
+  auto &callGraph = PDGCallGraph::getInstance();
+
   for (auto &F : M)
   {
     if (F.isDeclaration() || F.empty())
@@ -113,11 +116,23 @@ void pdg::KSplitCFG::build(Module &M)
       // callinst: connect inst with the first instruction in the called function
       if (CallInst *ci = dyn_cast<CallInst>(curInst))
       {
+        // handle indirect calls
         auto calledFunc = pdgutils::getCalledFunc(*ci);
         if (!calledFunc)
+        {
+          auto indCalledFuncs = callGraph.getIndirectCallCandidates(*ci, M);
+          for (auto indCalledFunc : indCalledFuncs)
+          {
+            auto beginInstIter = inst_begin(*indCalledFunc);
+            auto beginInst = &*beginInstIter;
+            auto beginInstNode = getNode(*beginInst);
+            curInstNode->addNeighbor(*beginInstNode, EdgeType::CONTROL_FLOW);
+          }
           continue;
+        }
         if (calledFunc->isDeclaration())
           continue;
+        // handle direct calls
         auto beginInstIter = inst_begin(*calledFunc);
         auto beginInst = &*beginInstIter;
         auto beginInstNode = getNode(*beginInst);
@@ -204,8 +219,7 @@ void pdg::KSplitCFG::computePathConditionsBetweenNodes(Node &srcNode, Node &dstN
   std::vector<std::pair<Node*, Edge*>> path;
   std::set<EdgeType> edgeTypes = {EdgeType::CONTROL_FLOW};
   findPathDFS(&srcNode, &dstNode, path, visited, edgeTypes);
-  
-  // return value
+
   for (auto p : path)
   {
     auto node = p.first;
@@ -213,7 +227,6 @@ void pdg::KSplitCFG::computePathConditionsBetweenNodes(Node &srcNode, Node &dstN
 
     if (!nodeVal)
       continue;
-
     if (auto inst = dyn_cast<Instruction>(nodeVal))
     {
       if (auto *BI = dyn_cast<BranchInst>(inst))

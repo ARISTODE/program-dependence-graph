@@ -651,63 +651,6 @@ Function *pdg::RiskyFieldAnalysis::canReachSensitiveOperations(Node &srcFuncNode
     return nullptr;
 }
 
-// void pdg::RiskyFieldAnalysis::printTaintFieldInfo()
-// {
-//     unsigned caseId = 0;
-//     for (auto tuple : _taintTuples)
-//     {
-//         auto srcNode = std::get<0>(tuple);
-//         auto dstNode = std::get<1>(tuple);
-//         auto accessPathStr = std::get<2>(tuple);
-//         auto riskyFieldStr = std::get<3>(tuple);
-//         generateTraceJsonObj(*srcNode, *dstNode, accessPathStr, riskyFieldStr, caseId);
-//         caseId++;
-//     }
-
-//     // create and output log files
-//     SmallString<128> dirPath("logs");
-//     if (!sys::fs::exists(dirPath))
-//     {
-//         std::error_code EC = sys::fs::create_directory(dirPath, true, sys::fs::perms::all_all);
-//         if (EC)
-//         {
-//             std::cerr << "Error: Failed to create directory. " << EC.message() << "\n";
-//         }
-//     }
-
-//     SmallString<128> jsonTraceCondFilePath = dirPath;
-//     sys::path::append(jsonTraceCondFilePath, "traceCond.json");
-
-//     std::ofstream jsonTraceCondFile(jsonTraceCondFilePath.c_str());
-//     if (!jsonTraceCondFile.is_open())
-//     {
-//         std::cerr << "Error: Failed to open json trace file.\n";
-//     }
-//     jsonTraceCondFile << taintTracesJson.dump(2);
-//     jsonTraceCondFile.close();
-
-//     SmallString<128> jsonTraceNoCondFilePath = dirPath;
-//     sys::path::append(jsonTraceNoCondFilePath, "traceNoCond.json");
-//     std::ofstream jsonTraceNoCondFile(jsonTraceNoCondFilePath.c_str());
-//     if (!jsonTraceNoCondFile.is_open())
-//     {
-//         std::cerr << "Error: Failed to open json no cond trace file.\n";
-//     }
-//     jsonTraceNoCondFile << taintTracesJsonNoConds.dump(2);
-//     jsonTraceNoCondFile.close();
-
-//     errs() << "dumping unclassified fields\n";
-//     SmallString<128> jsonUnclassifiedFieldFilePath = dirPath;
-//     sys::path::append(jsonUnclassifiedFieldFilePath, "unclassifiedFields.json");
-//     std::ofstream jsonTraceUnclassified(jsonUnclassifiedFieldFilePath.c_str());
-//     if (!jsonTraceUnclassified.is_open())
-//     {
-//         std::cerr << "Error: Failed to open json unclassified trace file.\n";
-//     }
-//     jsonTraceUnclassified << unclassifiedFieldsJson.dump(2);
-//     jsonTraceUnclassified.close();
-// }
-
 // helper and print functions
 nlohmann::ordered_json pdg::RiskyFieldAnalysis::generateTraceJsonObj(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId)
 {

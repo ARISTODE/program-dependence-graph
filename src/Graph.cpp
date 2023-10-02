@@ -507,8 +507,9 @@ bool pdg::GenericGraph::findPathDFS(Node *src, Node *dst, std::vector<std::pair<
       }
     }
   }
-  // If we haven't found the path, backtrack and remove the current node and edge from the path
-  if (!path.empty())
+
+  // Backtrack: Remove the node and edge from the path if no valid path is found.
+  if (!path.empty() && path.back().first == src)
   {
     path.pop_back();
   }
@@ -584,5 +585,40 @@ void pdg::GenericGraph::convertPathToString(std::vector<std::pair<pdg::Node *, p
       std::string sourceLocStr = pdgutils::getSourceLocationStr(*inst);
       ss << "[ " << nodeTypeStr << " || " << edgeTypeStr << " || " << sourceLocStr << " ] -> ";
     }
+  }
+}
+
+pdg::GenericGraph::PathVecs pdg::GenericGraph::computePaths(Node &src, Node &sink)
+{
+  PathVecs ret;
+  std::unordered_set<Value *> visited_vals;
+  bool found_path = false;
+  computePathsHelper(ret, src, sink, {}, visited_vals, found_path); // just find one path
+  return ret;
+}
+
+void pdg::GenericGraph::computePathsHelper(pdg::GenericGraph::PathVecs &path_vecs, Node &src, Node &sink, std::vector<Value *> cur_path, std::unordered_set<Value *> visited_vals, bool &found_path)
+{
+  if (found_path)
+    return;
+  if (!src.getValue() || !sink.getValue())
+    return;
+
+  Value *src_val = cast<Value>(src.getValue());
+  Value *sink_val = cast<Value>(sink.getValue());
+  if (visited_vals.find(src_val) != visited_vals.end())
+    return;
+  visited_vals.insert(src_val);
+  cur_path.push_back(src_val);
+  if (src_val == sink_val)
+  {
+    path_vecs.push_back(cur_path);
+    found_path = true;
+    return;
+  }
+
+  for (auto out_neighbor : src.getOutNeighbors())
+  {
+    computePathsHelper(path_vecs, *out_neighbor, sink, cur_path, visited_vals, found_path);
   }
 }

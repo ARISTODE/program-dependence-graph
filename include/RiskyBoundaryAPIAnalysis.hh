@@ -30,16 +30,23 @@ namespace pdg
     void analyzeKernelPrivateStatesUpdate();
     void analyzeBoundaryFuncStateUpdates(llvm::Function *boundaryFunc, StoreJsonMap &storeInstsJsonMap, StoreCondMap &storeInstCondMap);
     void calculateFixedPointForPrivateStateUpdates(StoreJsonMap &storeInstJsonMap, StoreCondMap &storeInstCondMap);
+
     // helper funcs for the fix point calculation
     std::queue<llvm::StoreInst*> initializeQueue(const StoreCondMap &storeInstCondMap);
     bool isPathControllable(llvm::StoreInst *si, const StoreCondMap &storeInstCondMap);
     std::set<Node*> propagateTaintsForPointerOperand(llvm::StoreInst *si);
     void enqueueAffectedStores(const std::set<Node*> &taintNodes, const StoreCondMap &storeInstCondMap, std::queue<llvm::StoreInst*> &siQueue);
 
+    // propagate taints through parameters passed across isolation boundary
+    void propagateBoundaryParameterTaints(llvm::Function *boundaryFunc);
+
     // risky apis invoked by the driver
     void analyzeRiskyBoundaryKernelAPIs(nlohmann::ordered_json &riskyAPIJsonObjs);
     void handleDirectRiskyAPI(llvm::Function *boundaryFunc, nlohmann::ordered_json &riskyAPIJsonObjs, unsigned &caseID);
     void handleTransitiveRiskyAPI(llvm::Function *boundaryFunc, nlohmann::ordered_json &riskyAPIJsonObjs, unsigned &caseID);
+
+    // counting related methods
+    nlohmann::ordered_json countRiskyAPIClasses(const nlohmann::ordered_json &riskyAPIJsonObjs);
 
   private:
     llvm::Module *_module;

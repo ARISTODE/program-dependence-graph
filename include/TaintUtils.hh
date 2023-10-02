@@ -32,6 +32,9 @@ namespace pdg
     void printJsonToFile(nlohmann::ordered_json &json, std::string logFileName);
     bool isRiskyFunc(std::string funcName);
     std::string getRiskyClassStr(std::string funcName);
+    
+    // counting methods
+    nlohmann::ordered_json countRiskyAPIClasses(const nlohmann::ordered_json &riskyAPIJsonObjs);
   }
 }
 
