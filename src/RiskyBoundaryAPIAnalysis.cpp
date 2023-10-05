@@ -24,7 +24,6 @@ static std::set<pdg::EdgeType> ValTaintPropEdges = {
     pdg::EdgeType::DATA_EQUL_OBJ,
 };
 
-
 bool pdg::RiskyBoundaryAPIAnalysis::runOnModule(Module &M)
 {
   // # setup basic utitlities
@@ -58,7 +57,6 @@ bool pdg::RiskyBoundaryAPIAnalysis::runOnModule(Module &M)
   return false;
 }
 
-
 // propagate taints through parameters passed across isolation boundary
 // this allowuing us to track the path conditions that are controlled by the attacker
 void pdg::RiskyBoundaryAPIAnalysis::propagateBoundaryParameterTaints(Function *boundaryFunc)
@@ -86,7 +84,7 @@ void pdg::RiskyBoundaryAPIAnalysis::handleDirectRiskyAPI(Function *boundaryFunc,
   kernelAPIJson["id"] = caseID;
   caseID++;
   kernelAPIJson["kernel boundary func name"] = funcName;
-  kernelAPIJson["Risky API class"] = taintutils::getRiskyClassStr(funcName);
+  kernelAPIJson["Risky API Class"] = taintutils::getRiskyClassStr(funcName);
   kernelAPIJson["Direct Risky Kernel API"] = 1;
 
   std::string driverCallerFuncNameStr = "";
@@ -152,8 +150,9 @@ void pdg::RiskyBoundaryAPIAnalysis::handleTransitiveRiskyAPI(Function *boundaryF
             continue;
           auto driverBoundaryCallNode = _callGraph->getNode(*callerFunc);
           auto transFuncCallNode = _callGraph->getNode(*transFunc);
-          if (_callGraph->findPathDFS(driverBoundaryCallNode, transFuncCallNode, callPath, visited))
+          if (_callGraph->findPathDFS(boundaryKernelFuncCallNode, transFuncCallNode, callPath, visited))
           {
+            callPath.insert(callPath.begin(), driverBoundaryCallNode);
             std::string s = _callGraph->generatePathStr(callPath);
             callPathStr = callPathStr + "( [" + std::to_string(callPath.size()) + "]" + s + " )";
             // obtain path conditions
@@ -170,8 +169,13 @@ void pdg::RiskyBoundaryAPIAnalysis::handleTransitiveRiskyAPI(Function *boundaryF
               bool isControllablePath = true;
               for (auto cond : pathConditions)
               {
+                if (!_PDG->getNode(*cond))
+                  continue;
                 if (!_PDG->getNode(*cond)->isTaint())
+                {
                   isControllablePath = false;
+                  break;
+                }
               }
 
               if (isControllablePath)
@@ -445,6 +449,15 @@ nlohmann::ordered_json pdg::RiskyBoundaryAPIAnalysis::countRiskyAPIClasses(const
   // Iterate through the JSON array
   for (const auto &jsonObj : riskyAPIJsonObjs)
   {
+    // Check for existence of the key "Risky API Class" in the JSON object
+    auto it = jsonObj.find("Risky API Class");
+    if (it == jsonObj.end())
+    {
+      // Log an error message and continue to the next iteration
+      std::cerr << "Error: 'Risky API Class' key not found in JSON object." << std::endl;
+      continue;
+    }
+
     // Extract the "Risky API Class" value from each JSON object
     std::string riskyAPIClass = jsonObj.at("Risky API Class").get<std::string>();
 

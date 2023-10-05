@@ -100,7 +100,7 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
   auto &programGraph = ProgramGraph::getInstance();
   auto parentAddrVars = _parentNode->getAddrVars();
 
-  auto handleLoadInst = [&](Value *user)
+  auto handleLoadInst = [&](Value *user, std::unordered_set<Value *> &baseAddrVars)
   {
     if (!isa<LoadInst>(user))
       return;
@@ -119,12 +119,16 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
         auto aliasVar = aliasNode->getValue();
         // if (aliasVar && isa<LoadInst>(aliasVar) && parentAddrVars.find(aliasVar) == parentAddrVars.end())
         if (aliasVar && isa<LoadInst>(aliasVar) && aliasVar->getType() == user->getType())
+        {
+          if (baseAddrVars.find(aliasVar) != baseAddrVars.end())
+            continue;
           _addrVars.insert(aliasVar);
+        }
       }
     }
   };
 
-  auto handleGEPInst = [&](Value *user)
+  auto handleGEPInst = [&](Value *user, std::unordered_set<Value *> &baseAddrVars)
   {
     if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(user))
     {
@@ -143,6 +147,8 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
           {
             if (pdgutils::isGEPOffsetMatchDIOffset(*_nodeDt, *aliasGep))
             {
+              if (baseAddrVars.find(aliasVar) != baseAddrVars.end())
+                continue;
               _addrVars.insert(aliasVar);
             }
           }
@@ -171,11 +177,11 @@ void pdg::TreeNode::computeDerivedAddrVarsFromParent()
     {
       if (isa<LoadInst>(user))
       {
-        handleLoadInst(user);
+        handleLoadInst(user, baseAddrVars);
       }
       else
       {
-        handleGEPInst(user);
+        handleGEPInst(user, baseAddrVars);
       }
     }
   }

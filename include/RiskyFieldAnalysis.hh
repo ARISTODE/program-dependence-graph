@@ -42,7 +42,7 @@ namespace pdg
             void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
             void printFieldClassificationTaint(llvm::raw_fd_ostream &OS);
             void printTaintFieldInfo();
-            nlohmann::ordered_json generateTraceJsonObj(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId);
+            nlohmann::ordered_json generateTraceJsonObj(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId, std::set<EdgeType> &taintEdges, TreeNode *typeTreeNode = nullptr);
             void updateRiskyFieldCounters(std::set<RiskyDataType> &riskyDataTypes);
             void updateRiskyParamCounters(std::set<RiskyDataType> &riskyDataTypes);
 

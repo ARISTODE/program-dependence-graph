@@ -85,20 +85,38 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
           Node *branch_node = g.getNode(*bi);
           if (branch_node == nullptr)
             break;
+          // Initialize a flag to track if a control dependency was added
+          bool controlDepAdded = false;
+          // Check if succ_bb is post-dominated by BB
           BasicBlock *nearestCommonDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
-          // while loop
-          if (nearestCommonDominator == &BB)
+          if (!_PDT->dominates(_PDT->getNode(succ_bb), _PDT->getNode(&BB)))
           {
-            addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROL);
+            if (nearestCommonDominator != &BB)
+            {
+              if (F.getName() == "foobar_baz")
+              {
+                errs() << "bi: " << *bi << " - " << *succ_bb << "\n";
+              }
+
+              addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROL);
+              controlDepAdded = true;
+            }
           }
 
-          for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
+          // Check for loop constructs
+          if (nearestCommonDominator == &BB && !controlDepAdded)
           {
-            // avoid adding dep to all the block that post dominate the BB
-            if (_PDT->dominates(cur, _PDT->getNode(&BB)))
-              continue;
-            addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROL);
+            addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROL);
+            controlDepAdded = true;
           }
+
+          // for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
+          // {
+          //   // avoid adding dep to all the block that post dominate the BB
+          //   if (_PDT->dominates(cur, _PDT->getNode(&BB)))
+          //     continue;
+          //   addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROL);
+          // }
         }
       }
     }

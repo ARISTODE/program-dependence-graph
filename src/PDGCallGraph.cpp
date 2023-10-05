@@ -428,7 +428,7 @@ std::string pdg::PDGCallGraph::generatePathStr(const std::vector<Node *> &path)
     // Print the node's function name
     if (Function *f = dyn_cast<Function>(node->getValue()))
     {
-      callPathStr += f->getName().str();
+      callPathStr = callPathStr + f->getName().str() + " ( " + pdgutils::getFuncSourceLocStr(*f) + " )";
     }
 
     // If it's not the last node in the path, add an arrow (->)

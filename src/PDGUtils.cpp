@@ -803,6 +803,21 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
   return outStr;
 }
 
+std::string pdg::pdgutils::getFuncSourceLocStr(Function &F)
+{
+  if (F.hasMetadata())
+  {
+    std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
+    if (auto *subprogram = F.getSubprogram())
+    { // Get DISubprogram metadata node
+      unsigned line = subprogram->getLine();
+      StringRef file = subprogram->getFilename();
+      return (filePrefix + file.str() + "#L" + std::to_string(line));
+    }
+  }
+  return "Unknown Loc";
+}
+
 bool pdg::pdgutils::isUpdatedInHeader(Instruction &I)
 {
   if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
@@ -821,7 +836,7 @@ bool pdg::pdgutils::isUpdatedInHeader(Instruction &I)
 }
 
 bool pdg::pdgutils::isFuncDefinedInHeaderFile(Function &F)
-{ 
+{
   auto DISubprog = F.getSubprogram();
   auto fileName = DISubprog->getFilename().str();
   if (fileName.empty())
@@ -861,47 +876,48 @@ unsigned pdg::pdgutils::computeFieldUniqueId(unsigned funcId, unsigned argIdx, u
 
 std::string pdg::pdgutils::edgeTypeToString(EdgeType edgeType)
 {
-  switch (edgeType) {
-    case EdgeType::CALL:
-      return "CALL";
-    case EdgeType::IND_CALL:
-      return "IND_CALL";
-    case EdgeType::CONTROL:
-      return "CONTROL";
-    case EdgeType::CONTROL_FLOW:
-      return "CONTROL_FLOW";
-    case EdgeType::DATA_DEF_USE:
-      return "DATA_DEF_USE";
-    case EdgeType::DATA_RAW:
-      return "DATA_RAW";
-    case EdgeType::DATA_RAW_REV:
-      return "DATA_RAW_REV";
-    case EdgeType::DATA_READ:
-      return "DATA_READ";
-    case EdgeType::DATA_MAY_ALIAS:
-      return "DATA_MAY_ALIAS";
-    case EdgeType::DATA_MUST_ALIAS:
-      return "DATA_MUST_ALIAS";
-    case EdgeType::DATA_ALIAS:
-      return "DATA_ALIAS";
-    case EdgeType::DATA_RET:
-      return "DATA_RET";
-    case EdgeType::DATA_STORE_TO:
-      return "DATA_ST";
-    case EdgeType::PARAMETER_IN:
-      return "PARAMETER_IN";
-    case EdgeType::PARAMETER_IN_REV:
-      return "PARAMETER_IN_REV";
-    case EdgeType::PARAMETER_OUT:
-      return "PARAMETER_OUT";
-    case EdgeType::PARAMETER_FIELD:
-      return "PARAMETER_FIELD";
-    case EdgeType::GLOBAL_DEP:
-      return "GLOBAL_DEP";
-    case EdgeType::VAL_DEP:
-      return "VAL_DEP";
-    default:
-      return "UNKNOWN Edge Type";
+  switch (edgeType)
+  {
+  case EdgeType::CALL:
+    return "CALL";
+  case EdgeType::IND_CALL:
+    return "IND_CALL";
+  case EdgeType::CONTROL:
+    return "CONTROL";
+  case EdgeType::CONTROL_FLOW:
+    return "CONTROL_FLOW";
+  case EdgeType::DATA_DEF_USE:
+    return "DATA_DEF_USE";
+  case EdgeType::DATA_RAW:
+    return "DATA_RAW";
+  case EdgeType::DATA_RAW_REV:
+    return "DATA_RAW_REV";
+  case EdgeType::DATA_READ:
+    return "DATA_READ";
+  case EdgeType::DATA_MAY_ALIAS:
+    return "DATA_MAY_ALIAS";
+  case EdgeType::DATA_MUST_ALIAS:
+    return "DATA_MUST_ALIAS";
+  case EdgeType::DATA_ALIAS:
+    return "DATA_ALIAS";
+  case EdgeType::DATA_RET:
+    return "DATA_RET";
+  case EdgeType::DATA_STORE_TO:
+    return "DATA_ST";
+  case EdgeType::PARAMETER_IN:
+    return "PARAMETER_IN";
+  case EdgeType::PARAMETER_IN_REV:
+    return "PARAMETER_IN_REV";
+  case EdgeType::PARAMETER_OUT:
+    return "PARAMETER_OUT";
+  case EdgeType::PARAMETER_FIELD:
+    return "PARAMETER_FIELD";
+  case EdgeType::GLOBAL_DEP:
+    return "GLOBAL_DEP";
+  case EdgeType::VAL_DEP:
+    return "VAL_DEP";
+  default:
+    return "UNKNOWN Edge Type";
   }
 }
 
@@ -910,28 +926,28 @@ std::string pdg::pdgutils::nodeTypeToString(GraphNodeType type)
   switch (type)
   {
   case GraphNodeType::INST:
-      return "INST";
+    return "INST";
   case GraphNodeType::FORMAL_IN:
-      return "FORMAL_IN";
+    return "FORMAL_IN";
   case GraphNodeType::FORMAL_OUT:
-      return "FORMAL_OUT";
+    return "FORMAL_OUT";
   case GraphNodeType::ACTUAL_IN:
-      return "ACTUAL_IN";
+    return "ACTUAL_IN";
   case GraphNodeType::ACTUAL_OUT:
-      return "ACTUAL_OUT";
+    return "ACTUAL_OUT";
   case GraphNodeType::RETURN:
-      return "RETURN";
+    return "RETURN";
   case GraphNodeType::FUNC_ENTRY:
-      return "FUNC_ENTRY";
+    return "FUNC_ENTRY";
   case GraphNodeType::GLOBAL_VAR:
-      return "GLOBAL_VAR";
+    return "GLOBAL_VAR";
   case GraphNodeType::CALL:
-      return "CALL";
+    return "CALL";
   case GraphNodeType::GLOBAL_TYPE:
-      return "GLOBAL_TYPE";
+    return "GLOBAL_TYPE";
   case GraphNodeType::FUNC:
-      return "FUNC";
+    return "FUNC";
   default:
-      return "Unknown GraphNodeType";
+    return "Unknown GraphNodeType";
   }
 }

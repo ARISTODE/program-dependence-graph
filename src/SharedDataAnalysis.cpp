@@ -344,14 +344,6 @@ void pdg::SharedDataAnalysis::connectTypeTreeToAddrVars(Tree &type_tree)
         continue;
       auto addrVarNode = _PDG->getNode(*addrVar);
       currentNode->addNeighbor(*addrVarNode, EdgeType::VAL_DEP);
-      // consider aliasing
-      // auto aliasNodes = _PDG->findNodesReachedByEdge(*addrVarNode, EdgeType::DATA_ALIAS);
-      // for (auto aliasNode : aliasNodes)
-      // {
-        
-      //   currentNode->addAddrVar(*aliasNode->getValue());
-      //   currentNode->addNeighbor(*aliasNode, EdgeType::VAL_DEP);
-      // }
     }
     for (auto childNode : currentNode->getChildNodes())
     {
@@ -504,6 +496,7 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
       {
         if (isTreeNodeShared(*currentTreeNode))
         {
+          currentTreeNode->isShared = true;
           auto fieldID = pdgutils::computeTreeNodeID(*currentTreeNode);
           if (!fieldID.empty())
             _shared_field_id.insert(fieldID);
@@ -708,7 +701,6 @@ void pdg::SharedDataAnalysis::countReadWriteAccessTimes(TreeNode &treeNode)
 
   if (isFuncPtr(treeNode) && isDriverCallBackFuncPtrFieldNode(treeNode))
   {
-    errs() << "Find driver exported funct ptr field: " << treeNode.getSrcName() << "\n";
     driverWriteTimes += 1;
   }
 
@@ -811,7 +803,7 @@ void pdg::SharedDataAnalysis::getDriverUpdateLocStr(TreeNode &treeNode, raw_stri
       if (isDriverFunc(*func) && pdgutils::hasWriteAccess(*inst))
       {
         auto sourceLocStr = pdgutils::getSourceLocationStr(*inst);
-        ss << "[ (" << func->getName() << ")" << sourceLocStr << " ], ";
+        ss << "[ (" << func->getName() << ") " << sourceLocStr << " ], ";
       }
     }
   }

@@ -1,4 +1,6 @@
 #include "TaintUtils.hh"
+#include "llvm/Analysis/LoopInfo.h"
+#include "llvm/IR/Dominators.h"
 
 using namespace llvm;
 
@@ -172,6 +174,12 @@ bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
   auto nodeVal = n.getValue();
   if (!nodeVal)
     return false;
+
+  Instruction *inst = cast<Instruction>(nodeVal);
+  Function *func = inst->getFunction();
+  DominatorTree DT(*func);
+  LoopInfo LI(DT);
+
   for (auto user : nodeVal->users())
   {
     if (auto cmpInst = dyn_cast<CmpInst>(user))
@@ -184,6 +192,8 @@ bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
           auto branchControlDependentNodes = PDG.findNodesReachedByEdge(*branchNode, EdgeType::CONTROL);
           for (auto ctrDepNode : branchControlDependentNodes)
           {
+            if (ctrDepNode == branchNode)
+              continue;
             auto depNodeVal = ctrDepNode->getValue();
             if (CallInst *ci = dyn_cast<CallInst>(depNodeVal))
             {
@@ -211,6 +221,15 @@ bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
               // auto calledFuncNode = callGraph->getNode(*calledFunc);
               // if (auto senOpFunc = canReachSensitiveOperations(*calledFuncNode))
               //   return true;
+            }
+            // check if the there is a loop the branch
+            if (BranchInst *BI = dyn_cast<BranchInst>(depNodeVal))
+            {
+              if (LI.isLoopHeader(BI->getParent()))
+              {
+                senOpName = "loop";
+                return true;
+              }
             }
           }
         }
