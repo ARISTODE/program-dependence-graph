@@ -21,6 +21,7 @@ namespace pdg
 
     // classification for non-pointer type
     bool isValueUsedInArithmetic(Node &n);
+    bool isValUsedInDivByZero(Node &n);
     bool isValueInSensitiveBranch(Node &n, std::string &senOpName);
     bool isValueInSensitiveAPI(Node &n, std::string &senOpName);
 

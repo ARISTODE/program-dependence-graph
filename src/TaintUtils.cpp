@@ -17,15 +17,58 @@ static std::unordered_set<std::string> sensitiveOperations = {
     "kmem_cache_destroy",
     "kfree",
     "vfree",
+    "__get_free_pages",
+    "alloc_pages",
+    "get_zeroed_page",
+    "devm_kmalloc",
     "copy_from_user",
     "copy_to_user",
     "memcpy",
     "strcpy",
     "strncpy",
     "memset",
+    "mod_time",
+    "dma_map_single",
     "kobject_put",
     "kobject_create_and_add",
-};
+    "pci_bus_max_busnr",
+    "pci_find_capability",
+    "pci_bus_find_capability",
+    "pci_find_next_ext_capability",
+    "pci_find_ext_capability",
+    "pci_find_next_ht_capability",
+    "pci_find_ht_capability",
+    "pci_find_vsec_capability",
+    "pci_find_dvsec_capability",
+    "pci_find_parent_resource",
+    "pci_find_resource",
+    "pci_platform_power_transition",
+    "pci_set_power_state",
+    "pci_save_state",
+    "pci_restore_state",
+    "pci_store_saved_state",
+    "pci_load_saved_state",
+    "pci_load_and_free_saved_state",
+    "pci_reenable_device",
+    "pci_enable_device_io",
+    "pci_enable_device_mem",
+    "pci_enable_device",
+    "pcim_enable_device",
+    "pcim_pin_device",
+    "pci_disable_device",
+    "pci_find_next_bus",
+    "pci_get_slot",
+    "pci_get_domain_bus_and_slot",
+    "pci_get_subsys",
+    "pci_dev_present",
+    "pci_msi_mask_irq",
+    "pci_msi_unmask_irq",
+    "pci_msi_vec_count",
+    "pci_bus_alloc_resource",
+    "pci_scan_slot",
+    "pci_scan_child_bus",
+    "pci_rescan_bus",
+    "pci_create_slot"};
 
 // classes of the risky operations
 static std::unordered_map<std::string, std::string> RiskyFuncToClassMap = {
@@ -62,8 +105,51 @@ static std::unordered_map<std::string, std::string> RiskyFuncToClassMap = {
     {"dma_alloc_coherent", "dma"},
     {"dma_free_coherent", "dma"},
     {"dma_map_single", "dma"},
-    {"dma_unmap_single", "dma"}};
-
+    {"dma_unmap_single", "dma"},
+    {"pci_bus_read_config_byte", "bus"},
+    {"pci_bus_read_config_word", "bus"},
+    {"pci_bus_read_config_dword", "bus"},
+    {"pci_bus_write_config_byte", "bus"},
+    {"pci_bus_write_config_word", "bus"},
+    {"pci_bus_write_config_dword", "bus"},
+    {"pci_bus_max_busnr", "bus"},
+    {"pci_find_capability", "bus"},
+    {"pci_bus_find_capability", "bus"},
+    {"pci_find_next_ext_capability", "bus"},
+    {"pci_find_ext_capability", "bus"},
+    {"pci_find_next_ht_capability", "bus"},
+    {"pci_find_ht_capability", "bus"},
+    {"pci_find_vsec_capability", "bus"},
+    {"pci_find_dvsec_capability", "bus"},
+    {"pci_find_parent_resource", "bus"},
+    {"pci_find_resource", "bus"},
+    {"pci_platform_power_transition", "bus"},
+    {"pci_set_power_state", "bus"},
+    {"pci_save_state", "bus"},
+    {"pci_restore_state", "bus"},
+    {"pci_store_saved_state", "bus"},
+    {"pci_load_saved_state", "bus"},
+    {"pci_load_and_free_saved_state", "bus"},
+    {"pci_reenable_device", "bus"},
+    {"pci_enable_device_io", "bus"},
+    {"pci_enable_device_mem", "bus"},
+    {"pci_enable_device", "bus"},
+    {"pcim_enable_device", "bus"},
+    {"pcim_pin_device", "bus"},
+    {"pci_disable_device", "bus"},
+    {"pci_find_next_bus", "bus"},
+    {"pci_get_slot", "bus"},
+    {"pci_get_domain_bus_and_slot", "bus"},
+    {"pci_get_subsys", "bus"},
+    {"pci_dev_present", "bus"},
+    {"pci_msi_mask_irq", "bus"},
+    {"pci_msi_unmask_irq", "bus"},
+    {"pci_msi_vec_count", "bus"},
+    {"pci_bus_alloc_resource", "bus"},
+    {"pci_scan_slot", "bus"},
+    {"pci_scan_child_bus", "bus"},
+    {"pci_rescan_bus", "bus"},
+    {"pci_create_slot", "bus"}};
 
 // check if the pointer is dereferneced
 bool pdg::taintutils::isPointerRead(Node &n)
@@ -166,6 +252,28 @@ bool pdg::taintutils::isValueUsedInArithmetic(Node &n)
   }
   return false;
 }
+
+bool pdg::taintutils::isValUsedInDivByZero(Node &n)
+{
+  auto nodeVal = n.getValue();
+  if (!nodeVal)
+    return false;
+
+  for (auto user : nodeVal->users())
+  {
+    // add, mul, sub etc
+    if (auto inst = dyn_cast<Instruction>(user))
+    {
+      if (inst->getOpcode() == Instruction::SDiv ||
+          inst->getOpcode() == Instruction::UDiv)
+      {
+        return inst->getOperand(1) == nodeVal;
+      }
+    }
+  }
+  return false;
+}
+
 
 bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
 {
@@ -326,22 +434,14 @@ std::string pdg::taintutils::riskyDataTypeToString(pdg::RiskyDataType type)
     return "PTR_READ";
   case RiskyDataType::PTR_WRTIE:
     return "PTR_WRITE";
-  case RiskyDataType::PTR_BUFFER:
-    return "PTR_BUFFER";
-  case RiskyDataType::PTR_ARITH_BASE:
-    return "PTR_ARITH_BASE";
-  case RiskyDataType::ARR_BUFFER:
-    return "ARR_BUFFER";
   case RiskyDataType::ARR_IDX:
     return "ARR_IDX";
-  case RiskyDataType::NUM_ARITH:
-    return "NUM_ARITH";
-  case RiskyDataType::CONTROL_SENBRANCH:
-    return "CONTROL_SENB_RANCH";
-  case RiskyDataType::SEN_API:
-    return "SEN_API";
-  case RiskyDataType::FUNC_PTR:
-    return "FUNC_PTR";
+  case RiskyDataType::DIV_BY_ZERO:
+    return "DIV_BY_ZERO";
+  case RiskyDataType::CONTROL_VAR:
+    return "BRANCH";
+  case RiskyDataType::RISKY_KERNEL_FUNC:
+    return "RISKY_KERNEL_FUNC";
   case RiskyDataType::OTHER:
     return "UNCLASSIFY";
   default:
@@ -354,7 +454,7 @@ bool pdg::taintutils::isRiskyFunc(std::string funcName)
   std::string s = pdgutils::stripVersionTag(funcName);
   for (auto iter = RiskyFuncToClassMap.begin(); iter != RiskyFuncToClassMap.end(); ++iter)
   {
-    if (iter->first.find(s) != std::string::npos)
+    if (iter->first.find(pdgutils::stripFuncNameVersionNumber(s)) != std::string::npos)
       return true;
   }
   return false;

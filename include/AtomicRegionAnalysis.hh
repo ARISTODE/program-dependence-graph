@@ -65,6 +65,7 @@ namespace pdg
     void dumpCS();
     void dumpAtomicOps();
     std::set<llvm::Instruction*> computeInstsInCS(CSPair cs_pair);
+    void generateWarningCallInstsInCS(CSPair cs_pair);
     std::unordered_set<llvm::Function *> getFuncsNeedSynStubGen() { return _funcs_need_sync_stub_gen; }
     bool isFuncNeedSyncStubGen(llvm::Function &F) { return _funcs_need_sync_stub_gen.find(&F) == _funcs_need_sync_stub_gen.end(); }
     bool isRcuLock(llvm::CallInst &lock_call_inst);
@@ -95,6 +96,8 @@ namespace pdg
     std::map<llvm::Instruction *, Tree *> _sync_data_inst_tree_map;
     std::set<llvm::Instruction *> _insts_in_CS;
     std::ofstream _sync_stub_file;
+    // file for generating warnings
+    llvm::raw_fd_ostream *riskyCallSitesInCS;
     // sk_buff counting
     unsigned num_fields_skb_cs = 0;
     unsigned num_fields_skb_ao = 0;

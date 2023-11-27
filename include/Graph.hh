@@ -42,7 +42,7 @@ namespace pdg
     bool isBuild() { return _isBuild; }
     bool canReach(Node &src, Node &dst, std::set<EdgeType> &includeEdgeTypes, std::set<std::vector<llvm::Function *>> *allPaths, bool recordPath);
     void dfs(Node *currentNode, Node &dst, std::set<EdgeType> &includeEdgeTypes, std::unordered_set<Node *> &visited, std::vector<llvm::Function *> &currentPath, std::set<std::vector<llvm::Function *>> *allPaths, bool recordPath);
-    std::unordered_set<Node *> findNodesReachedByEdge(Node &src, EdgeType edgeTy);
+    std::unordered_set<Node *> findNodesReachedByEdge(Node &src, EdgeType edgeTy, bool isIntra = false);
     std::unordered_set<Node *> findNodesReachedByEdges(Node &src, std::set<EdgeType> &edgeTypes, bool isBackward = false);
     bool findPathDFS(Node *src, Node *dst, std::vector<std::pair<Node *, Edge *>> &path, std::unordered_set<Node *> &visited, std::set<EdgeType> &edgeTypes);
     PathVecs computePaths(Node &src, Node &sink); // compute all pathes

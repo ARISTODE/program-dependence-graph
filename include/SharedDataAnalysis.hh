@@ -4,6 +4,7 @@
 #include "ProgramDependencyGraph.hh"
 #include "KSplitStatsCollector.hh"
 #include <set>
+#include <unordered_set>
 #include <fstream> 
 
 namespace pdg
@@ -36,6 +37,7 @@ namespace pdg
     bool isGlobalOpStruct(std::string &s) { return _driver_func_op_struct_names.find(s) != _driver_func_op_struct_names.end(); }
     std::set<llvm::Function *> readFuncsFromFile(std::string fileName, llvm::Module &M, std::string dir = "");
     std::unordered_set<llvm::Function *> computeBoundaryTransitiveClosure();
+    std::unordered_set<llvm::Function *> computeKernelInterfaceFuncTransitiveClosure();
     bool isBoundaryFuncName(std::string funcName) { return _boundary_func_names.find(funcName) != _boundary_func_names.end(); }
     void computeSharedStructDITypes();
     void computeGlobalStructTypeNames();
@@ -58,6 +60,10 @@ namespace pdg
     void readGlobalFuncOpStructNames();
     llvm::Function *getModuleInitFunc(llvm::Module &M);
     ProgramGraph *getPDG() { return _PDG; }
+    
+    // functions for finding functions access a specific type of data
+    void findKernelFuncsAccessType(std::string targetDtName, std::unordered_set<llvm::Function *> &funcs);
+
     // some side tests
     void printPingPongCalls(llvm::Module &M);
     void dumpSharedTypes(std::string fileName);
@@ -70,18 +76,6 @@ namespace pdg
     bool usedInBranch(TreeNode &treeNode);
     bool isFuncPtr(TreeNode &treeNode);
     bool isDriverCallBackFuncPtrFieldNode(TreeNode &treeNode);
-    
-    // functions related to potential attacks search
-    void detectDrvAttacksOnField(TreeNode &treeNode);
-    bool detectIsAddrVarUsedAsIndex(llvm::Value &addrVar, bool countTaint = false);
-    bool detectIsAddrVarUsedInCond(llvm::Value &addrVar);
-    bool detectIsAddrVarUsedInSensitiveAPI(llvm::Value &addrVar);
-    void printPrecedeDriverUpdate(llvm::Value &addrVar);
-    bool checkRAWDriverUpdate(Node &node);
-    void computeTaintOnField(TreeNode &treeNode);
-    void computeExplicitFlowTaintedOnNode(Node &node, llvm::Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith);
-    void computeImplicitFlowTaintedOnField(Node &node, llvm::Instruction &srcInst, std::string fieldAccessPath, bool &taintSenAPI, bool &taintCond, bool &taintPtrArith);
-    void findGlobalAlias(Node &node, std::unordered_set<Node *> &aliasNodes);
     std::map<llvm::DIType *, Tree *> getGlobalStructDTMap() { return _global_struct_di_type_map; }
 
   private:

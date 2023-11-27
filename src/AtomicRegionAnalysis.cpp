@@ -93,7 +93,7 @@ void pdg::AtomicRegionAnalysis::setupFenceNames()
 
 void pdg::AtomicRegionAnalysis::setupLockMap()
 {
-  _lock_map.insert(std::make_pair("rtnl_lock", "rtnl_unlock"));
+  _lock_map.insert(std::make_pair("rtnl_lock", "__rtnl_unlock"));
   _lock_map.insert(std::make_pair("mutex_lock", "mutex_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
@@ -259,6 +259,23 @@ std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicR
   return ret;
 }
 
+void pdg::AtomicRegionAnalysis::generateWarningCallInstsInCS(pdg::AtomicRegionAnalysis::CSPair cs_pair)
+{
+
+
+  std::set<CallInst *> ret;
+  auto instsInCS = computeInstsInCS(cs_pair);
+  *riskyCallSitesInCS << "------ [lock]: " << pdgutils::getSourceLocationStr(*cs_pair.first) << "\n";
+  for (auto inst : instsInCS)
+  {
+    if (auto ci = dyn_cast<CallInst>(inst))
+    {
+      *riskyCallSitesInCS << "\t[CS]: " << pdgutils::getSourceLocationStr(*ci) << "\n";
+    }
+  }
+  *riskyCallSitesInCS << "------ [unlock]: " << pdgutils::getSourceLocationStr(*cs_pair.second) << "\n";
+}
+
 bool pdg::AtomicRegionAnalysis::isRcuLock(CallInst &lock_call_inst)
 {
   auto called_func = pdgutils::getCalledFunc(lock_call_inst);
@@ -272,21 +289,37 @@ bool pdg::AtomicRegionAnalysis::isRcuLock(CallInst &lock_call_inst)
 
 void pdg::AtomicRegionAnalysis::computeWarningCS()
 {
+  std::error_code EC;
+  // this is setup for generating warning call instructions in critical sections
+  riskyCallSitesInCS = new raw_fd_ostream("RiskyCallSites.log", EC, sys::fs::OF_Text);
+  if (EC)
+  {
+    delete riskyCallSitesInCS;
+    errs() << "cannot open RiskyCallSites.log\n";
+    return;
+  }
+  auto kernelTransFunc = _SDA->computeKernelInterfaceFuncTransitiveClosure();
+
   ProgramGraph *G = _SDA->getPDG();
   // PDGCallGraph &CG = PDGCallGraph::getInstance();
   for (auto cs_pair : _critical_sections)
   {
+
     bool cs_warning = false;
     bool has_nested_lock = false;
     bool is_shared_lock = false;
     auto lock_inst = cs_pair.first;
+    Function *cur_func = lock_inst->getFunction();
+    if (kernelTransFunc.find(cur_func) != kernelTransFunc.end())
+      continue;
     // collect instructions in critical sections
     auto insts_in_cs = computeInstsInCS(cs_pair);
     _insts_in_CS.insert(insts_in_cs.begin(), insts_in_cs.end());
 
+    generateWarningCallInstsInCS(cs_pair);
+
     if (!isa<CallInst>(lock_inst))
       continue;
-    Function *cur_func = lock_inst->getFunction();
     // if (!_SDA->isDriverFunc(*cur_func))
     //   continue;
     CallInst *lock_call_inst = cast<CallInst>(lock_inst);
@@ -444,6 +477,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       }
     }
   }
+  riskyCallSitesInCS->close();
 }
 
 void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()

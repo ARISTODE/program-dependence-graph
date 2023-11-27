@@ -23,6 +23,8 @@ namespace pdg
       bool isBuild() { return _isBuild; }
       std::set<Node *> searchCallNodes(Node &start_node, std::string calleeName);
       void computePathConditionsBetweenNodes(Node &srcNode, Node &dstNode, std::set<llvm::Value*> &conditionValues);
+      void computeIntraprocControlFlowReachedNodes(Node &srcNode, std::set<Node *> &CFGReachedNodes);
+      void computeInstBetweenNodes(Node &srcNode, Node &dstNode, std::unordered_set<Node *> &instNodes);
 
     private:
       bool _isBuild = false;

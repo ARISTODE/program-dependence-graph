@@ -54,6 +54,7 @@ bool pdg::RiskyBoundaryAPIAnalysis::runOnModule(Module &M)
   taintutils::printJsonToFile(riskyAPIJsonObjs, "RiskyBoundaryAPI.json");
   auto classificationJson = countRiskyAPIClasses(riskyAPIJsonObjs);
   taintutils::printJsonToFile(classificationJson, "BoundaryAPICounts.json");
+
   return false;
 }
 
@@ -475,6 +476,7 @@ nlohmann::ordered_json pdg::RiskyBoundaryAPIAnalysis::countRiskyAPIClasses(const
 
   return outputJson;
 }
+
 
 static RegisterPass<pdg::RiskyBoundaryAPIAnalysis>
     RiskyFieldAnalysis("risky-boundary", "KSplit Taint Analysis", false, true);

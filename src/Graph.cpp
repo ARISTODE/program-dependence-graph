@@ -80,12 +80,14 @@ bool pdg::GenericGraph::canReach(Node &src, Node &dst, std::set<EdgeType> &inclu
 }
 
 
-std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edgeTy)
+std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::Node &src, EdgeType edgeTy, bool isIntra)
 {
   std::unordered_set<Node *> ret;
   std::queue<Node *> nodeQueue;
   nodeQueue.push(&src);
   std::unordered_set<Node*> visited;
+
+  // obtain source func, used to compare and eliminate non-intra insts if isIntra is true
   while (!nodeQueue.empty())
   {
     Node *currentNode = nodeQueue.front();
@@ -96,9 +98,16 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdge(pdg::N
     ret.insert(currentNode);
     for (auto out_edge : currentNode->getOutEdgeSet())
     {
+      auto neighborNode = out_edge->getDstNode();
+      auto neighborFunc = neighborNode->getFunc();
+
+      if (isIntra && neighborFunc && neighborFunc != src.getFunc())
+        continue;
+
       if (edgeTy != out_edge->getEdgeType())
         continue;
-      nodeQueue.push(out_edge->getDstNode());
+
+      nodeQueue.push(neighborNode);
     }
   }
   return ret;
@@ -143,6 +152,7 @@ std::unordered_set<pdg::Node *> pdg::GenericGraph::findNodesReachedByEdges(pdg::
         nodeQueue.push(edge->getDstNode());
     }
   }
+  
   return ret;
 }
 

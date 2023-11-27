@@ -6,14 +6,10 @@ namespace pdg
   enum class RiskyDataType {
     PTR_READ,
     PTR_WRTIE,
-    PTR_BUFFER,
-    PTR_ARITH_BASE,
-    ARR_BUFFER,
     ARR_IDX,
-    NUM_ARITH,
-    CONTROL_SENBRANCH,
-    SEN_API,
-    FUNC_PTR,
+    DIV_BY_ZERO,
+    CONTROL_VAR,
+    RISKY_KERNEL_FUNC,
     OTHER
   };
 

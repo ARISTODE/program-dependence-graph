@@ -17,7 +17,6 @@ namespace pdg
 {
   class RiskyBoundaryAPIAnalysis : public llvm::ModulePass
   {
-
   public:
     static char ID;
     RiskyBoundaryAPIAnalysis() : llvm::ModulePass(ID){};

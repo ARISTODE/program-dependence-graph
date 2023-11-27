@@ -67,8 +67,8 @@ void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)
         {
           std::string funcName = calledFunc->getName().str();
           funcName = pdgutils::stripFuncNameVersionNumber(funcName);
-          if (isBlackListFunc(funcName))
-            continue;
+          // if (isBlackListFunc(funcName))
+          //   continue;
           
           if (std::find(_importedFuncs.begin(), _importedFuncs.end(), funcName) == _importedFuncs.end())
           {

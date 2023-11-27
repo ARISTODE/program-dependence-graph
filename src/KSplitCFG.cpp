@@ -245,3 +245,44 @@ void pdg::KSplitCFG::computePathConditionsBetweenNodes(Node &srcNode, Node &dstN
     }
   }
 }
+
+void pdg::KSplitCFG::computeIntraprocControlFlowReachedNodes(pdg::Node &srcNode, std::set<pdg::Node *> &CFGReachedNodes)
+{
+  auto nodes = findNodesReachedByEdge(srcNode, EdgeType::CONTROL_FLOW, true);
+  CFGReachedNodes.insert(nodes.begin(), nodes.end());
+}
+
+void pdg::KSplitCFG::computeInstBetweenNodes(pdg::Node &srcNode, pdg::Node &dstNode, std::unordered_set<pdg::Node *> &instNodes)
+{
+  if (!srcNode.getValue())
+    return;
+  Function *srcFunc = srcNode.getFunc();
+
+  std::queue<Node *> nodeQ;
+  nodeQ.push(&srcNode);
+
+  while (!nodeQ.empty())
+  {
+    auto node = nodeQ.front();
+    nodeQ.pop();
+    auto cfgNeighbors = node->getOutNeighborsWithDepType(EdgeType::CONTROL_FLOW);
+    for (auto neighbor : cfgNeighbors)
+    {
+      auto neighborFunc = neighbor->getFunc();
+      if (srcFunc != neighborFunc)
+        continue;
+
+      if (neighbor == &dstNode)
+        return;
+
+      if (instNodes.find(neighbor) == instNodes.end())
+      {
+        instNodes.insert(neighbor);
+        nodeQ.push(neighbor);
+      }
+    }
+  }
+
+  // if target node is not found, just clear the node set
+  instNodes.clear();
+}

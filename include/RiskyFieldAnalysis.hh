@@ -55,13 +55,15 @@ namespace pdg
             std::set<std::tuple<Node *, Node *, std::string, std::string>> _taintTuples;
             std::set<std::tuple<Node *, Node *, std::string, std::string>> _structTaintTuples; // used to store taint for struct field
             // stats counting
-            unsigned numKernelReadDriverUpdatedFields = 0;
+            unsigned _numKernelReadDriverUpdatedFields = 0;
+            unsigned _numSharedFields = 0;
+            unsigned _numBoundaryArg = 0;
+            unsigned _numNonStructBoundaryArg = 0;
             unsigned numPtrField = 0;
             unsigned numFuncPtrField = 0;
             unsigned numDataPtrField = 0;
             unsigned numKernelAPIParam = 0;
             unsigned numControlTaintTrace = 0;
-            unsigned numBoundaryArg = 0;
             // output file
             llvm::raw_fd_ostream *riskyFieldOS;
             llvm::raw_fd_ostream *riskyFieldTaintOS;

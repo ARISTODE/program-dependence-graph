@@ -41,18 +41,8 @@ std::unordered_set<std::string> sensitiveOperations = {
     "memset",
     "kobject_put",
     "kobject_create_and_add",
+    "mod_timer"
 };
-
-// setup taint edges
-// std::set<pdg::EdgeType> taintEdges = {
-//     pdg::EdgeType::PARAMETER_IN,
-//     // pdg::EdgeType::PARAMETER_OUT,
-//     // pdg::EdgeType::DATA_ALIAS,
-//     // EdgeType::DATA_RET,
-//     // pdg::EdgeType::CONTROL,
-//     pdg::EdgeType::DATA_STORE_TO,
-//     pdg::EdgeType::DATA_DEF_USE,
-//     pdg::EdgeType::DATA_EQUL_OBJ};
 
 std::set<Function *> readFuncsFromFile(std::string fileName, Module &M, std::string dir)
 {
@@ -103,6 +93,58 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
     unsigned caseId = 0;
 
     auto globalStructDTMap = _SDA->getGlobalStructDTMap();
+    
+    // first step, propagate taint, this is used to 
+    for (auto dtPair : globalStructDTMap)
+    {
+        auto typeTree = dtPair.second;
+        std::queue<TreeNode *> nodeQueue;
+        nodeQueue.push(typeTree->getRootNode());
+        while (!nodeQueue.empty())
+        {
+            TreeNode *n = nodeQueue.front();
+            nodeQueue.pop();
+            DIType *nodeDIType = n->getDIType();
+            if (nodeDIType == nullptr)
+                continue;
+
+            for (auto childNode : n->getChildNodes())
+            {
+                nodeQueue.push(childNode);
+            }
+
+            auto addrVars = n->getAddrVars();
+            auto nodeType = n->getDIType();
+            std::set<EdgeType> taintEdges = {};
+            if (dbgutils::isPointerType(*nodeType))
+            {
+                taintEdges = {
+                    EdgeType::DATA_ALIAS,
+                    EdgeType::PARAMETER_IN,
+                    EdgeType::DATA_DEF_USE,
+                    EdgeType::DATA_EQUL_OBJ};
+            }
+            else
+            {
+                taintEdges = {
+                    EdgeType::PARAMETER_IN,
+                    EdgeType::DATA_DEF_USE,
+                    EdgeType::DATA_EQUL_OBJ,
+                    EdgeType::DATA_STORE_TO};
+            }
+
+            for (auto addrVar : addrVars)
+            {
+                auto addrVarNode = _PDG->getNode(*addrVar);
+                auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
+                for (auto taintNode : taintNodes)
+                {
+                    taintNode->setTaint();
+                }
+            }
+        }
+    }
+
     for (auto dtPair : globalStructDTMap)
     {
         auto typeTree = dtPair.second;
@@ -141,11 +183,16 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
                 numFields++;
             // classify the risky field into different classes
             if (n->isShared)
+            {
+                // per struct shared field count
                 numSharedFields++;
+                // increase the total shared field count
+                _numSharedFields++;
+            }
 
             if (isDriverControlledField(*n))
             {
-                numKernelReadDriverUpdatedFields++;
+                _numKernelReadDriverUpdatedFields++;
                 numKRDUFields++;
                 std::set<RiskyDataType> riskyClassifications;
                 classifyRiskyField(*n, riskyClassifications, taintJsonObjs, caseId);
@@ -167,11 +214,12 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
             }
         }
         // propagate struct in JSON format
-        structStatJson["No.fields"] = numFields;
-        structStatJson["No.shared fields"] = numSharedFields;
+        structStatJson["No.Fields"] = numFields;
+        structStatJson["No.Shared fields"] = numSharedFields;
         structStatJson["No.KRDU fields"] = numKRDUFields;
         structStatJson["No.classified fields"] = numKRDUFields - riskyFieldCounters[RiskyDataType::OTHER];
         structStatJson["No.unclassified fields"] = riskyFieldCounters[RiskyDataType::OTHER];
+
         for (auto it = riskyFieldCounters.begin(); it != riskyFieldCounters.end(); ++it)
         {
             std::string riskyDTStr = taintutils::riskyDataTypeToString(it->first);
@@ -186,7 +234,56 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
 
     // TODO: taint the return value of driver interface functions
     // classify the taint based on the data directly passed across the isolation boundary
+
     auto kernelAPIs = readFuncsFromFile("imported_funcs", M, "boundaryFiles");
+
+    // propagate taints from the parameters
+    for (auto func : kernelAPIs)
+    {
+        if (_SDA->isDriverFunc(*func))
+            continue;
+
+        auto funcWrapper = _PDG->getFuncWrapper(*func);
+        if (!funcWrapper)
+            continue;
+
+        auto argTreeMap = funcWrapper->getArgFormalInTreeMap();
+
+        for (auto iter = argTreeMap.begin(); iter != argTreeMap.end(); iter++)
+        {
+            auto argTree = iter->second;
+            auto rootNode = argTree->getRootNode();
+            auto argDIType = rootNode->getDIType();
+            if (!argDIType)
+                continue;
+
+            std::set<EdgeType> taintEdges;
+
+            if (dbgutils::isPointerType(*argDIType))
+            {
+                taintEdges = {
+                    EdgeType::DATA_ALIAS,
+                    EdgeType::PARAMETER_IN,
+                    EdgeType::DATA_DEF_USE,
+                    EdgeType::DATA_EQUL_OBJ};
+            }
+            else
+            {
+                taintEdges = {
+                    EdgeType::PARAMETER_IN,
+                    EdgeType::DATA_DEF_USE,
+                    EdgeType::DATA_EQUL_OBJ,
+                    EdgeType::DATA_STORE_TO};
+            }
+
+            auto taintNodes = _PDG->findNodesReachedByEdges(*rootNode, taintEdges);
+            for (auto taintNode : taintNodes)
+            {
+                taintNode->setTaint();
+            }
+        }
+    }
+
     for (auto func : kernelAPIs)
     {
         if (_SDA->isDriverFunc(*func))
@@ -203,9 +300,11 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
             auto argTree = iter->second;
             auto rootNode = argTree->getRootNode();
             auto argDIType = rootNode->getDIType();
+            _numBoundaryArg++;
             // struct and struct fields are covered by type taint
             if (argDIType && dbgutils::isStructPointerType(*argDIType))
                 continue;
+            _numNonStructBoundaryArg++;
             // if ptr is not updated in driver, no need to analyze it
             if (dbgutils::isPointerType(*argDIType) && !hasUpdateInDrv(*rootNode))
                 continue;
@@ -223,12 +322,51 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
             }
 
             caseId++;
-            numBoundaryArg++;
             taintutils::printJsonToFile(taintJsonObjs, "boundaryParamTaint.json");
         }
     }
 
+    // check return value of driver exported functions
+    for (auto func : _SDA->getBoundaryFuncs())
+    {
+        if (!_SDA->isDriverFunc(*func))
+            continue;
+
+        auto funcWrapper = _PDG->getFuncWrapper(*func);
+        if (!funcWrapper)
+            continue;
+
+        auto retFormalTree = funcWrapper->getRetFormalInTree();
+        auto retRootNode = retFormalTree->getRootNode();
+        if (retRootNode)
+        {
+            auto retRootDIType = retRootNode->getDIType();
+            if (!retRootDIType)
+                continue;
+            // classify the return value based on the risky use
+            auto actualInTreeNodes = retRootNode->getInNeighborsWithDepType(EdgeType::PARAMETER_IN);
+            for (auto n : actualInTreeNodes)
+            {
+                TreeNode *actualTN = static_cast<TreeNode *>(n);
+                nlohmann::ordered_json retTaintJsonObjs = nlohmann::ordered_json::array();
+                std::set<RiskyDataType> retRiskyClassifications;
+                classifyRiskyField(*actualTN, retRiskyClassifications, retTaintJsonObjs, caseId);
+
+                // update the total counter
+                updateRiskyParamCounters(retRiskyClassifications);
+
+                if (retRiskyClassifications.empty())
+                {
+                    totalRiskyParamCounters[RiskyDataType::OTHER]++;
+                }
+                taintutils::printJsonToFile(retTaintJsonObjs, "retBoundaryParamTaint.json");
+            }
+        }
+        caseId++;
+    }
+
     printFieldClassificationTaint(*riskyFieldOS);
+
     riskyFieldTaintOS->close();
     return false;
 }
@@ -322,8 +460,6 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyPtrField(TreeNode &tn, std::set<pdg::
         // TODO: we should discuss if function pointer could cause risky usage in the kernel.
         // Ideally, we should mark this as risky, as the attacker can just supply a pointer and instruct the kernel
         // to call back to that address.
-        riskyClassifications.insert(RiskyDataType::FUNC_PTR);
-
         for (auto addrVar : addrVars)
         {
             auto addrVarNode = _PDG->getNode(*addrVar);
@@ -353,11 +489,10 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyPtrField(TreeNode &tn, std::set<pdg::
         // for pointer type node, find all the aliasing, and pointer derived from them
         auto addrVarNode = _PDG->getNode(*addrVar);
         auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
-
+        
         // classify based on taint node
         for (auto taintNode : taintNodes)
         {
-            taintNode->setTaint();
             auto taintVal = taintNode->getValue();
             if (!taintVal)
                 continue;
@@ -385,29 +520,12 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyPtrField(TreeNode &tn, std::set<pdg::
                 taintJsonObjs.push_back(traceJsonObj);
                 classified = true;
             }
-            // check if the ptr is used as buffer
-            if (riskyClassifications.find(RiskyDataType::PTR_BUFFER) == riskyClassifications.end() && taintutils::isPointerToArray(*taintNode))
-            {
-                riskyClassifications.insert(RiskyDataType::PTR_BUFFER);
-                auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, "ptr-array", caseID, taintEdges, &tn);
-                taintJsonObjs.push_back(traceJsonObj);
-                classified = true;
-            }
-            // check if the ptr is used as ptr arith base, this is a super set of the ptr arry, it considers ptrtoint inst as well as gep, while the
-            // ptr buffer only consider gep
-            if (riskyClassifications.find(RiskyDataType::PTR_ARITH_BASE) == riskyClassifications.end() && taintutils::isBaseInPointerArithmetic(*taintNode))
-            {
-                riskyClassifications.insert(RiskyDataType::PTR_ARITH_BASE);
-                auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, "ptr-arith", caseID, taintEdges, &tn);
-                taintJsonObjs.push_back(traceJsonObj);
-                classified = true;
-            }
 
             // check if the ptr could affect a bracnh in the kernel, also check if the branch contains risky operations
             std::string senOpName = "";
-            if (riskyClassifications.find(RiskyDataType::CONTROL_SENBRANCH) == riskyClassifications.end() && taintutils::isValueInSensitiveBranch(*taintNode, senOpName))
+            if (riskyClassifications.find(RiskyDataType::CONTROL_VAR) == riskyClassifications.end() && taintutils::isValueInSensitiveBranch(*taintNode, senOpName))
             {
-                riskyClassifications.insert(RiskyDataType::CONTROL_SENBRANCH);
+                riskyClassifications.insert(RiskyDataType::CONTROL_VAR);
                 std::string s = "ptr-sen-branch (" + senOpName + ")";
                 auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, s, caseID, taintEdges, &tn);
                 taintJsonObjs.push_back(traceJsonObj);
@@ -417,9 +535,9 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyPtrField(TreeNode &tn, std::set<pdg::
 
             //  check if th e ptr is used in sensitive kernel APIS, such as memory copying, or memory management etc
             senOpName = "";
-            if (riskyClassifications.find(RiskyDataType::SEN_API) == riskyClassifications.end() && taintutils::isValueInSensitiveAPI(*taintNode, senOpName))
+            if (riskyClassifications.find(RiskyDataType::RISKY_KERNEL_FUNC) == riskyClassifications.end() && taintutils::isValueInSensitiveAPI(*taintNode, senOpName))
             {
-                riskyClassifications.insert(RiskyDataType::SEN_API);
+                riskyClassifications.insert(RiskyDataType::RISKY_KERNEL_FUNC);
                 std::string s = "ptr-sen-api (" + senOpName + ")";
                 auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, s, caseID, taintEdges, &tn);
                 taintJsonObjs.push_back(traceJsonObj);
@@ -460,9 +578,14 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
         auto addrVarNode = _PDG->getNode(*addrVar);
         auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
 
+        // set the taints for all the tainted nodes
+        // for (auto taintNode : taintNodes)
+        // {
+        //     taintNode->setTaint();
+        // }
+
         for (auto taintNode : taintNodes)
         {
-            taintNode->setTaint();
             auto taintVal = taintNode->getValue();
             if (!taintVal)
                 continue;
@@ -473,14 +596,6 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
                 // skip driver uses in functions
                 if (_SDA->isDriverFunc(*taintInst->getFunction()))
                     continue;
-            }
-            // check if this is an array type
-            if (riskyClassifications.find(RiskyDataType::ARR_BUFFER) == riskyClassifications.end() && dbgutils::isArrayType(*fieldDIType))
-            {
-                riskyClassifications.insert(RiskyDataType::ARR_BUFFER);
-                auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, "array", caseID, taintEdges, &tn);
-                taintJsonObjs.push_back(traceJsonObj);
-                classified = true;
             }
 
             // check if value used as array index or operand of ptr arith
@@ -493,10 +608,10 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
             }
 
             // check if value is used in ptr arithmetic
-            if (riskyClassifications.find(RiskyDataType::NUM_ARITH) == riskyClassifications.end() && taintutils::isValueUsedInArithmetic(*taintNode))
+            if (riskyClassifications.find(RiskyDataType::DIV_BY_ZERO) == riskyClassifications.end() && taintutils::isValUsedInDivByZero(*taintNode))
             {
-                riskyClassifications.insert(RiskyDataType::NUM_ARITH);
-                auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, "numeric-arith", caseID, taintEdges, &tn);
+                riskyClassifications.insert(RiskyDataType::DIV_BY_ZERO);
+                auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, "div-by-zero", caseID, taintEdges, &tn);
                 taintJsonObjs.push_back(traceJsonObj);
                 classified = true;
             }
@@ -504,9 +619,9 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
             // check if value is used in kernel branch
             // check if the ptr could affect a bracnh in the kernel, also check if the branch contains risky operations
             std::string senOpName = "";
-            if (riskyClassifications.find(RiskyDataType::CONTROL_SENBRANCH) == riskyClassifications.end() && taintutils::isValueInSensitiveBranch(*taintNode, senOpName))
+            if (riskyClassifications.find(RiskyDataType::CONTROL_VAR) == riskyClassifications.end() && taintutils::isValueInSensitiveBranch(*taintNode, senOpName))
             {
-                riskyClassifications.insert(RiskyDataType::CONTROL_SENBRANCH);
+                riskyClassifications.insert(RiskyDataType::CONTROL_VAR);
                 // TODO: check if the branch operation is risky, if so, add the risky operation info to the json
                 std::string s = "val-sen-branch (" + senOpName + ")";
                 auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, s, caseID, taintEdges, &tn);
@@ -516,9 +631,9 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
 
             //  check if th e ptr is used in sensitive kernel APIS, such as memory copying, or memory management etc
             senOpName = "";
-            if (riskyClassifications.find(RiskyDataType::SEN_API) == riskyClassifications.end() && taintutils::isValueInSensitiveAPI(*taintNode, senOpName))
+            if (riskyClassifications.find(RiskyDataType::RISKY_KERNEL_FUNC) == riskyClassifications.end() && taintutils::isValueInSensitiveAPI(*taintNode, senOpName))
             {
-                riskyClassifications.insert(RiskyDataType::SEN_API);
+                riskyClassifications.insert(RiskyDataType::RISKY_KERNEL_FUNC);
                 std::string s = "val-sen-api (" + senOpName + ")";
                 auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, s, caseID, taintEdges, &tn);
                 taintJsonObjs.push_back(traceJsonObj);
@@ -615,20 +730,9 @@ bool pdg::RiskyFieldAnalysis::hasUpdateInDrv(pdg::TreeNode &n)
         // skip nodes that are not in driver
         if (!_SDA->isDriverFunc(*func))
             continue;
-        if (treeNodeFunc->getName() == "kmalloc_order")
-        {
-            if (node->getValue())
-            {
-                if (auto inst = dyn_cast<Instruction>(node->getValue()))
-                {
-                    pdgutils::printSourceLocation(*inst);
-                }
-            }
-        }
 
         if (auto inst = dyn_cast<Instruction>(node->getValue()))
         {
-            // pdgutils::printSourceLocation(*inst);
             if (pdgutils::hasWriteAccess(*inst) && !isa<AllocaInst>(inst))
                 return true;
         }
@@ -780,28 +884,83 @@ nlohmann::ordered_json pdg::RiskyFieldAnalysis::generateTraceJsonObj(Node &srcNo
         traceJsonObj["call path (type)"] = callPaths;
     }
 
-    // obtain path conditions
-    auto cfgAddrVarNode = cfg.getNode(*addrVarInst);
-    auto cfgTaintVarNode = cfg.getNode(*taintInst);
-    std::set<Value *> conditionVals;
-    cfg.computePathConditionsBetweenNodes(*cfgAddrVarNode, *cfgTaintVarNode, conditionVals);
-    traceJsonObj["cond_num"] = std::to_string(conditionVals.size());
+
+    // recursively obtain control dependent nodes from the taint sink inst
+    std::set<EdgeType> ctrlEdge = {EdgeType::CONTROL};
+    auto controlDepNodes = _PDG->findNodesReachedByEdges(dstNode, ctrlEdge, true);
+    if (controlDepNodes.size() > 0)
+    {
+        std::string controlDepLoc = "";
+        unsigned numCheck = 0;
+        for (auto cn : controlDepNodes)
+        {
+            if (cn == &dstNode)
+                continue;
+            if (cn->getValue())
+            {
+                if (auto i = dyn_cast<Instruction>(cn->getValue()))
+                {
+                    controlDepLoc = controlDepLoc + pdgutils::getSourceLocationStr(*i) + " | ";
+                    numCheck++;
+                }
+            }
+        }
+        traceJsonObj["num condition checks"] = numCheck;
+        traceJsonObj["condition checks"] = controlDepLoc;
+    }
+
+    // obtain path conditions based on control dependences on the tainted ndoes
+    // first, obtain taint path based on data flow
+    std::vector<std::pair<Node *, Edge *>> taintPath;
+    std::unordered_set<Node *> visited;
+    std::unordered_set<Node *> totalCtrlNodes;
+
+    if (_PDG->findPathDFS(&srcNode, &dstNode, taintPath, visited, taintEdges))
+    {
+        for (auto pair : taintPath)
+        {
+            Node* tn = pair.first;
+            auto ctrlDepNodes = _PDG->findNodesReachedByEdges(*tn, ctrlEdge, true);
+            // erase the starting node 
+            ctrlDepNodes.erase(ctrlDepNodes.find(tn), ctrlDepNodes.end());
+            totalCtrlNodes.insert(ctrlDepNodes.begin(), ctrlDepNodes.end());
+        }
+    }
+
+
+    // auto cfgAddrVarNode = cfg.getNode(*addrVarInst);
+    // auto cfgTaintVarNode = cfg.getNode(*taintInst);
+    // std::set<Value *> conditionVals;
+    // cfg.computePathConditionsBetweenNodes(*cfgAddrVarNode, *cfgTaintVarNode, conditionVals);
+    traceJsonObj["cond_num"] = std::to_string(totalCtrlNodes.size());
+    std::string condLocStr = "";
+    
+    for (auto ctrlNode : totalCtrlNodes)
+    {
+        auto ctrlNodeVal = ctrlNode->getValue();
+        if (!ctrlNodeVal)
+            continue;
+
+        if (Instruction *i = dyn_cast<Instruction>(ctrlNodeVal))
+        {
+            condLocStr = condLocStr + pdgutils::getSourceLocationStr(*i) + " | ";
+        }
+    }
+
+    traceJsonObj["cond_loc"] = condLocStr;
 
     bool isControlledPath = true;
     // check if path conditions are all tainted, which indicates a feasible path
     // if path is not controllable, push the JSON to the non trace JSON object
-    for (auto v : conditionVals)
+    for (auto ctrlNode : totalCtrlNodes)
     {
         if (!isControlledPath)
             break;
+        
         bool isCurBranchTaint = false;
-        auto condInstNode = _PDG->getNode(*v);
-
-        if (!condInstNode)
-            continue;
 
         // check if condition is tainted
-        if (!condInstNode->isTaint())
+        if (!ctrlNode->isTaint())
         {
             isControlledPath = false;
             break;
@@ -820,12 +979,9 @@ nlohmann::ordered_json pdg::RiskyFieldAnalysis::generateTraceJsonObj(Node &srcNo
     numControlTaintTrace++;
 
     // if all the conditions are tainted, we proceed to compute the taints
-    std::vector<std::pair<Node *, Edge *>> path;
-    std::unordered_set<Node *> visited;
-    _PDG->findPathDFS(&srcNode, &dstNode, path, visited, taintEdges);
     std::string taintTraceStr = "";
     raw_string_ostream ss(taintTraceStr);
-    _PDG->convertPathToString(path, ss);
+    _PDG->convertPathToString(taintPath, ss);
     ss.flush();
     traceJsonObj["t_trace"] = ss.str();
 
@@ -864,28 +1020,44 @@ void pdg::RiskyFieldAnalysis::printFieldClassificationTaint(raw_fd_ostream &OS)
     // OS << "No.kernel API params: " << numKernelAPIParam << "\n";
     // OS << "No.control taint trace: " << numControlTaintTrace << "\n";
 
-    nlohmann::ordered_json fieldStatJson;
-    fieldStatJson["KRDU fields"] = numKernelReadDriverUpdatedFields;
-    fieldStatJson["ptr fields"] = numPtrField;
-    fieldStatJson["func ptr fields"] = numFuncPtrField;
-    fieldStatJson["data ptr fields"] = numDataPtrField;
+    unsigned numKernelBoundaryFunc = 0;
+    unsigned numDrvBoundaryFunc = 0;
+    for (auto f : _SDA->getBoundaryFuncs())
+    {
+        if (_SDA->isDriverFunc(*f))
+            numDrvBoundaryFunc++;
+        else
+            numKernelBoundaryFunc++;
+    }
+
+    nlohmann::ordered_json drvGeneralStats;
+    drvGeneralStats["Num kernel  boundary func"] = numKernelBoundaryFunc;
+    drvGeneralStats["Num boundary parameters"] = _numBoundaryArg;
+    drvGeneralStats["Num non-struct boundary parameters"] = _numNonStructBoundaryArg;
+    drvGeneralStats["Num drv callbacks"] = numDrvBoundaryFunc;
+    drvGeneralStats["Num shared struct"] = _SDA->getGlobalStructDTMap().size();
+    drvGeneralStats["Shared fields"] = _numSharedFields;
+    drvGeneralStats["KRDU fields"] = _numKernelReadDriverUpdatedFields;
+    drvGeneralStats["ptr fields"] = numPtrField;
+    drvGeneralStats["func ptr fields"] = numFuncPtrField;
+    drvGeneralStats["data ptr fields"] = numDataPtrField;
 
     for (auto it = totalRiskyFieldCounters.begin(); it != totalRiskyFieldCounters.end(); ++it)
     {
         auto typeStr = taintutils::riskyDataTypeToString(it->first);
-        fieldStatJson[typeStr] = it->second;
+        drvGeneralStats[typeStr] = it->second;
     }
-    taintutils::printJsonToFile(fieldStatJson, "riskyDataStat.json");
+    taintutils::printJsonToFile(drvGeneralStats, "riskyDataStat.json");
 
-    nlohmann::ordered_json boundaryParamStatJson;
-    boundaryParamStatJson["num boundary arg"] = numBoundaryArg;
-    for (auto it = totalRiskyParamCounters.begin(); it != totalRiskyParamCounters.end(); ++it)
-    {
-        auto typeStr = taintutils::riskyDataTypeToString(it->first);
-        boundaryParamStatJson[typeStr] = it->second;
-    }
+    // nlohmann::ordered_json boundaryParamStatJson;
+    // boundaryParamStatJson["num boundary arg"] = _numBoundaryArg;
+    // for (auto it = totalRiskyParamCounters.begin(); it != totalRiskyParamCounters.end(); ++it)
+    // {
+    //     auto typeStr = taintutils::riskyDataTypeToString(it->first);
+    //     boundaryParamStatJson[typeStr] = it->second;
+    // }
 
-    taintutils::printJsonToFile(boundaryParamStatJson, "riskyDataStat.json");
+    // taintutils::printJsonToFile(boundaryParamStatJson, "riskyDataStat.json");
 }
 
 static RegisterPass<pdg::RiskyFieldAnalysis>
