@@ -205,7 +205,7 @@ pdg::Tree::Tree(const Tree &src_tree)
 void pdg::Tree::print()
 {
   if (getFunc())
-    errs() << "func: " << getFunc()->getName() << "\n";
+    errs() << "func: " << getFunc()->getName().str() << "\n";
   std::queue<TreeNode *> nodeQueue;
   nodeQueue.push(_rootNode);
   while (!nodeQueue.empty())
@@ -326,7 +326,7 @@ bool pdg::TreeNode::isSharedLockField()
   //             Function *calledFunc = callInst->getCalledFunction();
   //             if (calledFunc)
   //             {
-  //               StringRef funcName = calledFunc->getName();
+  //               StringRef funcName = calledFunc->getName().str();
   //               if (funcName == "_raw_spin_lock" || funcName == "_raw_spin_unlock" ||
   //                   funcName == "mutex_lock" || funcName == "mutex_unlock")
   //                 return true;

@@ -44,6 +44,10 @@ namespace pdg
     // Atk3: compute lock region that have linked list access, or loop within
     void computeCSLoop(CallInstSet &lockCallSites);
 
+    // protocol violation related attacks, should move the impl to a separate file later
+    void computeKernelInterfaceFuncCSUnderCondition();
+    void computeDrvCallBackCallSite();
+
   private:
     llvm::Module *_module;
     ProgramGraph *_PDG;

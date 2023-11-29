@@ -59,7 +59,7 @@ bool pdg::RiskyAPIAnalysis::runOnModule(llvm::Module &M)
 
     computeSensitiveInstructionFromDriverCalls();
     // for (auto f:_SDA->getBoundaryFuncs()){
-    //     errs()<<f->getName()<<"\n";
+    //     errs()<<f->getName().str()<<"\n";
     // }
     return false;
 }
@@ -383,11 +383,11 @@ void pdg::RiskyAPIAnalysis::computeSensitiveInstructionFromDriverCalls()
             // if we have an API run analysis on transitive closure
             if (calledByDriver)
             {
-                if (pdgutils::containsAnySubstring(fNode->getValue()->getName(), allocatorNames) || pdgutils::containsAnySubstring(fNode->getValue()->getName(), deallocatorNames))
+                if (pdgutils::containsAnySubstring(fNode->getValue()->getName().str(), allocatorNames) || pdgutils::containsAnySubstring(fNode->getValue()->getName().str(), deallocatorNames))
                 {
                     if (dyn_cast<Function>(fNode->getValue()) && (isSinkMM(*fNode, true) || isSinkMM(*fNode, false)))
                     {
-                        errs() << "Direct Memory Managmene Call: " << fNode->getValue()->getName() << "\n";
+                        errs() << "Direct Memory Managmene Call: " << fNode->getValue()->getName().str() << "\n";
                         directMMcalls++;
                     }
                 }
@@ -425,12 +425,12 @@ void pdg::RiskyAPIAnalysis::computeSensitiveInstructionFromDriverCalls()
                 if (totalNumFrees > 0 && totalNumAllocs == 0)
                 {
                     FreeOnly++;
-                    errs() << "Free Only: " << fNode->getValue()->getName() << "\n";
+                    errs() << "Free Only: " << fNode->getValue()->getName().str() << "\n";
                 }
                 else if (totalNumFrees == 0 && totalNumAllocs > 0)
                 {
                     AllocOnly++;
-                    errs() << "Allocation Only: " << fNode->getValue()->getName() << "\n";
+                    errs() << "Allocation Only: " << fNode->getValue()->getName().str() << "\n";
                 }
 
                 if (UpdateKField)

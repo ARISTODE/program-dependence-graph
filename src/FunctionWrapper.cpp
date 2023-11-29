@@ -28,7 +28,7 @@ DIType *pdg::FunctionWrapper::getArgDIType(Argument &arg)
     DILocalVariable *di_local_var = dbg_declare_inst->getVariable();
     if (!di_local_var)
       continue;
-    if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
+    if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().str().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
       return di_local_var->getType();
   }
   return nullptr;
@@ -116,8 +116,8 @@ DILocalVariable *pdg::FunctionWrapper::getArgDILocalVar(Argument &arg)
     DILocalVariable *di_local_var = dbg_declare_inst->getVariable();
     if (!di_local_var)
       continue;
-    // if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
-    if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
+    // if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().str().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
+    if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().str().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
       return di_local_var;
   }
   return nullptr;
@@ -130,7 +130,7 @@ AllocaInst *pdg::FunctionWrapper::getArgAllocaInst(Argument &arg)
     DILocalVariable *di_local_var = dbg_declare_inst->getVariable();
     if (!di_local_var)
       continue;
-    if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
+    if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().str().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
     {
       if (AllocaInst *ai = dyn_cast<AllocaInst>(dbg_declare_inst->getVariableLocation()))
         return ai;

@@ -69,7 +69,7 @@ void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)
           funcName = pdgutils::stripFuncNameVersionNumber(funcName);
           // if (isBlackListFunc(funcName))
           //   continue;
-          
+
           if (std::find(_importedFuncs.begin(), _importedFuncs.end(), funcName) == _importedFuncs.end())
           {
             _importedFuncs.push_back(funcName);
@@ -121,7 +121,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     global_var.getDebugInfo(sv);
     for (auto di_expr : sv)
     {
-      if (di_expr->getVariable()->getName() == global_var.getName())
+      if (di_expr->getVariable()->getName().str() == global_var.getName().str())
         di_gv = di_expr->getVariable(); // get global variable from global expression
     }
     if (!di_gv)
@@ -144,7 +144,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     const auto &typeArrRef = dyn_cast<DICompositeType>(gv_lowest_di_type)->getElements();
     Type *global_type = global_var.getType();
     if (auto t = dyn_cast<PointerType>(global_type))
-          global_type = t->getPointerElementType();
+      global_type = t->getPointerElementType();
     if (!global_type->isStructTy())
       continue;
     if (global_type->getStructNumElements() != typeArrRef.size())
@@ -158,10 +158,10 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
       {
         // if the field is a function pointer, directly print it to map
         std::string field_type_name = struct_element->getName().str();
-        // if a field is a user of sentinel array (hold the content of sentinel array), then we need to record it 
+        // if a field is a user of sentinel array (hold the content of sentinel array), then we need to record it
         // and synchronize this field with special syntax in IDL generation
-        if (pdgutils::isUserOfSentinelTypeVal(*struct_element))
-          _sentinelFields.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
+        // if (pdgutils::isUserOfSentinelTypeVal(*struct_element))
+        //   _sentinelFields.push_back(dbgutils::getSourceLevelVariableName(*struct_field_di_type));
 
         // extract all the function pointer name exported by the driver
         if (!field_type_name.empty())
@@ -226,7 +226,7 @@ void pdg::BoundaryAnalysis::dumpToFiles()
 void pdg::BoundaryAnalysis::dumpToFile(std::string fileName, std::vector<std::string> &names)
 {
   std::ofstream outputFile(fileName);
-  for (auto name: names)
+  for (auto name : names)
   {
     outputFile << name << "\n";
   }

@@ -85,7 +85,7 @@ std::pair<llvm::DIType *, llvm::DIType *> pdg::SharedFieldsAnalysis::computeInst
     {
       if (_inst_ditype_map.find(load_addr) == _inst_ditype_map.end())
       {
-        errs() << "[WARNING]: empty di type on load address in func" << li->getFunction()->getName() << "\n";
+        errs() << "[WARNING]: empty di type on load address in func" << li->getFunction()->getName().str() << "\n";
         errs() << *load_addr << "\n";
         // assert(false);
       }
@@ -213,7 +213,7 @@ void pdg::SharedFieldsAnalysis::printWarningsForUnsafeTypeCastsOnInst(Instructio
           if (casting_source_type_name.find("union") != std::string::npos)
             continue;
           errs() << "casting source type: " << casting_source_type_name << "\n";
-          errs() << "potential wild casting that may cause missing shared fields: " << F.getName() << " - " << *castInst << "\n";
+          errs() << "potential wild casting that may cause missing shared fields: " << F.getName().str() << " - " << *castInst << "\n";
           _num_wild_cast++;
         }
       }

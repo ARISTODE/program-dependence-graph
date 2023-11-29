@@ -20,6 +20,7 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
   PTAWrapper &ptaw = PTAWrapper::getInstance();
   if (!ptaw.hasPTASetup())
     ptaw.setupPTA(M);
+
   ProgramGraph &g = ProgramGraph::getInstance();
   if (!g.isBuild())
   {

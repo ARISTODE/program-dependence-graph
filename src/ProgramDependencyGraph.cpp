@@ -248,7 +248,7 @@ void pdg::ProgramDependencyGraph::connectInterprocDependencies(Function &F)
           Tree *actualInTree = call_w->getArgActualInTree(*arg);
           if (!actualInTree)
           {
-            // errs() << "[WARNING]: empty actual tree for callsite " << *callInst << " in func " << F.getName() << "\n";
+            // errs() << "[WARNING]: empty actual tree for callsite " << *callInst << " in func " << F.getName().str() << "\n";
             continue;
           }
           Tree *actualOutTree = call_w->getArgActualOutTree(*arg);
@@ -444,7 +444,7 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actualIn
       auto addrVarNode = _PDG->getNode(*addrVar);
       addrVarNode->addNeighbor(*currentNode, EdgeType::PARAMETER_IN);
       // auto accessPath = currentNode->getSrcName();
-      // errs() << "connecting " << accessPath << " - " << ci.getFunction()->getName() << " - " << *addrVar << "\n";
+      // errs() << "connecting " << accessPath << " - " << ci.getFunction()->getName().str() << " - " << *addrVar << "\n";
       // if (auto inst = dyn_cast<Instruction>(addrVar))
       //   pdgutils::printSourceLocation(*inst);
       // auto aliasNodes = addrVarNode->getOutNeighborsWithDepType(EdgeType::DATA_ALIAS);

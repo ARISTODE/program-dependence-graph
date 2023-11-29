@@ -182,7 +182,7 @@ bool pdg::dbgutils::isCharPointer(DIType &dt)
   auto base_type = getLowestDIType(*d); // new lowest to skip violatile node
   if (base_type == nullptr)
     return false;
-  return (base_type->getName() == "char");
+  return (base_type->getName().str() == "char");
 }
 
 bool pdg::dbgutils::hasSameDITypeName(DIType &d1, DIType &d2)
@@ -328,7 +328,7 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool isRaw)
   // assert(!type_name.empty() && !var_name.empty() && "cannot generation idl from empty var/type name!");
   case dwarf::DW_TAG_structure_type:
   {
-    if (dt.getName().empty())
+    if (dt.getName().str().empty())
       return isRaw ? "" : "struct";
     return isRaw ? dt.getName().str() : "struct " + dt.getName().str();
   }
@@ -365,7 +365,7 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool isRaw)
   }
   case dwarf::DW_TAG_union_type:
   {
-    if (dt.getName().empty())
+    if (dt.getName().str().empty())
       return isRaw ? "" : "union";
     return isRaw ? dt.getName().str() : "union " + dt.getName().str();
   }
@@ -600,7 +600,7 @@ std::string pdg::dbgutils::getArgumentName(llvm::Argument &arg)
       DLV = valueInst->getVariable();
     if (!DLV)
       continue;
-    if (DLV->getArg() == arg.getArgNo() + 1 && !DLV->getName().empty() && DLV->getScope()->getSubprogram() == F->getSubprogram())
+    if (DLV->getArg() == arg.getArgNo() + 1 && !DLV->getName().str().empty() && DLV->getScope()->getSubprogram() == F->getSubprogram())
       return DLV->getName().str();
   }
 

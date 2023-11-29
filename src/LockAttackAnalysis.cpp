@@ -34,6 +34,9 @@ bool pdg::LockAttackAnalysis::runOnModule(Module &M)
   // find atk3 -> loop within CS
   computeCSLoop(lockCallSites);
 
+  // protocol violation detection
+  computeKernelInterfaceFuncCSUnderCondition();
+  computeDrvCallBackCallSite();
   return false;
 }
 
@@ -107,7 +110,7 @@ bool pdg::LockAttackAnalysis::hasUnlockInstInSameBB(CallInst &lockCallInst)
   if (calledFunc == nullptr)
     return false;
   // obtain the lock function name
-  auto lockCallName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName());
+  auto lockCallName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName().str());
   auto BB = lockCallInst.getParent();
   for (auto &inst : *BB)
   {
@@ -119,7 +122,7 @@ bool pdg::LockAttackAnalysis::hasUnlockInstInSameBB(CallInst &lockCallInst)
       auto calledFunc = pdgutils::getCalledFunc(*ci);
       if (calledFunc == nullptr)
         continue;
-      auto calledFuncName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName());
+      auto calledFuncName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName().str());
       if (_lockMap[lockCallName] == calledFuncName)
         return true;
     }
@@ -141,7 +144,7 @@ pdg::LockAttackAnalysis::CSMap pdg::LockAttackAnalysis::computeIntraCS(Function 
     if (calledFunc == nullptr)
       return ret;
     // obtain the lock function name
-    auto lockInstName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName());
+    auto lockInstName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName().str());
     // 2. find reachable unlock insts
     std::vector<Instruction *> unlockInsts;
     for (auto tmpInstIter = instIter; tmpInstIter != inst_end(F); tmpInstIter++)
@@ -170,7 +173,7 @@ pdg::LockAttackAnalysis::CSMap pdg::LockAttackAnalysis::computeIntraCSWithLock(C
   if (calledFunc == nullptr)
     return ret;
  
-  auto lockInstName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName());
+  auto lockInstName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName().str());
 
   // 2. find unlock that can be reached from the lock
   std::vector<Instruction *> unlockInsts;
@@ -249,7 +252,7 @@ pdg::LockAttackAnalysis::CallInstSet pdg::LockAttackAnalysis::computeUnpairedLoc
         auto calledFunc = pdgutils::getCalledFunc(*ci);
         if (!calledFunc)
           continue;
-        if (calledFunc->getName() == "rtnl_unlock")
+        if (calledFunc->getName().str() == "rtnl_unlock")
         {
           hasIntraPairedUnlock = true;
           break;
@@ -273,7 +276,7 @@ void pdg::LockAttackAnalysis::computeLockCallSiteUnderConditions(pdg::LockAttack
       continue;
 
     nlohmann::ordered_json lockUnderCondJson;
-    auto lockName = pdgutils::getCalledFunc(*lockCS)->getName();
+    auto lockName = pdgutils::getCalledFunc(*lockCS)->getName().str();
     // obtain PDG node for the call site
     auto lockCSNode = _PDG->getNode(*lockCS);
     // use control dep (backward) to obtain the condition guarding the lock call
@@ -329,7 +332,7 @@ void pdg::LockAttackAnalysis::computeCSLoop(pdg::LockAttackAnalysis::CallInstSet
     {
       auto instsInCS = computeInstsInCS(csPair);
       nlohmann::ordered_json loopCSJson;
-      auto lockName = pdgutils::getCalledFunc(*lockCS)->getName();
+      auto lockName = pdgutils::getCalledFunc(*lockCS)->getName().str();
 
       for (auto inst : instsInCS)
       {
@@ -369,6 +372,95 @@ void pdg::LockAttackAnalysis::computeCSLoop(pdg::LockAttackAnalysis::CallInstSet
 
   // print to file
   taintutils::printJsonToFile(atkJsons, "CSLoop.json");
+}
+
+// protocol violation related attacks, should move the impl to a separate file later
+void pdg::LockAttackAnalysis::computeKernelInterfaceFuncCSUnderCondition()
+{
+  nlohmann::ordered_json atkJsons = nlohmann::ordered_json::array();
+  // step1: obtain driver boundary functions
+  auto kernelInterfaceFuncs = _SDA->getBoundaryFuncs();
+
+  CallInstSet kernelFuncCSs;
+  for (auto f : kernelInterfaceFuncs)
+  {
+    // skip driver boundary function
+    if (_SDA->isDriverFunc(*f))
+      continue;
+    // step 2: obtain the driver call sites of the kernel interface functions
+    auto callSites = _callGraph->getFunctionCallSites(*f);
+    for (auto callSite : callSites)
+    {
+      auto callerFunc = callSite->getFunction();
+
+      if (_SDA->isDriverFunc(*callerFunc))
+        kernelFuncCSs.insert(callSite);
+    }
+  }
+
+  // step 3: check if the kernel interface function call sites are under conditions
+  std::set<EdgeType> ctrlEdge = {EdgeType::CONTROL};
+  for (auto CS : kernelFuncCSs)
+  {
+    // obtain PDG node for the call site
+    auto callSiteNode = _PDG->getNode(*CS);
+    // use control dep (backward) to obtain the condition guarding the lock call
+    auto controlDepNodes = _PDG->findNodesReachedByEdges(*callSiteNode, ctrlEdge, true);
+    auto it = controlDepNodes.find(callSiteNode);
+    if (it != controlDepNodes.end())
+      controlDepNodes.erase(it);
+    // when there is a check for the call site
+    if (controlDepNodes.size() > 0)
+    {
+       nlohmann::ordered_json csJson;
+       std::string condLocStr = "";
+       for (auto ctrlDepNode : controlDepNodes)
+       {
+         auto ctrlNodeVal = ctrlDepNode->getValue();
+         if (!ctrlNodeVal)
+           continue;
+
+         if (Instruction *i = dyn_cast<Instruction>(ctrlNodeVal))
+           condLocStr += pdgutils::getSourceLocationStr(*i) + " | ";
+       }
+       csJson["Cond loc"] = condLocStr;
+       csJson["Call site loc"] = pdgutils::getSourceLocationStr(*CS);
+       atkJsons.push_back(csJson);
+    }
+  }
+
+  // add stats at the beginning
+  nlohmann::ordered_json statJson;
+  statJson["No. entry"] = atkJsons.size();
+  atkJsons.insert(atkJsons.begin(), statJson);
+  // print to file
+  taintutils::printJsonToFile(atkJsons, "ConditionalKernelICall.json");
+}
+
+void pdg::LockAttackAnalysis::computeDrvCallBackCallSite()
+{
+  nlohmann::ordered_json atkJsons = nlohmann::ordered_json::array();
+
+  for (auto F : _SDA->getBoundaryFuncs())
+  {
+    if (!_SDA->isDriverFunc(*F))
+      continue;
+
+    auto drvFuncCallSites = _callGraph->getFunctionCallSites(*F);
+    for (auto CS : drvFuncCallSites)
+    {
+      // only check for kernel funcs
+      if (_SDA->isDriverFunc(*CS->getFunction()))
+        continue;
+      nlohmann::ordered_json csJson;
+      csJson["Ret loc"] = pdgutils::getSourceLocationStr(*CS);
+      csJson["Drv func"] = F->getName().str();
+      csJson["Drv func loc"] = pdgutils::getFuncSourceLocStr(*F);
+      atkJsons.push_back(csJson);
+    }
+  }
+
+  taintutils::printJsonToFile(atkJsons, "DrvCallBackRetLoc.json");
 }
 
 static RegisterPass<pdg::LockAttackAnalysis>

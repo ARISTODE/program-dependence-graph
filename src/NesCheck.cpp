@@ -205,7 +205,7 @@ namespace NesCheck
         // if (!isa<Function>(v))
         // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << *v << " - type:" << *t << "\n";
         // else
-        // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << ((Function *)v)->getName() << " - type:" << *t << "\n";
+        // errs() << "\tUsing manual Size (ObjSizeEval failed) for " << ((Function *)v)->getName().str() << " - type:" << *t << "\n";
 
         if (t->isPointerTy())
           t = ((PointerType *)t)->getElementType();
@@ -603,7 +603,7 @@ namespace NesCheck
     //             if (!node_val)
     //               continue;
     //             // if (Instruction *ii = dyn_cast<Instruction>(node_val))
-    //             //   errs() << "find val node: " << fieldId << " - " << *ii << " - " << ii->getFunction()->getName() << "\n";
+    //             //   errs() << "find val node: " << fieldId << " - " << *ii << " - " << ii->getFunction()->getName().str() << "\n";
     //             if (PtrTypeMap.find(node_val) != PtrTypeMap.end())
     //             {
     //               auto classified_ptr_type = PtrTypeMap[node_val];
@@ -637,7 +637,7 @@ namespace NesCheck
           // if (Instruction *i = dyn_cast<Instruction>(nodeVal))
           // {
           //   if (!ptrType.empty())
-          //     errs() << "[Warning]: find conflicting nescheck types in func " << i->getFunction()->getName() << " - " << fieldID << " - " << classifiedType << "|" << ptrType << "\n";
+          //     errs() << "[Warning]: find conflicting nescheck types in func " << i->getFunction()->getName().str() << " - " << fieldID << " - " << classifiedType << "|" << ptrType << "\n";
           // }
           // classification priority: DYN > SEQ > SAFE
           if (classifiedType == "DYN")
@@ -782,13 +782,13 @@ namespace NesCheck
         //     var_name = pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDILocalVar());
         //   else
         //     var_name = pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType());
-        //   errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName() << " - " << var_name << "\n";
+        //   errs() << "Find safe ptr: " << *i << " - " << i->getFunction()->getName().str() << " - " << var_name << "\n";
         // }
       }
       else if (ptr_type == "SEQ")
       {
         if (Instruction *i = dyn_cast<Instruction>(&ptr))
-          errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << "\n";
+          errs() << "Find seq ptr: " << *i << " - " << i->getFunction()->getName().str() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << "\n";
         if (!pdg::dbgutils::isArrayType(*treeNode.getDIType()))
         {
           // _ksplitStats->increaseArrayNum();
@@ -806,7 +806,7 @@ namespace NesCheck
           if (Instruction *i = dyn_cast<Instruction>(&ptr))
           {
             errs() << " ===========================================================================\n";
-            errs() << "Find non-void wild ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << " - " << treeNode.getFunc()->getName() << "\n";
+            errs() << "Find non-void wild ptr: " << *i << " - " << i->getFunction()->getName().str() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << " - " << treeNode.getFunc()->getName().str() << "\n";
             errs() << " ===========================================================================\n";
           }
           // _ksplitStats->increaseNonVoidWildPtrNum();
@@ -820,7 +820,7 @@ namespace NesCheck
       else if (ptr_type == "UNKNOWN")
       {
         if (Instruction *i = dyn_cast<Instruction>(&ptr))
-          errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << "\n";
+          errs() << "Find unknown ptr: " << *i << " - " << i->getFunction()->getName().str() << " - " << pdg::dbgutils::getSourceLevelVariableName(*treeNode.getDIType()) << "\n";
         // _ksplitStats->increaseUnknownPtrNum();
         errs() << "unknown: " << ptr << "\n";
         UnknownPtrs.insert(&ptr);
@@ -875,7 +875,7 @@ namespace NesCheck
       for (auto ptr : SafePtrs)
       {
         if (Instruction *i = dyn_cast<Instruction>(ptr))
-          errs() << *i << " - " << i->getFunction()->getName() << "\n";
+          errs() << *i << " - " << i->getFunction()->getName().str() << "\n";
       }
       errs() << " =============================================== \n";
 
@@ -883,7 +883,7 @@ namespace NesCheck
       for (auto ptr : SeqPtrs)
       {
         if (Instruction *i = dyn_cast<Instruction>(ptr))
-          errs() << *i << " - " << i->getFunction()->getName() << "\n";
+          errs() << *i << " - " << i->getFunction()->getName().str() << "\n";
       }
       errs() << " =============================================== \n";
 
@@ -891,7 +891,7 @@ namespace NesCheck
       for (auto ptr : WildPtrs)
       {
         if (Instruction *i = dyn_cast<Instruction>(ptr))
-          errs() << *i << " - " << i->getFunction()->getName() << "\n";
+          errs() << *i << " - " << i->getFunction()->getName().str() << "\n";
       }
       errs() << " =============================================== \n";
 
@@ -899,7 +899,7 @@ namespace NesCheck
       for (auto ptr : UnknownPtrs)
       {
         if (Instruction *i = dyn_cast<Instruction>(ptr))
-          errs() << "Unknwon: " << *i << " - " << i->getFunction()->getName() << "\n";
+          errs() << "Unknwon: " << *i << " - " << i->getFunction()->getName().str() << "\n";
       }
       errs() << " =============================================== \n";
     }
@@ -922,7 +922,7 @@ namespace NesCheck
         if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U))
         {
           //                errs() << "Global Variable - " << *GV << "\n";
-          TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName()));
+          TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName().str()));
         }
         //              For the edge cases where a gep instruction is another instruction's operand
         //              GEP Instruction isn't relevant to definition of a DYN pointer but it is relevant to SEQ
@@ -931,14 +931,14 @@ namespace NesCheck
           if (GlobalVariable *GV = dyn_cast<GlobalVariable>(gepo->getPointerOperand()))
           {
             // errs() << "Global Variable - " << *GV << "\n";
-            TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName()));
+            TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName().str()));
           }
           for (auto it = gepo->idx_begin(), et = gepo->idx_end(); it != et; ++it)
           {
             if (GlobalVariable *GV = dyn_cast<GlobalVariable>(*it))
             {
               // errs() << "Global Variable  - " << *GV << "\n";
-              TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName()));
+              TheState.Variables[GV].dependentFunctions.insert(TheState.Variables[GV].dependentFunctions.begin(), (I->getFunction()->getName().str()));
             }
           }
         }
@@ -970,17 +970,17 @@ namespace NesCheck
 
       else if (CallInst *II = dyn_cast_or_null<CallInst>(I))
       {
-        if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName() == "malloc" && II->getCalledFunction()->arg_size() == 1)
+        if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName().str() == "malloc" && II->getCalledFunction()->arg_size() == 1)
         {
           // errs() << "(M) " << *II << "\n";
           TheState.SetSizeForPointerVariable(II, II->getArgOperand(0));
         }
-        else if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName() == "realloc" && II->getCalledFunction()->arg_size() == 2)
+        else if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName().str() == "realloc" && II->getCalledFunction()->arg_size() == 2)
         {
           // errs() << "(M) " << *II << "\n";
           TheState.SetSizeForPointerVariable(II, II->getArgOperand(1));
         }
-        else if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName() == "free" && II->getCalledFunction()->arg_size() == 1)
+        else if (II->getCalledFunction() != NULL && II->getCalledFunction()->getName().str() == "free" && II->getCalledFunction()->arg_size() == 1)
         {
           // errs() << "(F) " << *II << "\n";
           TheState.SetSizeForPointerVariable(II->getArgOperand(0), NULL);
@@ -1013,7 +1013,7 @@ namespace NesCheck
         // check if this instruction calls a function that has been rewritten and update it
         if (II->getCalledFunction() != NULL)
         {
-          StringRef fname = II->getCalledFunction()->getName();
+          StringRef fname = II->getCalledFunction()->getName().str();
           if (CONTAINS(FunctionsToRemove, II->getCalledFunction()) && (fname.endswith("_nesCheck")))
           {
             // errs() << "Call needs rewriting!\n";
@@ -1072,7 +1072,7 @@ namespace NesCheck
         //   errs() << "(~) " << *II << "\t" << DETAIL << " // {" << *valoperand << " -> " << *(II->getPointerOperand()) << " }"
         //          << "" << NORMAL << "\n";
         // else
-        //   errs() << "(~) " << *II << "\t" << DETAIL << " // {" << ((Function *)valoperand)->getName() << " -> " << *(II->getPointerOperand()) << " }"
+        //   errs() << "(~) " << *II << "\t" << DETAIL << " // {" << ((Function *)valoperand)->getName().str() << " -> " << *(II->getPointerOperand()) << " }"
         //          << "" << NORMAL << "\n";
         if (valoperand->getType()->isPointerTy())
         {
@@ -1093,7 +1093,7 @@ namespace NesCheck
               if (varinfo2 == NULL || !varinfo2->hasExplicitSizeVariable)
               {
                 // create a new explicit size variable for the pointer
-                sizevaralloca = new AllocaInst(MySizeType, 0, instr->getName() + "_size_nesCheck", B->getTerminator());
+                sizevaralloca = new AllocaInst(MySizeType, 0, instr->getName().str() + "_size_nesCheck", B->getTerminator());
                 // store initial size value for explicit size variable
                 // Attempted bug fix - is this statement of any use?
                 if (varinfo2 != NULL)
@@ -1325,7 +1325,7 @@ namespace NesCheck
 
       llvm::Instruction *NewCall;
       llvm::Instruction *Before = Call;
-      Function *NF = CurrentModule->getFunction((calledF->getName() + "_nesCheck").str());
+      Function *NF = CurrentModule->getFunction((calledF->getName().str() + "_nesCheck").str());
       if (llvm::InvokeInst *II = llvm::dyn_cast<llvm::InvokeInst>(Call))
       {
         NewCall = llvm::InvokeInst::Create(NF, II->getNormalDest(), II->getUnwindDest(), Args, "", Before);
@@ -1344,7 +1344,7 @@ namespace NesCheck
         if (Call->hasName())
           NewCall->takeName(Call);
         else
-          NewCall->setName(NF->getName() + ".ret");
+          NewCall->setName(NF->getName().str() + ".ret");
       }
 
       // The original function returned a pointer, so the new function returns the pointer and its size
@@ -1374,7 +1374,7 @@ namespace NesCheck
 
     bool isWhitelisted(Function *F)
     {
-      StringRef fname = F->getName();
+      StringRef fname = F->getName().str();
       // Whitelist all functions that are only necessary for TOSSIM simulation.
       if (fname.startswith("sim_") || fname.startswith("heap") || fname.endswith("heap") ||
           fname.startswith("hashtable_") || fname.endswith("_hashtable"))
@@ -1385,7 +1385,7 @@ namespace NesCheck
 
     bool isWhitelistedForInstrumentation(Function *F)
     {
-      StringRef fname = F->getName();
+      StringRef fname = F->getName().str();
       std::string fnamestr = fname.str();
       // Whitelist all functions that are only necessary for TOSSIM simulation, or for nesCheck instrumentation.
       return (isWhitelisted(F) || CONTAINS(WhitelistedFunctions, fname.str()) ||
@@ -1411,7 +1411,7 @@ namespace NesCheck
         }
 
         // skip functions used with function pointer in structs for now, cause it's a mess
-        // errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName() << '\n';
+        // errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName().str() << '\n';
         // errs() << "SKIPPED function rewriting because of whitelisting\n";
         return F;
       }
@@ -1422,7 +1422,7 @@ namespace NesCheck
       {
         if (needsRewritten(i->getType()))
         {
-          Argument *newArg = new Argument(MySizeType, i->getName() + "_size");
+          Argument *newArg = new Argument(MySizeType, i->getName().str() + "_size");
           newArgs.push_back(newArg); // add argument for size of this pointer
 
           needsChanged = true;
@@ -1434,7 +1434,7 @@ namespace NesCheck
         return F;
 
       ++FunctionSignaturesRewritten;
-      // errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName() << '\n';
+      // errs() << "\n\n*********\n REWRITING SIGNATURE FOR FUNCTION: " << F->getName().str() << '\n';
 
       // starts changing the signature for this function by creating a new one and moving everything over there
 
@@ -1459,7 +1459,7 @@ namespace NesCheck
       llvm::FunctionType *NFTy = llvm::FunctionType::get(NRetTy, Params, FTy->isVarArg());
 
       // Create the new function body and insert it into the module...
-      llvm::Function *NF = llvm::Function::Create(NFTy, F->getLinkage(), F->getName() + "_nesCheck");
+      llvm::Function *NF = llvm::Function::Create(NFTy, F->getLinkage(), F->getName().str() + "_nesCheck");
       NF->copyAttributesFrom(F);
       F->getParent()->getFunctionList().insert(F->getIterator(), NF);
 
@@ -1485,7 +1485,7 @@ namespace NesCheck
       llvm::Function::arg_iterator NAI = FirstNewArgIter;
       for (Argument *newarg : newArgs)
       {
-        // errs() << "NAI: " << *NAI << " - " << "newarg name: " << newarg->getName() << "\n";
+        // errs() << "NAI: " << *NAI << " - " << "newarg name: " << newarg->getName().str() << "\n";
         NAI->takeName(newarg);
         NAI++;
       }
@@ -1511,7 +1511,7 @@ namespace NesCheck
 
     void analyzeFunction(Function *F)
     {
-      // errs() << "\n\n*********\n ANALYZING FUNCTION: " << F->getName() << "\n";
+      // errs() << "\n\n*********\n ANALYZING FUNCTION: " << F->getName().str() << "\n";
       // if (isCurrentFunctionWhitelisted)
       // {
       //   errs() << "\t[whitelisted]\n";
@@ -1592,7 +1592,7 @@ namespace NesCheck
 
       srand(time(NULL));
 
-      errs() << "\n\n#############\n MODULE: " << M.getName() << '\n';
+      errs() << "\n\n#############\n MODULE: " << M.getName().str() << '\n';
 
       CurrentModule = &M;
       CurrentDL = &(M.getDataLayout());
@@ -1666,7 +1666,7 @@ namespace NesCheck
         ObjectSizeOffsetEvaluator TheObjSizeEval(*CurrentDL, TLI, M.getContext());
         ObjSizeEval = &TheObjSizeEval;
 
-        StringRef fname = F->getName();
+        StringRef fname = F->getName().str();
         if (fname == "printCheck" || fname == "printErrorLine" || fname == "printFaultInjectionExecuted" ||
             fname == "setMetadataTableEntry" || fname == "lookupMetadataTableEntry" || fname == "findMetadataTableEntry" || (fname.endswith("malloc_nesCheck")))
           continue;

@@ -93,7 +93,7 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
           {
             if (nearestCommonDominator != &BB)
             {
-              if (F.getName() == "foobar_baz")
+              if (F.getName().str() == "foobar_baz")
               {
                 errs() << "bi: " << *bi << " - " << *succ_bb << "\n";
               }

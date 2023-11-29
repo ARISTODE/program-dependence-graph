@@ -44,7 +44,7 @@ uint64_t pdg::pdgutils::getGEPOffsetInBits(Module &M, StructType &structTy, GetE
   auto const struct_layout = data_layout.getStructLayout(&structTy);
   if (gep_offset >= structTy.getNumElements())
   {
-    // errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName() << "\n";
+    // errs() << "dubious gep access outof bound: " << gep << " in func " << gep.getFunction()->getName().str() << "\n";
     return INT_MIN;
   }
   uint64_t field_bit_offset = struct_layout->getElementOffsetInBits(gep_offset);
@@ -88,12 +88,12 @@ bool pdg::pdgutils::isGEPOffsetMatchDIOffset(DIType &dt, GetElementPtrInst &gep)
         if (ConstantInt *ci = dyn_cast<ConstantInt>(shift_bits))
         {
           gep_bit_offset += ci->getZExtValue(); // add the value as an unsigned integer
-          if (dbgutils::getSourceLevelVariableName(dt) == "__pkt_type_offset" && gep.getFunction()->getName() == "skb_checksum_help")
+          if (dbgutils::getSourceLevelVariableName(dt) == "__pkt_type_offset" && gep.getFunction()->getName().str() == "skb_checksum_help")
           {
             errs() << "Checking pkt type offset: " << gep_bit_offset << " - " << dt.getOffsetInBits() << " - " << ci->getZExtValue() << "\n";
             errs() << gep << "\n";
           }
-          if (dbgutils::getSourceLevelVariableName(dt) == "ip_summed" && gep.getFunction()->getName() == "skb_checksum_help")
+          if (dbgutils::getSourceLevelVariableName(dt) == "ip_summed" && gep.getFunction()->getName().str() == "skb_checksum_help")
           {
             errs() << "ip_summed offset: " << dt.getOffsetInBits() << "\n";
           }
@@ -654,7 +654,7 @@ bool pdg::pdgutils::isDoublePointer(Value &ptr)
 
 bool pdg::pdgutils::isMainFunc(Function &F)
 {
-  return F.getName() == "main";
+  return F.getName().str() == "main";
 }
 
 bool pdg::pdgutils::isFileExist(std::string fileName)
@@ -692,7 +692,7 @@ void pdg::pdgutils::printTreeNodeAddrVars(TreeNode &treeNode)
   for (auto addrVar : treeNode.getAddrVars())
   {
     if (auto inst = dyn_cast<Instruction>(addrVar))
-    errs() << "\tfunc name: " << inst->getFunction()->getName()  << *inst <<  "\n";
+    errs() << "\tfunc name: " << inst->getFunction()->getName().str()  << *inst <<  "\n";
   }
 }
 
@@ -755,7 +755,7 @@ void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &Outpu
     unsigned line = debugLoc.getLine();
     unsigned col = debugLoc.getCol();
     llvm::MDNode *scopeNode = debugLoc.getScope();
-    std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
+    std::string filePrefix = "https://github.com/ksplit/lvd-linux/tree/ksplit-latest/";
 
     if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
     {
@@ -772,7 +772,7 @@ void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &Outpu
 std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
 {
   std::string outStr = "";
-  std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
+  std::string filePrefix = "https://github.com/ksplit/lvd-linux/tree/ksplit-latest/";
 
   if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
   {
@@ -807,7 +807,7 @@ std::string pdg::pdgutils::getFuncSourceLocStr(Function &F)
 {
   if (F.hasMetadata())
   {
-    std::string filePrefix = "https://gitlab.flux.utah.edu/xcap/xcap-capability-linux/-/blob/llvm_v4.8/";
+    std::string filePrefix = "https://github.com/ksplit/lvd-linux/tree/ksplit-latest/";
     if (auto *subprogram = F.getSubprogram())
     { // Get DISubprogram metadata node
       unsigned line = subprogram->getLine();
@@ -838,6 +838,8 @@ bool pdg::pdgutils::isUpdatedInHeader(Instruction &I)
 bool pdg::pdgutils::isFuncDefinedInHeaderFile(Function &F)
 {
   auto DISubprog = F.getSubprogram();
+  if (!DISubprog || !DISubprog->getFile())
+    return false;
   auto fileName = DISubprog->getFilename().str();
   if (fileName.empty())
     return false;

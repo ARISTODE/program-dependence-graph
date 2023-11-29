@@ -207,11 +207,11 @@ void pdg::PDGCallGraph::dump()
   {
     if (Function *f = dyn_cast<Function>(pair.first))
     {
-      errs() << f->getName() << ": \n";
+      errs() << f->getName().str() << ": \n";
       for (auto out_node : pair.second->getOutNeighbors())
       {
         if (Function *callee = dyn_cast<Function>(out_node->getValue()))
-          errs() << "\t\t" << callee->getName() << "\n";
+          errs() << "\t\t" << callee->getName().str() << "\n";
       }
     }
   }
@@ -227,7 +227,7 @@ void pdg::PDGCallGraph::printPaths(Node &src, Node &sink)
     errs() << "path len: " << path.size() << "\n";
     for (auto iter = path.begin(); iter != path.end(); iter++)
     {
-      errs() << (*iter)->getName();
+      errs() << (*iter)->getName().str();
       if (std::next(iter, 1) != path.end())
         errs() << " -> ";
       else

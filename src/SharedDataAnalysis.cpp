@@ -166,7 +166,7 @@ std::unordered_set<Function *> pdg::SharedDataAnalysis::computeBoundaryTransitiv
   {
     if (_callGraph->isExcludeFunc(*boundary_func))
     {
-      errs() << "found exclude func " << boundary_func->getName() << "\n";
+      errs() << "found exclude func " << boundary_func->getName().str() << "\n";
       continue;
     }
     auto func_node = _callGraph->getNode(*boundary_func);
@@ -188,7 +188,7 @@ std::unordered_set<Function *> pdg::SharedDataAnalysis::computeKernelInterfaceFu
   {
     if (_callGraph->isExcludeFunc(*boundaryFunc))
     {
-      errs() << "found exclude func " << boundaryFunc->getName() << "\n";
+      errs() << "found exclude func " << boundaryFunc->getName().str() << "\n";
       continue;
     }
     if (isDriverFunc(*boundaryFunc))
@@ -318,7 +318,7 @@ void pdg::SharedDataAnalysis::computeGlobalStructTypeNames()
     global_var.getDebugInfo(sv);
     for (auto di_expr : sv)
     {
-      if (di_expr->getVariable()->getName() == global_var.getName())
+      if (di_expr->getVariable()->getName().str() == global_var.getName().str())
         di_gv = di_expr->getVariable(); // get global variable from global expression
     }
     if (di_gv == nullptr)
@@ -809,7 +809,7 @@ void pdg::SharedDataAnalysis::printDriverUpdateLocations(TreeNode &treeNode, raw
       auto func = inst->getFunction();
       if (isDriverFunc(*func) && pdgutils::hasWriteAccess(*inst))
       {
-        OS << "\t(" << func->getName() << ") ";
+        OS << "\t(" << func->getName().str() << ") ";
         pdgutils::printSourceLocation(*inst, OS);
       }
     }
@@ -830,7 +830,7 @@ void pdg::SharedDataAnalysis::getDriverUpdateLocStr(TreeNode &treeNode, raw_stri
       if (isDriverFunc(*func) && pdgutils::hasWriteAccess(*inst))
       {
         auto sourceLocStr = pdgutils::getSourceLocationStr(*inst);
-        ss << "[ (" << func->getName() << ") " << sourceLocStr << " ], ";
+        ss << "[ (" << func->getName().str() << ") " << sourceLocStr << " ], ";
       }
     }
   }

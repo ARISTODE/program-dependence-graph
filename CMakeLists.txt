@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.4.3)
 project(pdg)
 message (STATUS "Searching CMAKE Path in ${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}")
-find_package(LLVM "10.0.1" REQUIRED CONFIG)
+find_package(LLVM "12.0.0" REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_CMAKE_DIR}")
 
@@ -40,6 +40,8 @@ include_directories("src")
 # include_directories("sea-dsa/include")
 
 file(GLOB SOURCES "src/*.cpp")
+list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/NesCheck.cpp")
+
 file(GLOB HEADERS "include/*.hh")
 
 add_library(pdg MODULE

@@ -134,7 +134,7 @@ void pdg::MemInstrumentPass::insertFieldAccCheckPolicy(Function &F)
     std::unordered_set<Instruction*> mustInstrumentInsts;
     computeMustInstrumentInsts(F, mustInstrumentInsts);
     auto funcW = PDG->getFuncWrapper(F);
-    errs() << "(" << F.getName() << ") instrument inst count: " << mustInstrumentInsts.size() << " - " << (funcW->getLoadInsts().size() + funcW->getStoreInsts().size()) << "\n";
+    errs() << "(" << F.getName().str() << ") instrument inst count: " << mustInstrumentInsts.size() << " - " << (funcW->getLoadInsts().size() + funcW->getStoreInsts().size()) << "\n";
     for (auto inst : mustInstrumentInsts)
     {
         if (LoadInst *li = dyn_cast<LoadInst>(inst))

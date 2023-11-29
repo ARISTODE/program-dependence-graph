@@ -330,7 +330,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck
               // for (auto addrVar : treeNode.getAddrVars())
               // {
               //   if (auto inst = dyn_cast<Instruction>(addrVar))
-              //     errs() << "\t" << *inst << " in " << inst->getFunction()->getName() << "\n";
+              //     errs() << "\t" << *inst << " in " << inst->getFunction()->getName().str() << "\n";
               // }
             }
           }
@@ -385,7 +385,7 @@ void pdg::KSplitStats::collectDataStats(TreeNode &treeNode, std::string nescheck
   else
   {
     _shared_other++; // This should be 0, otherwise, we need to look at this node
-    errs() << "unclassified field type: " << treeNode.getTree()->getFunc()->getName() << " - " << dbgutils::getSourceLevelTypeName(*dt) << "\n";
+    errs() << "unclassified field type: " << treeNode.getTree()->getFunc()->getName().str() << " - " << dbgutils::getSourceLevelTypeName(*dt) << "\n";
   }
 }
 
@@ -450,7 +450,7 @@ void pdg::KSplitStats::collectSharedPointerStats(TreeNode &node, std::string nes
       {
         Function *func = node.getTree()->getFunc();
         if (func != nullptr)
-          errs() << "find multiple cast void ptr: " << func->getName() << "\n";
+          errs() << "find multiple cast void ptr: " << func->getName().str() << "\n";
         _multi_cast_shared_void_ptr_num++;
       }
       else
@@ -458,7 +458,7 @@ void pdg::KSplitStats::collectSharedPointerStats(TreeNode &node, std::string nes
     }
     else
     {
-      errs() << "non-void wild ptr found in " << node.getFunc()->getName() << "\n";
+      errs() << "non-void wild ptr found in " << node.getFunc()->getName().str() << "\n";
       _non_void_wild_ptr_num++;
     }
   }

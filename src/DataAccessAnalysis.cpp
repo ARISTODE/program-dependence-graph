@@ -221,7 +221,7 @@ bool pdg::DataAccessAnalysis::isSharedAllocator(Value &allocator)
     if (funcName.find("kzalloc") != std::string::npos)
       return false;
 
-    if (f->getName() == "ixgbe_probe")
+    if (f->getName().str() == "ixgbe_probe")
       ixgbeProbeFlag = true;
     // now only tracking driver side allocators
     if (!_SDA->isDriverFunc(*f))
@@ -247,7 +247,7 @@ bool pdg::DataAccessAnalysis::isSharedAllocator(Value &allocator)
     if (ixgbeProbeFlag)
     {
       if (node->getValue())
-        errs() << "ixgbe probe reaching func: " << f->getName() << " - " << *node->getValue() << "\n";
+        errs() << "ixgbe probe reaching func: " << f->getName().str() << " - " << *node->getValue() << "\n";
     }
     auto nodeDomain = DomainTag::KERNEL_DOMAIN;
     // find kernel functions
@@ -272,7 +272,7 @@ std::unordered_set<pdg::Node *> pdg::DataAccessAnalysis::computeSharedAllocators
   for (auto allocator : allocators)
   {
     if (Instruction *i = dyn_cast<Instruction>(allocator))
-      errs() << "allocator in func: " << *allocator << " | " << i->getFunction()->getName() << "\n";
+      errs() << "allocator in func: " << *allocator << " | " << i->getFunction()->getName().str() << "\n";
     if (isSharedAllocator(*allocator))
       sharedAllocators.insert(_PDG->getNode(*allocator));
   }
@@ -455,7 +455,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
   if (!treeNode.getDIType())
   {
     // errs() << "[Warning]: processing tree node with null DIType in func " <<
-    // func->getName() << " - depth " << treeNode.getDepth()
+    // func->getName().str() << " - depth " << treeNode.getDepth()
     // << " - isRet " << isRet
     // << " parent var name " << treeNode.getParentNode()->getSrcHierarchyName() << "\n";
     return;
@@ -529,7 +529,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
         if (!gep->hasAllConstantIndices())
         {
           if (pdgutils::isStructPointerType(*gep->getPointerOperand()->getType()))
-            errs() << "[Warning]: " << treeNode.getSrcHierarchyName() << " GEP has variadic idx. May miss field access - " << gep->getFunction()->getName() << "\n";
+            errs() << "[Warning]: " << treeNode.getSrcHierarchyName() << " GEP has variadic idx. May miss field access - " << gep->getFunction()->getName().str() << "\n";
         }
       }
     }
@@ -610,7 +610,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, b
       }
       if (Instruction *i = dyn_cast<Instruction>(n->getValue()))
       {
-        // errs() << "\t" << *i << " - " << i->getFunction()->getName() << " - " << treeNode.getDepth() << "\n";
+        // errs() << "\t" << *i << " - " << i->getFunction()->getName().str() << " - " << treeNode.getDepth() << "\n";
         auto inst_func = i->getFunction();
         // DomainTag func_domain_tag = computeFuncDomainTag(*inst_func);
         // optimize by connecting all the nodes in the same isolation domain with the parameter tree node.
@@ -729,8 +729,8 @@ void pdg::DataAccessAnalysis::checkCrossDomainRAWforFormalTreeNode(TreeNode &tre
           if (treeNode.getFunc())
           {
             errs() << ptrStr << "Kernel RAW driver field: " << fieldName << " - "
-                   << "Read func: " << treeNode.getFunc()->getName() << " - "
-                   << "Update func: " << n->getFunc()->getName() << " - " << treeNode.getDepth() << "\n";
+                   << "Read func: " << treeNode.getFunc()->getName().str() << " - "
+                   << "Update func: " << n->getFunc()->getName().str() << " - " << treeNode.getDepth() << "\n";
             errs() << "Update locations:\n";
             // if (_visitedSharedFieldIDInRAWAna.find(fieldID) == _visitedSharedFieldIDInRAWAna.end())
             // {
@@ -742,7 +742,7 @@ void pdg::DataAccessAnalysis::checkCrossDomainRAWforFormalTreeNode(TreeNode &tre
             for (auto loc : updateLocs)
             {
               if (auto inst = dyn_cast<Instruction>(loc))
-                errs() << "\t" << *inst << " - " << inst->getFunction()->getName() << "\n";
+                errs() << "\t" << *inst << " - " << inst->getFunction()->getName().str() << "\n";
             }
             // compute and print out the call path from the update to the read
             // auto srcFuncNode = _callGraph->getNode(*n->getFunc());
@@ -755,9 +755,9 @@ void pdg::DataAccessAnalysis::checkCrossDomainRAWforFormalTreeNode(TreeNode &tre
             //   for (auto func : path)
             //   {
             //     if (count != path.size() - 1)
-            //       errs() << func->getName() << "->";
+            //       errs() << func->getName().str() << "->";
             //     else
-            //       errs() << func->getName() << "\n";
+            //       errs() << func->getName().str() << "\n";
             //     count += 1;
             //   }
             // }
@@ -814,8 +814,8 @@ void pdg::DataAccessAnalysis::checkCrossDomainRAWforFormalTreeNode(TreeNode &tre
             if (treeNode.getFunc())
             {
               errs() << ptrStr << "(D) Kernel RAW driver field: " << fieldName << " - "
-                     << "Read func: " << n->getFunc()->getName() << " - "
-                     << "Update func: " << treeNode.getFunc()->getName() << "\n";
+                     << "Read func: " << n->getFunc()->getName().str() << " - "
+                     << "Update func: " << treeNode.getFunc()->getName().str() << "\n";
 
               _ksplitStats->kernelRAWDriverSharedFields++;
               if (dbgutils::isPointerType(*treeNode.getDIType()))
@@ -977,7 +977,7 @@ void pdg::DataAccessAnalysis::computeDataAccessForGlobalTree(Tree *tree)
 
 void pdg::DataAccessAnalysis::computeDataAccessForFuncArgs(Function &F)
 {
-  // errs() << "compute intra for func: " << F.getName() << "\n";
+  // errs() << "compute intra for func: " << F.getName().str() << "\n";
   auto func_wrapper_map = _PDG->getFuncWrapperMap();
   if (func_wrapper_map.find(&F) == func_wrapper_map.end())
     return;
@@ -1736,7 +1736,7 @@ void pdg::DataAccessAnalysis::generateIDLForFunc(Function &F, bool processingExp
     return;
   }
   generateRpcForFunc(F, processingExportedFunc);
-  // errs() << "generating idl for: " << F.getName() << "\n";
+  // errs() << "generating idl for: " << F.getName().str() << "\n";
   _idlFile << "{\n";
   // generate projection for return value
   auto retArgTree = fw->getRetFormalInTree();
@@ -1811,7 +1811,7 @@ void pdg::DataAccessAnalysis::inferUserAnnotation(TreeNode &treeNode, std::set<s
         auto called_func = pdgutils::getCalledFunc(*ci);
         if (called_func == nullptr)
           continue;
-        std::string calleeName = called_func->getName();
+        std::string calleeName = called_func->getName().str();
         calleeName = pdgutils::stripFuncNameVersionNumber(calleeName);
         if (calleeName == "_copy_from_user" || calleeName == "_copy_to_user")
         {
@@ -2037,7 +2037,7 @@ void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
       if (gep_access_offset >= 0)
         continue;
       // check the next instruction
-      // errs() << "container of location: " << F.getName() << "\n";
+      // errs() << "container of location: " << F.getName().str() << "\n";
       if (EnableAnalysisStats)
         _ksplitStats->_total_containerof++;
       Instruction *next_i = gep->getNextNonDebugInstruction();
@@ -2074,7 +2074,7 @@ void pdg::DataAccessAnalysis::computeContainerOfLocs(Function &F)
         //     {
         //       _ksplitStats->_shared_containerof++;
         //       // if (DEBUG)
-        //       //   errs() << "shared container_of: " << F.getName() << " - " << di_type_name << " - " << *bci << "\n";
+        //       //   errs() << "shared container_of: " << F.getName().str() << " - " << di_type_name << " - " << *bci << "\n";
         //     }
         //   }
         // }
@@ -2087,7 +2087,7 @@ void pdg::DataAccessAnalysis::logSkbFieldStats(TreeNode &skb_root_node)
 {
   Function *current_func = skb_root_node.getFunc();
   assert(current_func != nullptr && "cannot log skb without current function information\n");
-  errs() << "logging skb stats in function: " << current_func->getName() << "\n";
+  errs() << "logging skb stats in function: " << current_func->getName().str() << "\n";
   // log deep copy fields using debug info
   DIType *dt = skb_root_node.getDIType();
   unsigned num_deep_copy_fields = dbgutils::computeDeepCopyFields(*dt);
@@ -2131,7 +2131,7 @@ void pdg::DataAccessAnalysis::logSkbFieldStats(TreeNode &skb_root_node)
 //   errs() << "num of container_of access shared states: " << _containerofInsts.size() << "\n";
 //   for (auto i : _containerofInsts)
 //   {
-//     errs() << "container_of: " << i->getFunction()->getName() << " -- " << *i << "\n";
+//     errs() << "container_of: " << i->getFunction()->getName().str() << " -- " << *i << "\n";
 //   }
 //   errs() << " ===============================================\n";
 // }
@@ -2276,13 +2276,13 @@ void pdg::DataAccessAnalysis::printDriverTaintKernelAllocDeallocFuncs()
   // for each of allocator function, check hwo driver invoke these functions
   for (auto kernelAllocAPI : kernelAllocatorAPIs)
   {
-    errs() << "Kernel allocator API: " << kernelAllocAPI->getName() << "\n";
+    errs() << "Kernel allocator API: " << kernelAllocAPI->getName().str() << "\n";
   }
 
   // for each of deallocator function, check hwo driver invoke these functions
   for (auto kernelDeallocAPI : kernelDeallocatorAPIs)
   {
-    errs() << "Kernel deallocator API: " << kernelDeallocAPI->getName() << "\n";
+    errs() << "Kernel deallocator API: " << kernelDeallocAPI->getName().str() << "\n";
   }
 }
 
@@ -2384,7 +2384,7 @@ bool pdg::DataAccessAnalysis::hasParamDataflow(Function &boundaryF, Function &si
       {
         errs() << "\tFind data flow: "
                << "kernel func ("
-               << boundaryF.getName()
+               << boundaryF.getName().str()
                << ")"
                << "arg ("
                << arg->getArgNo()
@@ -2404,7 +2404,7 @@ bool pdg::DataAccessAnalysis::hasParamDataflow(Function &boundaryF, Function &si
     //     if (n->getFunc() == &sinkFunc)
     //       errs() << "\tFind data flow: "
     //              << "kernel func ("
-    //              << boundaryF.getName()
+    //              << boundaryF.getName().str()
     //              << ")"
     //              << "arg ("
     //              << arg->getArgNo()
@@ -2435,12 +2435,12 @@ void pdg::DataAccessAnalysis::printDriverCallSite(Function &boundaryFunc, Functi
       if (!_SDA->isDriverFunc(*inst->getFunction()))
         continue;
       errs() << "kernel func ("
-             << boundaryFunc.getName() << ") "
+             << boundaryFunc.getName().str() << ") "
              << "|" 
              << sinkStr 
-             << " (" << sinkFunc.getName() << ") "
+             << " (" << sinkFunc.getName().str() << ") "
              << "| driver call site ("
-             << inst->getFunction()->getName() << ") - ";
+             << inst->getFunction()->getName().str() << ") - ";
              pdgutils::printSourceLocation(*inst);
     }
   }

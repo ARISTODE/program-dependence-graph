@@ -89,7 +89,7 @@ void pdg::GenerateMonitorPass::collectStructTypes(DIType *rootTy, std::unordered
         structTy->getTag() == dwarf::DW_TAG_class_type)
     {
           // skip anonymous struct struct
-          if (!structTy->getName().empty())
+          if (!structTy->getName().str().empty())
           {
             structTypes.insert(std::make_pair(structTy, (funcName + "." + offsetStr)));
             for (auto *elemTy : structTy->getElements())

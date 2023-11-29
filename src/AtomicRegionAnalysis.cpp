@@ -45,7 +45,7 @@ void pdg::AtomicRegionAnalysis::generateSyncStubsForAtomicRegions()
     Instruction *cs_begin_inst = tree_pair.first;
     std::string current_func_name = cs_begin_inst->getFunction()->getName().str();
     CallInst *lock_call_inst = cast<CallInst>(cs_begin_inst);
-    std::string lock_call_name = pdgutils::getCalledFunc(*lock_call_inst)->getName();
+    std::string lock_call_name = pdgutils::getCalledFunc(*lock_call_inst)->getName().str();
     lock_call_name = pdgutils::stripFuncNameVersionNumber(lock_call_name);
     std::string unlock_call_name = _lock_map[lock_call_name];
     auto rootNode = tree->getRootNode();
@@ -161,7 +161,7 @@ pdg::AtomicRegionAnalysis::CSMap pdg::AtomicRegionAnalysis::computeCSInFunc(Func
       Function *called_func = pdgutils::getCalledFunc(*lock_call_inst);
       if (called_func == nullptr)
         continue;
-      auto lock_inst_name = pdgutils::stripFuncNameVersionNumber(called_func->getName());
+      auto lock_inst_name = pdgutils::stripFuncNameVersionNumber(called_func->getName().str());
       if (isUnlockInst(*tmp_inst_iter, lock_inst_name))
         unlock_insts.push_back(&*tmp_inst_iter);
     }
@@ -353,7 +353,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
       // empty lock instance
       if (used_lock == nullptr)
       {
-        errs() << "[Warning]: potential shared lock - " << cur_func->getName() << " - " << *lock_call_inst << "\n";
+        errs() << "[Warning]: potential shared lock - " << cur_func->getName().str() << " - " << *lock_call_inst << "\n";
         if (isRtnlLockInst(*lock_call_inst))
           is_shared_lock = true;
       }
@@ -472,7 +472,7 @@ void pdg::AtomicRegionAnalysis::computeWarningCS()
         if (has_nested_lock)
         {
           _ksplitStats->_shared_nest_lock += 1;
-          // errs() << "nested lock: " << lock_inst->getFunction()->getName() << "\n";
+          // errs() << "nested lock: " << lock_inst->getFunction()->getName().str() << "\n";
         }
       }
     }
@@ -514,7 +514,7 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
     aliasNodes.insert(in_alias.begin(), in_alias.end());
     for (auto aliasNode : aliasNodes)
     {
-      // errs() << "atomic warn: " << atomic_op->getFunction()->getName() << " - " << *aliasNode->getValue() << "\n";
+      // errs() << "atomic warn: " << atomic_op->getFunction()->getName().str() << " - " << *aliasNode->getValue() << "\n";
       // check in edges and see if it is addr variable
       for (auto in_edge : aliasNode->getInEdgeSet())
       {
@@ -555,7 +555,7 @@ void pdg::AtomicRegionAnalysis::computeWarningAtomicOps()
         // if (EnableAnalysisStats)
         // {
         //   _ksplitStats->_shared_atomic_op += 1;
-        //   errs() << "shared atomic op: " << atomic_op->getFunction()->getName() << " - " << *atomic_op << "\n";
+        //   errs() << "shared atomic op: " << atomic_op->getFunction()->getName().str() << " - " << *atomic_op << "\n";
         //   for (auto name : modified_names)
         //   {
         //     errs() << "\t op name: " << name << "\n";
@@ -747,7 +747,7 @@ bool pdg::AtomicRegionAnalysis::isKernelLockInstance(std::string fieldId)
 void pdg::AtomicRegionAnalysis::printWarningCS(pdg::AtomicRegionAnalysis::CSPair cs_pair, Value &v, Function &f, std::set<std::string> &modified_names, std::string source_type)
 {
   errs() << " ============  CS Warning [ " << _cs_warning_count << " ] ============\n";
-  errs() << "Function: " << f.getName() << "\n";
+  errs() << "Function: " << f.getName().str() << "\n";
   errs() << "cs begin: " << *cs_pair.first << "\n";
   errs() << "cs end: " << *cs_pair.second << "\n";
   errs() << "modified var: " << v << "\n";
@@ -763,7 +763,7 @@ void pdg::AtomicRegionAnalysis::printWarningAtomicOp(llvm::Instruction &i, std::
 {
   Function *f = i.getFunction();
   errs() << " ============  Atomic Ops Warning [ " << _warning_atomic_op_count << " ] ============\n";
-  errs() << "Function: " << f->getName() << "\n";
+  errs() << "Function: " << f->getName().str() << "\n";
   errs() << "modified var: " << i << "\n";
   for (auto fieldName : modified_names)
   {
@@ -781,7 +781,7 @@ void pdg::AtomicRegionAnalysis::dumpCS()
     auto lock_inst = cs.first;
     auto unlock_inst = cs.second;
     Function *f = lock_inst->getFunction();
-    errs() << "Function: " << f->getName() << " || " << *lock_inst << " || " << *unlock_inst << "\n";
+    errs() << "Function: " << f->getName().str() << " || " << *lock_inst << " || " << *unlock_inst << "\n";
   }
 }
 
@@ -791,7 +791,7 @@ void pdg::AtomicRegionAnalysis::dumpAtomicOps()
   for (auto atomic_op : _atomic_operations)
   {
     Function *f = atomic_op->getFunction();
-    errs() << "Function: " << f->getName() << " || " << *atomic_op << "\n";
+    errs() << "Function: " << f->getName().str() << " || " << *atomic_op << "\n";
   }
 }
 
@@ -1003,7 +1003,7 @@ void pdg::AtomicRegionAnalysis::generateSyncStubProjFromTreeNode(TreeNode &treeN
 //           if (!tn->isStructMember())
 //             continue;
 //           if (_SDA->isTreeNodeShared(*tn))
-//             errs() << "Find shared field update outside critical section: " << F.getName() << " - " << pdgutils::computeTreeNodeID(*tn) << "\n";
+//             errs() << "Find shared field update outside critical section: " << F.getName().str() << " - " << pdgutils::computeTreeNodeID(*tn) << "\n";
 //         }
 //       }
 //     }

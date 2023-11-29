@@ -997,7 +997,7 @@ void pdg::RiskyFieldAnalysis::printRiskyFieldInfo(raw_ostream &os, const std::st
     os.changeColor(raw_ostream::RED);
     os << "--- [" << category << "] --- ";
     os.resetColor();
-    os << treeNode.getSrcHierarchyName(false) << " in func " << func.getName() << "\n";
+    os << treeNode.getSrcHierarchyName(false) << " in func " << func.getName().str() << "\n";
     pdg::pdgutils::printSourceLocation(inst);
 }
 
