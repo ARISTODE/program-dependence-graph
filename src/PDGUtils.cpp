@@ -797,7 +797,7 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
     auto DISubprog = func->getSubprogram();
     unsigned line = DISubprog->getLine();
     std::string file = DISubprog->getFilename().str();
-    outStr = filePrefix + file + "#L" + std::to_string(line) + " | "  + ss.str();
+    outStr = filePrefix + file + "#L" + std::to_string(line) + " | " + ss.str();
   }
 
   return outStr;

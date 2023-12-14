@@ -1,7 +1,8 @@
 #ifndef LOCK_ATTACK_ANALYSIS_H_
 #define LOCK_ATTACK_ANALYSIS_H_
 #include "LLVMEssentials.hh"
-#include "SharedDataAnalysis.hh"
+#include "RiskyFieldAnalysis.hh"
+#include "RiskyBoundaryAPIAnalysis.hh"
 #include "TaintUtils.hh"
 #include "KSplitCFG.hh"
 #include "json.hpp"
@@ -28,7 +29,9 @@ namespace pdg
     bool isLockInst(llvm::Instruction &i);
     bool isUnlockInst(llvm::Instruction &i, std::string lockInstName);
     bool hasUnlockInstInSameBB(llvm::CallInst &lockCallInst);
-
+    bool hasUnlockInstUnderSameControlDepVar(llvm::CallInst &lockCallInst, std::string &lockCallName);
+    bool isSharedLockCall(llvm::CallInst &lockCS);
+    llvm::Value *getUsedLock(llvm::CallInst &lockCS);
 
     CSMap computeIntraCS(llvm::Function &F);
     CSMap computeIntraCSWithLock(llvm::CallInst &lockCallInst);
@@ -47,6 +50,9 @@ namespace pdg
     // protocol violation related attacks, should move the impl to a separate file later
     void computeKernelInterfaceFuncCSUnderCondition();
     void computeDrvCallBackCallSite();
+    void computeCorruptedCallBackRetVal();
+    // semantic violation
+    void computeBugOnLoc();
 
   private:
     llvm::Module *_module;

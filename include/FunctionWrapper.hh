@@ -40,6 +40,7 @@ namespace pdg
     std::vector<llvm::StoreInst *> &getStoreInsts() { return _storeInsts; }
     std::vector<llvm::CallInst *> &getCallInsts() { return _callInsts; }
     std::vector<llvm::ReturnInst *> &getReturnInsts() { return _returnInsts; }
+    std::vector<llvm::UnreachableInst *> &getUnreachableInsts() { return _unreachableInsts; }
     std::vector<llvm::Argument *> &getArgList() { return _argList; }
     bool hasNullRetVal() { return (_retValFormalInTree == nullptr); }
     std::set<llvm::Value *> computeAddrVarDerivedFromArg(llvm::Argument &arg);
@@ -55,6 +56,7 @@ namespace pdg
     std::vector<llvm::CallInst *> _callInsts;
     std::vector<llvm::ReturnInst *> _returnInsts;
     std::vector<llvm::Argument *> _argList;
+    std::vector<llvm::UnreachableInst*> _unreachableInsts;
     std::map<llvm::Argument *, Tree *> _argFormalInTreeMap;
     std::map<llvm::Argument *, Tree *> _argFormalOutTreeMap;
     Tree *_retValFormalInTree;

@@ -93,11 +93,6 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
           {
             if (nearestCommonDominator != &BB)
             {
-              if (F.getName().str() == "foobar_baz")
-              {
-                errs() << "bi: " << *bi << " - " << *succ_bb << "\n";
-              }
-
               addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROL);
               controlDepAdded = true;
             }

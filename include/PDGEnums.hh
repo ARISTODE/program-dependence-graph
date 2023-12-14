@@ -8,6 +8,7 @@ namespace pdg
     PTR_WRTIE,
     ARR_IDX,
     DIV_BY_ZERO,
+    NUM_ARITH,
     CONTROL_VAR,
     RISKY_KERNEL_FUNC,
     OTHER

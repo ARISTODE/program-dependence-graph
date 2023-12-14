@@ -26,6 +26,8 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M)
 
   PTAWrapper &ptaw = PTAWrapper::getInstance();
   PDGCallGraph &call_g = PDGCallGraph::getInstance();
+  if (!call_g.isBuild())
+    call_g.build(M);
 
   // decide the functions need to be built
   if (!_PDG->isBuild())

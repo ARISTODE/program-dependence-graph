@@ -45,6 +45,7 @@ namespace pdg
             nlohmann::ordered_json generateTraceJsonObj(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId, std::set<EdgeType> &taintEdges, TreeNode *typeTreeNode = nullptr);
             void updateRiskyFieldCounters(std::set<RiskyDataType> &riskyDataTypes);
             void updateRiskyParamCounters(std::set<RiskyDataType> &riskyDataTypes);
+            SharedDataAnalysis *getSDA() { return _SDA; }
 
         private:
             llvm::Module *_module;

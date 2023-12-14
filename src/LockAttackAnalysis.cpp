@@ -7,14 +7,16 @@ using namespace llvm;
 
 void pdg::LockAttackAnalysis::getAnalysisUsage(AnalysisUsage &AU) const
 {
-  AU.addRequired<SharedDataAnalysis>();
+  AU.addRequired<RiskyBoundaryAPIAnalysis>();
+  AU.addRequired<RiskyFieldAnalysis>();
   AU.setPreservesAll();
 }
 
 bool pdg::LockAttackAnalysis::runOnModule(Module &M)
 {
   _module = &M;
-  _SDA = &getAnalysis<SharedDataAnalysis>();
+  auto RFA = &getAnalysis<RiskyFieldAnalysis>();
+  _SDA = RFA->getSDA();
   _PDG = _SDA->getPDG();
   _callGraph = &PDGCallGraph::getInstance();
   _CFG = &KSplitCFG::getInstance();
@@ -37,15 +39,16 @@ bool pdg::LockAttackAnalysis::runOnModule(Module &M)
   // protocol violation detection
   computeKernelInterfaceFuncCSUnderCondition();
   computeDrvCallBackCallSite();
+  computeBugOnLoc();
   return false;
 }
 
 void pdg::LockAttackAnalysis::setupLockMap()
 {
   _lockMap.insert(std::make_pair("rtnl_lock", "rtnl_unlock"));
-  // _lockMap.insert(std::make_pair("mutex_lock", "mutex_unlock"));
-  // _lockMap.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
-  // _lockMap.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
+  _lockMap.insert(std::make_pair("mutex_lock", "mutex_unlock"));
+  _lockMap.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
+  _lockMap.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
   _lockMap.insert(std::make_pair("_raw_spin_lock_irqsave", "_raw_spin_unlock_irqrestore"));
   // _lockMap.insert(std::make_pair("_raw_read_lock_irqsave", "_raw_read_unlock_irq"));
   // _lockMap.insert(std::make_pair("_raw_write_lock_irqsave", "_raw_write_unlock_irq"));
@@ -54,6 +57,7 @@ void pdg::LockAttackAnalysis::setupLockMap()
 
 void pdg::LockAttackAnalysis::computeLockCallSites(pdg::LockAttackAnalysis::CallInstSet &lockCallSites)
 {
+  auto boundaryTransFuncs = _SDA->computeBoundaryTransitiveClosure();
   for (auto iter : _lockMap)
   {
     auto lockName = iter.first;
@@ -61,16 +65,69 @@ void pdg::LockAttackAnalysis::computeLockCallSites(pdg::LockAttackAnalysis::Call
     if (!lockFunc)
       continue;
 
-    auto boundaryTransFuncs = _SDA->computeBoundaryTransitiveClosure();
     auto callSites = _callGraph->getFunctionCallSites(*lockFunc);
     for (auto callSite : callSites)
     {
+      // skip non-shared lock field
+      if (!isSharedLockCall(*callSite))
+        continue;
       auto func = callSite->getFunction();
       if (boundaryTransFuncs.find(func) == boundaryTransFuncs.end() && !_SDA->isDriverFunc(*func))
         continue;
       lockCallSites.insert(callSite);
     }
   }
+}
+
+// determine if a lock call is operated on a shared lock
+// two kinds of shared lock: global lock or shared field used as lock
+bool pdg::LockAttackAnalysis::isSharedLockCall(CallInst &lockCS)
+{
+   auto calledLockFunc = pdgutils::getCalledFunc(lockCS);
+   // now only consider rtnl_lock as shared global lock, should consider other global locks as well
+   if (calledLockFunc)
+   {
+     auto calledLockFuncName = pdgutils::stripFuncNameVersionNumber(calledLockFunc->getName().str());
+     if (calledLockFuncName == "rtnl_lock")
+       return true;
+   }
+
+   // obtain used lock
+   auto usedLock = getUsedLock(lockCS);
+   if (!usedLock)
+    return false;
+  
+   auto lockNode = _PDG->getNode(*usedLock);
+   auto lockParamNode = lockNode->getAbstractTreeNode();
+   if (lockParamNode)
+   {
+     TreeNode *tn = static_cast<TreeNode *>(lockParamNode);
+     if (tn->isShared)
+       return true;
+   }
+
+   return false;
+}
+
+Value *pdg::LockAttackAnalysis::getUsedLock(CallInst &lockCS)
+{
+  // we only consider lock instructions that take a lock instance as argument
+  if (lockCS.getNumArgOperands() == 0)
+    return nullptr;
+  // use pattern on IR to track down the lock (O0 optimization level)
+  if (auto usedLockCastInst = dyn_cast<BitCastInst>(lockCS.getOperand(0)))
+  {
+    auto usedLock = usedLockCastInst->getOperand(0);
+    if (auto gep = dyn_cast<GetElementPtrInst>(usedLock))
+    {
+      if (auto li = dyn_cast<LoadInst>(gep->getPointerOperand()))
+        return li;
+    }
+  }
+  else
+    return lockCS.getOperand(0);
+
+  return nullptr;
 }
 
 bool pdg::LockAttackAnalysis::isLockInst(Instruction &i)
@@ -130,10 +187,59 @@ bool pdg::LockAttackAnalysis::hasUnlockInstInSameBB(CallInst &lockCallInst)
   return false;
 }
 
+bool pdg::LockAttackAnalysis::hasUnlockInstUnderSameControlDepVar(CallInst &lockCallInst, std::string &lockCallName)
+{
+  // obtain the control dep vars
+  std::set<EdgeType> ctrlEdge = {EdgeType::CONTROL};
+  auto lockCSNode = _PDG->getNode(lockCallInst);
+  // use control dep (backward) to obtain the condition guarding the lock call
+  auto controlDepCondNodes = _PDG->findNodesReachedByEdges(*lockCSNode, ctrlEdge, true);
+  auto it = controlDepCondNodes.find(lockCSNode);
+  if (it != controlDepCondNodes.end())
+    controlDepCondNodes.erase(it);
+
+  bool hasUnlockUnderSameControlDep = false;
+  if (controlDepCondNodes.size() > 0)
+  {
+    for (auto ctrlDepCondNode : controlDepCondNodes)
+    {
+      if (!ctrlDepCondNode->getValue())
+        continue;
+      auto controlDepNodes = _PDG->findNodesReachedByEdges(*ctrlDepCondNode, ctrlEdge);
+      for (auto controlDepNode : controlDepNodes)
+      {
+        auto ctrlDepVal = controlDepNode->getValue();
+        if (!ctrlDepVal)
+          continue;
+
+        if (CallInst *ci = dyn_cast<CallInst>(ctrlDepVal))
+        {
+          // check if it's an unlock inst
+          auto calledFunc = pdgutils::getCalledFunc(*ci);
+
+          if (calledFunc != nullptr)
+          {
+            auto calledFuncName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName().str());
+            if (calledFuncName == _lockMap[lockCallName])
+            {
+              hasUnlockUnderSameControlDep = true;
+              break;
+            }
+          }
+        }
+      }
+      if (hasUnlockUnderSameControlDep)
+        break;
+    }
+  }
+
+  return hasUnlockUnderSameControlDep;
+}
+
 pdg::LockAttackAnalysis::CSMap pdg::LockAttackAnalysis::computeIntraCS(Function &F)
 {
   CSMap ret;
-  
+
   for (inst_iterator instIter = inst_begin(F); instIter != inst_end(F); instIter++)
   {
     // 1. find all lock instruction that call to acquire a lock
@@ -172,7 +278,7 @@ pdg::LockAttackAnalysis::CSMap pdg::LockAttackAnalysis::computeIntraCSWithLock(C
   Function *calledFunc = pdgutils::getCalledFunc(lockCallInst);
   if (calledFunc == nullptr)
     return ret;
- 
+
   auto lockInstName = pdgutils::stripFuncNameVersionNumber(calledFunc->getName().str());
 
   // 2. find unlock that can be reached from the lock
@@ -275,8 +381,11 @@ void pdg::LockAttackAnalysis::computeLockCallSiteUnderConditions(pdg::LockAttack
     if (hasUnlockInstInSameBB(*lockCS))
       continue;
 
-    nlohmann::ordered_json lockUnderCondJson;
     auto lockName = pdgutils::getCalledFunc(*lockCS)->getName().str();
+    if (hasUnlockInstUnderSameControlDepVar(*lockCS, lockName))
+      continue;
+
+    nlohmann::ordered_json lockUnderCondJson;
     // obtain PDG node for the call site
     auto lockCSNode = _PDG->getNode(*lockCS);
     // use control dep (backward) to obtain the condition guarding the lock call
@@ -287,21 +396,24 @@ void pdg::LockAttackAnalysis::computeLockCallSiteUnderConditions(pdg::LockAttack
 
     if (controlDepNodes.size() > 0)
     {
-      lockUnderCondJson["Lock name"] = lockName;
-      lockUnderCondJson["Lock Inst Loc"] = pdgutils::getSourceLocationStr(*lockCS);
       std::string condLocStr = "";
       for (auto ctrlDepNode : controlDepNodes)
       {
         auto ctrlNodeVal = ctrlDepNode->getValue();
         if (!ctrlNodeVal)
-            continue;
+          continue;
 
         if (Instruction *i = dyn_cast<Instruction>(ctrlNodeVal))
           condLocStr += pdgutils::getSourceLocationStr(*i) + " | ";
       }
-      
-      lockUnderCondJson["Cond Lock"] = condLocStr;
-      atkJsons.push_back(lockUnderCondJson);
+
+      if (!condLocStr.empty())
+      {
+        lockUnderCondJson["Lock name"] = lockName;
+        lockUnderCondJson["Lock Inst Loc"] = pdgutils::getSourceLocationStr(*lockCS);
+        lockUnderCondJson["Cond Loc"] = condLocStr;
+        atkJsons.push_back(lockUnderCondJson);
+      }
     }
   }
 
@@ -322,7 +434,7 @@ void pdg::LockAttackAnalysis::computeCSLoop(pdg::LockAttackAnalysis::CallInstSet
   {
     // compute critical section
     auto intraCSMap = computeIntraCSWithLock(*lockCS);
-    
+
     // obtain loop info in the function
     auto func = lockCS->getFunction();
     DominatorTree DT(*func);
@@ -338,7 +450,9 @@ void pdg::LockAttackAnalysis::computeCSLoop(pdg::LockAttackAnalysis::CallInstSet
       {
         if (BranchInst *BI = dyn_cast<BranchInst>(inst))
         {
-          if (LI.isLoopHeader(BI->getParent()))
+          // check if the branch is tainted
+          auto BINode = _PDG->getNode(*BI);
+          if (BINode->isTaint() && LI.isLoopHeader(BI->getParent()))
           {
             loopCSJson["Lock Name"] = lockName;
             loopCSJson["Lock loc"] = pdgutils::getSourceLocationStr(*csPair.first);
@@ -349,6 +463,11 @@ void pdg::LockAttackAnalysis::computeCSLoop(pdg::LockAttackAnalysis::CallInstSet
 
         if (auto gep = dyn_cast<GetElementPtrInst>(inst))
         {
+          // check if the gep is tainted
+          auto gepNode = _PDG->getNode(*gep);
+          if (!gepNode->isTaint())
+            continue;
+
           auto gepOffset = pdgutils::getGEPAccessFieldOffset(*gep);
           if (gepOffset < 0)
           {
@@ -412,20 +531,24 @@ void pdg::LockAttackAnalysis::computeKernelInterfaceFuncCSUnderCondition()
     // when there is a check for the call site
     if (controlDepNodes.size() > 0)
     {
-       nlohmann::ordered_json csJson;
-       std::string condLocStr = "";
-       for (auto ctrlDepNode : controlDepNodes)
-       {
-         auto ctrlNodeVal = ctrlDepNode->getValue();
-         if (!ctrlNodeVal)
-           continue;
+      nlohmann::ordered_json csJson;
+      std::string condLocStr = "";
+      for (auto ctrlDepNode : controlDepNodes)
+      {
+        auto ctrlNodeVal = ctrlDepNode->getValue();
+        if (!ctrlNodeVal)
+          continue;
 
-         if (Instruction *i = dyn_cast<Instruction>(ctrlNodeVal))
-           condLocStr += pdgutils::getSourceLocationStr(*i) + " | ";
-       }
-       csJson["Cond loc"] = condLocStr;
-       csJson["Call site loc"] = pdgutils::getSourceLocationStr(*CS);
-       atkJsons.push_back(csJson);
+        if (Instruction *i = dyn_cast<Instruction>(ctrlNodeVal))
+          condLocStr += pdgutils::getSourceLocationStr(*i) + " | ";
+      }
+      if (!condLocStr.empty())
+      {
+        csJson["Drv func"] = CS->getFunction()->getName().str();
+        csJson["Cond loc"] = condLocStr;
+        csJson["Call site loc"] = pdgutils::getSourceLocationStr(*CS);
+        atkJsons.push_back(csJson);
+      }
     }
   }
 
@@ -445,7 +568,6 @@ void pdg::LockAttackAnalysis::computeDrvCallBackCallSite()
   {
     if (!_SDA->isDriverFunc(*F))
       continue;
-
     auto drvFuncCallSites = _callGraph->getFunctionCallSites(*F);
     for (auto CS : drvFuncCallSites)
     {
@@ -459,8 +581,165 @@ void pdg::LockAttackAnalysis::computeDrvCallBackCallSite()
       atkJsons.push_back(csJson);
     }
   }
-
   taintutils::printJsonToFile(atkJsons, "DrvCallBackRetLoc.json");
+}
+
+// TODO: need to think about how to identify critical resource functions
+void pdg::LockAttackAnalysis::computeCorruptedCallBackRetVal()
+{
+  // compute all the driver functions that return a value
+
+  // for all such driver interface function, obtain the return statements
+}
+
+// the idea to find all the BUG_ON that can be reached from the kernel interface functions
+// On IR, it's hard to retrive the conditiona used in the BUG_ON macro.
+//
+
+void pdg::LockAttackAnalysis::computeBugOnLoc()
+{
+  nlohmann::ordered_json atkJsons = nlohmann::ordered_json::array();
+  unsigned controlledBugonCount = 0;
+  unsigned uncontrolledBugonCount = 0;
+
+  // used to obtain check conditions
+  std::set<EdgeType> ctrlEdge = {EdgeType::CONTROL};
+
+  // step1: iterate through kernel interface functions
+  for (auto F : _SDA->getBoundaryFuncs())
+  {
+    if (_SDA->isDriverFunc(*F))
+      continue;
+    // compute unreachable instruction that is reached from the kernel interface function
+    auto boundaryFuncNode = _callGraph->getNode(*F);
+    if (!boundaryFuncNode)
+      continue;
+
+    std::string drvCallerStr = "";
+    auto funcCallSites = _callGraph->getFunctionCallSites(*F);
+    for (CallInst *callsite : funcCallSites)
+    {
+      auto callerFunc = callsite->getFunction();
+      if (callerFunc && _SDA->isDriverFunc(*callerFunc) && !pdgutils::isFuncDefinedInHeaderFile(*callerFunc))
+      {
+        std::string callSiteLocStr = pdgutils::getSourceLocationStr(*callsite);
+        std::string callLocStr = "[ " + callerFunc->getName().str() + " | " + callSiteLocStr + " ], ";
+        drvCallerStr = drvCallerStr + callLocStr;
+      }
+    }
+
+    auto transFuncNodes = _callGraph->computeTransitiveClosure(*boundaryFuncNode);
+    for (auto transFuncNode : transFuncNodes)
+    {
+      auto transFuncVal = transFuncNode->getValue();
+      if (auto transFunc = dyn_cast<Function>(transFuncVal))
+      {
+        auto transFuncW = _PDG->getFuncWrapper(*transFunc);
+        if (!transFuncW)
+          continue;
+
+        auto &unreachableInsts = transFuncW->getUnreachableInsts();
+        if (unreachableInsts.size() == 0)
+          continue;
+
+        // compute call path from kernel boundary to the transitive function
+        std::string callPathStr = "";
+        std::string callPaths = "";
+        std::vector<Node *> path;
+        std::unordered_set<Node *> visited;
+        if (_callGraph->findPathDFS(boundaryFuncNode, transFuncNode, path, visited))
+        {
+          for (size_t i = 0; i < path.size(); ++i)
+          {
+            Node *node = path[i];
+
+            // Print the node's function name
+            if (Function *f = dyn_cast<Function>(node->getValue()))
+              callPathStr = callPathStr + f->getName().str();
+
+            if (i < path.size() - 1)
+              callPathStr = callPathStr + "->";
+
+            // here, we only consider one valid path
+          }
+
+          if (!callPathStr.empty())
+            callPaths = callPaths + " [" + callPathStr + "] ";
+        }
+
+        for (auto unreachableInst : unreachableInsts)
+        {
+          nlohmann::ordered_json logJson;
+          auto unreachableInstNode = _PDG->getNode(*unreachableInst);
+          auto controlDepNodes = _PDG->findNodesReachedByEdges(*unreachableInstNode, ctrlEdge, true);
+          auto it = controlDepNodes.find(unreachableInstNode);
+          if (it != controlDepNodes.end())
+            controlDepNodes.erase(it);
+
+          if (controlDepNodes.size() == 0)
+          {
+            // when there is no condition guarding the unreachable instruction
+            logJson["Drv caller"] = drvCallerStr;
+            logJson["Trans func name"] = transFunc->getName().str();
+            logJson["Bugon loc"] = pdgutils::getSourceLocationStr(*unreachableInst);
+            logJson["Check"] = "No check";
+            logJson["Call Path"] = callPathStr;
+            controlledBugonCount++;
+          }
+          else
+          {
+            logJson["Drv caller"] = drvCallerStr;
+            logJson["Trans func name"] = transFunc->getName().str();
+            logJson["Bugon loc"] = pdgutils::getSourceLocationStr(*unreachableInst);
+            logJson["Call Path"] = callPathStr;
+            // when there is a conditional check, check if the condition is tainted
+            bool isCondTainted = false;
+            for (auto ctrlDepNode : controlDepNodes)
+            {
+              if (!ctrlDepNode->isTaint())
+              {
+                isCondTainted = false;
+                break;
+              }
+            }
+            if (isCondTainted)
+            {
+              controlledBugonCount++;
+              logJson["Is check controlled"] = "true";
+            }
+            else
+            {
+              uncontrolledBugonCount++;
+              logJson["Is check controlled"] = "false";
+            }
+
+            // generate condtion loc string
+            std::string condLocStr = "";
+            for (auto ctrlDepNode : controlDepNodes)
+            {
+              auto ctrlNodeVal = ctrlDepNode->getValue();
+              if (!ctrlNodeVal)
+                continue;
+
+              if (Instruction *i = dyn_cast<Instruction>(ctrlNodeVal))
+                condLocStr += pdgutils::getSourceLocationStr(*i) + " | ";
+            }
+
+            logJson["Cond loc"] = condLocStr;
+          }
+
+          atkJsons.push_back(logJson);
+        }
+      }
+    }
+  }
+
+  nlohmann::ordered_json statJson;
+  statJson["Total Bugon"] = controlledBugonCount + uncontrolledBugonCount;
+  statJson["Controlled Bugon"] = controlledBugonCount;
+  statJson["Uncontrolled Bugon"] = uncontrolledBugonCount;
+  atkJsons.insert(atkJsons.begin(), statJson);
+  taintutils::printJsonToFile(atkJsons, "BugonLoc.json");
 }
 
 static RegisterPass<pdg::LockAttackAnalysis>

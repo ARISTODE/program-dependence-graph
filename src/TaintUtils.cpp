@@ -292,6 +292,7 @@ bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
   {
     if (auto cmpInst = dyn_cast<CmpInst>(user))
     {
+      bool hasRiskyOperation = false;
       for (auto u : cmpInst->users())
       {
         if (isa<BranchInst>(u) || isa<SwitchInst>(u))
@@ -316,7 +317,7 @@ bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
                 return true;
               }
               auto calledFuncName = calledFunc->getName().str();
-              // we only check if a sensitive API is directly enabled in the branch
+              // check if a sensitive API is directly executed in the branch
               for (auto op : sensitiveOperations)
               {
                 if (calledFuncName.find(op) != std::string::npos)
@@ -325,11 +326,8 @@ bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
                   return true;
                 }
               }
-              // check if the call can reach sensitive operations
-              // auto calledFuncNode = callGraph->getNode(*calledFunc);
-              // if (auto senOpFunc = canReachSensitiveOperations(*calledFuncNode))
-              //   return true;
             }
+
             // check if the there is a loop the branch
             if (BranchInst *BI = dyn_cast<BranchInst>(depNodeVal))
             {
@@ -339,9 +337,22 @@ bool pdg::taintutils::isValueInSensitiveBranch(Node &n, std::string &senOpName)
                 return true;
               }
             }
+
+            // check if the branch contains buffer access
+            if (auto gep = dyn_cast<GetElementPtrInst>(depNodeVal))
+            {
+              // skip gep on struct pointer
+              if (pdgutils::isStructPointerType(*gep->getPointerOperand()->getType()))
+                continue;
+              senOpName = "buffer_acc";
+              return true;
+            }
           }
         }
       }
+
+      senOpName = "norm_branch";
+      return true;
     }
   }
   return false;

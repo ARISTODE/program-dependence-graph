@@ -43,6 +43,7 @@ void pdg::PDGCallGraph::build(Module &M)
         {
           // indirect calls
           auto ind_call_candidates = getIndirectCallCandidates(*ci, M);
+
           for (auto ind_call_can : ind_call_candidates)
           {
             Node *callee_node = getNode(*ind_call_can);
@@ -318,7 +319,7 @@ void pdg::PDGCallGraph::setupExcludeFuncs()
 
 void pdg::PDGCallGraph::setupExportedFuncs()
 {
-  std::ifstream ReadFile("exported_funcs");
+  std::ifstream ReadFile("boundaryFiles/exported_funcs");
   for (std::string line; std::getline(ReadFile, line);)
   {
     _exported_func_names.insert(line);
@@ -327,7 +328,7 @@ void pdg::PDGCallGraph::setupExportedFuncs()
 
 void pdg::PDGCallGraph::setupDriverFuncs()
 {
-  std::ifstream ReadFile("driver_funcs");
+  std::ifstream ReadFile("boundaryFiles/driver_funcs");
   for (std::string line; std::getline(ReadFile, line);)
   {
     _driver_func_names.insert(line);
@@ -352,8 +353,7 @@ bool pdg::PDGCallGraph::isDriverFunc(Function &F)
 {
   auto funcName = F.getName().str();
   funcName = pdgutils::stripFuncNameVersionNumber(funcName);
-  return (_driver_func_names.find(funcName) != _driver_func_names.end());
-}
+  return (_driver_func_names.find(funcName) != _driver_func_names.end()); }
 
 bool pdg::PDGCallGraph::findPathDFS(Node *src, Node *dst, std::vector<Node *> &path, std::unordered_set<Node *> &visited)
 {

@@ -17,6 +17,8 @@ void pdg::FunctionWrapper::addInst(Instruction &i)
     if (!isa<DbgDeclareInst>(&i))
       _callInsts.push_back(ci);
   }
+  if (UnreachableInst *unreachableInst = dyn_cast<UnreachableInst>(&i))
+    _unreachableInsts.push_back(unreachableInst);
   if (ReturnInst *reti = dyn_cast<ReturnInst>(&i))
     _returnInsts.push_back(reti);
 }

@@ -538,6 +538,20 @@ void pdg::SharedDataAnalysis::computeSharedFieldID()
           }
           // collect read/write accesses in driver/kernel domain
           countReadWriteAccessTimes(*currentTreeNode);
+          // set formal tree node as shared as well
+          for (auto addrVar : currentTreeNode->getAddrVars())
+          {
+            auto addrVarNode = _PDG->getNode(*addrVar);
+            if (addrVarNode)
+            {
+              auto abstractTN = addrVarNode->getAbstractTreeNode();
+              if (abstractTN)
+              {
+                TreeNode *tn = static_cast<TreeNode*>(abstractTN);
+                tn->isShared = true;
+              }
+            }
+          }
         }
       }
 

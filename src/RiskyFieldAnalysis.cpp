@@ -94,7 +94,7 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
 
     auto globalStructDTMap = _SDA->getGlobalStructDTMap();
     
-    // first step, propagate taint, this is used to 
+    // first step, propagate taint, used by branch checking later
     for (auto dtPair : globalStructDTMap)
     {
         auto typeTree = dtPair.second;
@@ -305,6 +305,7 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
             if (argDIType && dbgutils::isStructPointerType(*argDIType))
                 continue;
             _numNonStructBoundaryArg++;
+            
             // if ptr is not updated in driver, no need to analyze it
             if (dbgutils::isPointerType(*argDIType) && !hasUpdateInDrv(*rootNode))
                 continue;
@@ -578,12 +579,6 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
         auto addrVarNode = _PDG->getNode(*addrVar);
         auto taintNodes = _PDG->findNodesReachedByEdges(*addrVarNode, taintEdges);
 
-        // set the taints for all the tainted nodes
-        // for (auto taintNode : taintNodes)
-        // {
-        //     taintNode->setTaint();
-        // }
-
         for (auto taintNode : taintNodes)
         {
             auto taintVal = taintNode->getValue();
@@ -591,12 +586,10 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
                 continue;
 
             // skip taints in driver functions
-            if (auto taintInst = dyn_cast<Instruction>(taintVal))
-            {
-                // skip driver uses in functions
-                if (_SDA->isDriverFunc(*taintInst->getFunction()))
-                    continue;
-            }
+            Instruction *taintInst = cast<Instruction>(taintVal);
+            // skip driver uses in functions
+            if (_SDA->isDriverFunc(*taintInst->getFunction()))
+                continue;
 
             // check if value used as array index or operand of ptr arith
             if (riskyClassifications.find(RiskyDataType::ARR_IDX) == riskyClassifications.end() && taintutils::isUsedAsArrayIndex(*taintNode))
@@ -607,7 +600,30 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
                 classified = true;
             }
 
-            // check if value is used in ptr arithmetic
+            // check if value is used in any number arithmetic operations
+            if (riskyClassifications.find(RiskyDataType::NUM_ARITH) == riskyClassifications.end() && taintutils::isValueUsedInArithmetic(*taintNode))
+            {
+                // check if the derived value is used in a branch
+                auto arithValTaintNodes = _PDG->findNodesReachedByEdges(*taintNode, taintEdges);
+                std::string senOpName = "";
+                for (auto arithTN : arithValTaintNodes)
+                {
+                    if (taintutils::isValueInSensitiveBranch(*arithTN, senOpName))
+                    {
+                        if (auto arithInst = dyn_cast<Instruction>(arithTN->getValue()))
+                        {
+                            std::string senBranchLoc = pdgutils::getSourceLocationStr(*arithInst);
+                            std::string warnStr = "num-arith ( " + senBranchLoc + " )";
+                            riskyClassifications.insert(RiskyDataType::NUM_ARITH);
+                            auto traceJsonObj = generateTraceJsonObj(*addrVarNode, *taintNode, accessPathStr, warnStr, caseID, taintEdges, &tn);
+                            taintJsonObjs.push_back(traceJsonObj);
+                            classified = true;
+                        }
+                    }
+                }
+            }
+
+            // check if value is used in divided by 0 operation
             if (riskyClassifications.find(RiskyDataType::DIV_BY_ZERO) == riskyClassifications.end() && taintutils::isValUsedInDivByZero(*taintNode))
             {
                 riskyClassifications.insert(RiskyDataType::DIV_BY_ZERO);
