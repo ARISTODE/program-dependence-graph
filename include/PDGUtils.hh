@@ -70,6 +70,8 @@ namespace pdg
     void readLinesFromFile(std::set<std::string> &lines, std::string fileName);
     void printSourceLocation(llvm::Instruction &I, llvm::raw_ostream &OutputStream = llvm::errs());
     std::string getSourceLocationStr(llvm::Instruction &I);
+    std::string getSourceLocationStrForInlineInst(llvm::Instruction &I);
+    llvm::DILocation* getTopDebugLocation(llvm::DILocation *DL);
     std::string getFuncSourceLocStr(llvm::Function &F);
     unsigned getFuncUniqueId(const llvm::Function &F);
     // TODO: should consider depth as well

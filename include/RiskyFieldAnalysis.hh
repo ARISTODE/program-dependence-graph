@@ -21,6 +21,9 @@ namespace pdg
             void classifyRiskyField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
             bool classifyRiskyPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
             bool classifyRiskyNonPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
+            // checks for atomic_t type field
+            bool isSharedAtomicField(TreeNode &tn);
+
             // pointer field checks
             bool checkPtrValUsedInPtrArithOp(Node &n);
             // scalar field checks
@@ -40,7 +43,7 @@ namespace pdg
             void printJsonToFile(nlohmann::ordered_json& json, std::string logFileName);
             void getTraceStr(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_string_ostream &OS);
             void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
-            void printFieldClassificationTaint(llvm::raw_fd_ostream &OS);
+            void printFieldClassificationTaint();
             void printTaintFieldInfo();
             nlohmann::ordered_json generateTraceJsonObj(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId, std::set<EdgeType> &taintEdges, TreeNode *typeTreeNode = nullptr);
             void updateRiskyFieldCounters(std::set<RiskyDataType> &riskyDataTypes);
@@ -66,8 +69,6 @@ namespace pdg
             unsigned numKernelAPIParam = 0;
             unsigned numControlTaintTrace = 0;
             // output file
-            llvm::raw_fd_ostream *riskyFieldOS;
-            llvm::raw_fd_ostream *riskyFieldTaintOS;
             std::unordered_map<RiskyDataType, int> totalRiskyFieldCounters;
             std::unordered_map<RiskyDataType, int> totalRiskyParamCounters;
             nlohmann::ordered_json taintTracesJson = nlohmann::ordered_json::array();

@@ -53,6 +53,8 @@ namespace pdg
     void computeCorruptedCallBackRetVal();
     // semantic violation
     void computeBugOnLoc();
+    void computeRiskyDirectRefCount();
+    bool isAtomicRefCountCall(llvm::CallInst &CI);
 
   private:
     llvm::Module *_module;

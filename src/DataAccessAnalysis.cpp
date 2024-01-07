@@ -407,8 +407,8 @@ void pdg::DataAccessAnalysis::computeCollocatedAllocsite(Module &M)
 
 void pdg::DataAccessAnalysis::computeExportedFuncsPtrNameMap()
 {
-  std::ifstream driverExportFuncs("exported_funcs");
-  std::ifstream driverExportFuncPtrs("exported_func_ptrs");
+  std::ifstream driverExportFuncs("boundaryFiles/exported_funcs");
+  std::ifstream driverExportFuncPtrs("boundaryFiles/exported_func_ptrs");
   for (std::string line1, line2; std::getline(driverExportFuncPtrs, line1), std::getline(driverExportFuncs, line2);)
   {
     // in some cases, a function pointer exported from driver may point to a kernel function

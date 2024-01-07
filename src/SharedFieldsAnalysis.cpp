@@ -87,7 +87,6 @@ std::pair<llvm::DIType *, llvm::DIType *> pdg::SharedFieldsAnalysis::computeInst
       {
         errs() << "[WARNING]: empty di type on load address in func" << li->getFunction()->getName().str() << "\n";
         errs() << *load_addr << "\n";
-        // assert(false);
       }
       DIType *load_addr_di_type = getValDIType(*load_addr);
       if (!load_addr_di_type)

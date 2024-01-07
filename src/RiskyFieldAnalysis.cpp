@@ -74,26 +74,11 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
     _PDG = _SDA->getPDG();
     _callGraph = &PDGCallGraph::getInstance();
     std::error_code EC;
-    riskyFieldOS = new raw_fd_ostream("RiskyField.log", EC, sys::fs::OF_Text);
-    if (EC)
-    {
-        delete riskyFieldOS;
-        errs() << "cannot open RiskyField.log\n";
-        return false;
-    }
-
-    riskyFieldTaintOS = new raw_fd_ostream("RiskyFieldTaint.log", EC, sys::fs::OF_Text);
-    if (EC)
-    {
-        delete riskyFieldTaintOS;
-        errs() << "cannot open RiskyField.log\n";
-        return false;
-    }
 
     unsigned caseId = 0;
 
     auto globalStructDTMap = _SDA->getGlobalStructDTMap();
-    
+
     // first step, propagate taint, used by branch checking later
     for (auto dtPair : globalStructDTMap)
     {
@@ -145,6 +130,7 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
         }
     }
 
+    // step 2: classify fields
     for (auto dtPair : globalStructDTMap)
     {
         auto typeTree = dtPair.second;
@@ -181,6 +167,37 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
             }
             if (n->isStructField())
                 numFields++;
+
+            auto fieldTypeName = dbgutils::getSourceLevelVariableName(*n->getDIType());
+            auto fieldName = n->getSrcName();
+            if (fieldName == "io_pending")
+                errs() << "find io_pending " << " - " << fieldTypeName << "\n";
+            // searching for field vulnerable to reference counting attack
+            if (isSharedAtomicField(*n))
+            {
+                
+                if (fieldTypeName == "atomic_t")
+                {
+                    errs() << "find atomic_t field " << fieldTypeName << "\n";
+                }
+
+                // nlohmann::ordered_json atomicTypeFieldJson;
+                // atomicTypeFieldJson["Field"] = n->getSrcHierarchyName();
+                // atomicTypeFieldJson["Parent struct"] = typeTree->getRootNode()->getSrcName();
+                // std::string driverAccessLocs = "";
+                // for (auto addrVar : n->getAddrVars())
+                // {
+                //     if (auto tmpInst = dyn_cast<Instruction>(addrVar))
+                //     {
+                //         if (_SDA->isDriverFunc(*tmpInst->getFunction()))
+                //         {
+                //             driverAccessLocs = driverAccessLocs + " | " + pdgutils::getSourceLocationStr(*tmpInst);
+                //         }
+                //     }
+                // }
+                // atomicTypeFieldJson["Driver Acc Locs"] = driverAccessLocs;
+            }
+
             // classify the risky field into different classes
             if (n->isShared)
             {
@@ -192,6 +209,7 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
 
             if (isDriverControlledField(*n))
             {
+
                 _numKernelReadDriverUpdatedFields++;
                 numKRDUFields++;
                 std::set<RiskyDataType> riskyClassifications;
@@ -284,6 +302,7 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
         }
     }
 
+    // step 3: classify parameters passed directly from the interface
     for (auto func : kernelAPIs)
     {
         if (_SDA->isDriverFunc(*func))
@@ -366,9 +385,8 @@ bool pdg::RiskyFieldAnalysis::runOnModule(Module &M)
         caseId++;
     }
 
-    printFieldClassificationTaint(*riskyFieldOS);
+    printFieldClassificationTaint();
 
-    riskyFieldTaintOS->close();
     return false;
 }
 
@@ -659,6 +677,15 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyNonPtrField(TreeNode &tn, std::set<pd
     }
 
     return classified;
+}
+
+bool pdg::RiskyFieldAnalysis::isSharedAtomicField(TreeNode &tn)
+{
+    auto fieldDIType = tn.getDIType();
+    auto fieldTypeName = dbgutils::getSourceLevelTypeName(*fieldDIType);
+    if (fieldTypeName == "atomic_t")
+        return true;
+    return false;
 }
 
 void pdg::RiskyFieldAnalysis::classifyRiskyField(TreeNode &tn, std::set<pdg::RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID)
@@ -1017,25 +1044,8 @@ void pdg::RiskyFieldAnalysis::printRiskyFieldInfo(raw_ostream &os, const std::st
     pdg::pdgutils::printSourceLocation(inst);
 }
 
-void pdg::RiskyFieldAnalysis::printFieldClassificationTaint(raw_fd_ostream &OS)
+void pdg::RiskyFieldAnalysis::printFieldClassificationTaint()
 {
-    // OS << "Number of kernel read driver updated fields: " << numKernelReadDriverUpdatedFields << "\n";
-    // OS << "Number of pointer fields: " << numPtrField << "\n";
-    // OS << "\tNumber of function pointer fields: " << numFuncPtrField << "\n";
-    // OS << "\tNumber of data pointer fields: " << numDataPtrField << "\n";
-    // OS << "\t\tNo.pointer arithmetic pointer fields (Taint): " << numPtrArithPtrFieldTaint << "\n";
-    // OS << "\t\tNo.dereference pointer fields (Taint): " << numDereferencePtrFieldTaint << "\n";
-    // OS << "\t\tNo.sensitive operation pointer fields (Taint): " << numSensitiveOpPtrFieldTaint << "\n";
-    // OS << "\t\tNo.branch pointer fields (Taint): " << numBranchPtrFieldTaint << "\n";
-    // OS << "No.array index fields (Taint): " << numArrayIdxFieldTaint << "\n";
-    // OS << "No.arith op fields (Taint): " << numArithFieldTaint << "\n";
-    // OS << "No.sensitive branch fields (Taint): " << numSensitiveBranchFieldTaint << "\n";
-    // OS << "No.sensitive operation fields (Taint): " << numSensitiveOpsFieldTaint << "\n";
-    // OS << "No.unclassified fields (Taint): " << numUnclassifiedFieldTaint << "\n";
-    // OS << "No.unclassified func ptr fields (Taint): " << numUnclassifiedFuncPtrFieldTaint << "\n";
-    // OS << "No.kernel API params: " << numKernelAPIParam << "\n";
-    // OS << "No.control taint trace: " << numControlTaintTrace << "\n";
-
     unsigned numKernelBoundaryFunc = 0;
     unsigned numDrvBoundaryFunc = 0;
     for (auto f : _SDA->getBoundaryFuncs())

@@ -40,6 +40,8 @@ bool pdg::LockAttackAnalysis::runOnModule(Module &M)
   computeKernelInterfaceFuncCSUnderCondition();
   computeDrvCallBackCallSite();
   computeBugOnLoc();
+  computeRiskyDirectRefCount();
+  
   return false;
 }
 
@@ -740,6 +742,62 @@ void pdg::LockAttackAnalysis::computeBugOnLoc()
   statJson["Uncontrolled Bugon"] = uncontrolledBugonCount;
   atkJsons.insert(atkJsons.begin(), statJson);
   taintutils::printJsonToFile(atkJsons, "BugonLoc.json");
+}
+
+void pdg::LockAttackAnalysis::computeRiskyDirectRefCount()
+{
+  // step 1: iterate all the functions, and find inline assembly that perform 
+  for (auto func : _SDA->getDriverFuncs())
+  {
+    auto funcWrapper = _PDG->getFuncWrapper(*func);
+    for (auto CI : funcWrapper->getCallInsts())
+    {
+      if (isAtomicRefCountCall(*CI))
+      {
+        errs() << "find atomic inc in func " << func->getName() << " - " << pdgutils::getSourceLocationStr(*CI) << "\n";
+      }
+    }
+  }
+}
+
+bool pdg::LockAttackAnalysis::isAtomicRefCountCall(CallInst &CI)
+{
+  if (!CI.getCalledFunction())
+  {
+    // Must be inline asm
+    if (CI.getNumArgOperands() != 2)
+      return false;
+
+    Value *firstArg = CI.getArgOperand(0);
+    Value *secondArg = CI.getArgOperand(1);
+
+    // Check if arguments are same pointer
+    if (firstArg != secondArg)
+      return false;
+
+    // Match inline asm
+    if (InlineAsm *ia = dyn_cast<InlineAsm>(CI.getCalledOperand()))
+    {
+      auto asmStr = ia->getAsmString();
+      // check if the call is atomic_inc or atomic_dec
+      bool hasAtomicAddDec = false;
+      if (asmStr.find("lock") != std::string::npos)
+      {
+
+        if (asmStr.find("incl") != string::npos)
+        {
+          hasAtomicAddDec = true;
+        }
+        else if (asmStr.find("decl") != string::npos)
+        {
+          hasAtomicAddDec = true;
+        }
+      }
+      return hasAtomicAddDec;
+    }
+  }
+
+  return false;
 }
 
 static RegisterPass<pdg::LockAttackAnalysis>

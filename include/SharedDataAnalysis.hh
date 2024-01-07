@@ -100,8 +100,6 @@ namespace pdg
     std::set<std::string> _driver_global_struct_types;
     std::set<std::string> _sentinelFields;
     std::set<std::string> exportedFuncPtrFieldNames;
-    std::ofstream fieldStatsFile;
-    std::ofstream riskyPatternLog;
   };
 } // namespace pdg
 #endif

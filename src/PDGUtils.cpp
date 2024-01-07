@@ -776,9 +776,20 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
 
   if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
   {
+    // default info from debug node
     unsigned line = debugLoc.getLine();
-    // unsigned col = debugLoc.getCol();
     llvm::MDNode *scopeNode = debugLoc.getScope();
+    // if this inst is inlined, need to find the original node
+    auto inlinedDILoc = debugLoc.getInlinedAt();
+    if (inlinedDILoc)
+    {
+      auto DILoc = getTopDebugLocation(inlinedDILoc);
+      if (DILoc)
+      {
+        line = DILoc->getLine();
+        scopeNode = DILoc->getScope();
+      }
+    }
 
     if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
     {
@@ -787,6 +798,7 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
     }
   }
 
+  // output the discope info
   if (outStr.empty())
   {
     std::string s;
@@ -801,6 +813,20 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
   }
 
   return outStr;
+}
+
+DILocation *pdg::pdgutils::getTopDebugLocation(DILocation *DL)
+{
+  auto tmpDL = DL;
+  while (tmpDL)
+  {
+    if (tmpDL->getInlinedAt() != nullptr)
+      tmpDL = tmpDL->getInlinedAt();
+    else // here we know we hit the top most DILocation node
+      return tmpDL;
+  }
+
+  return nullptr;
 }
 
 std::string pdg::pdgutils::getFuncSourceLocStr(Function &F)

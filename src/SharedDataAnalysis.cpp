@@ -16,8 +16,6 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   _PDG = getAnalysis<ProgramDependencyGraph>().getPDG();
   _callGraph = &PDGCallGraph::getInstance();
   _ksplitStats = &KSplitStats::getInstance();
-  fieldStatsFile.open("fieldAccessStats.csv");
-  riskyPatternLog.open("riskyPatterns.txt");
   // read driver/kernel domian funcs
   setupStrOps();
   readSentinelFields();
@@ -40,11 +38,10 @@ bool pdg::SharedDataAnalysis::runOnModule(llvm::Module &M)
   _ksplitStats->printSoKClassifiedFields();
   errs() << "number of shared fields: " << _shared_field_id.size() << "\n";
   // computeSharedGlobalVars();
-  if (!pdgutils::isFileExist("shared_struct_types"))
-    dumpSharedTypes("shared_struct_types");
+  if (!pdgutils::isFileExist("boundaryFiles/shared_struct_types"))
+    dumpSharedTypes("boundaryFiles/shared_struct_types");
   // printPingPongCalls(M);
   // collect shared fields detail access stats
-  fieldStatsFile.close();
 
   errs() << "Shared fields computation finished\n";
   return false;
@@ -79,7 +76,7 @@ void pdg::SharedDataAnalysis::setupDriverFuncs(Module &M)
 
 void pdg::SharedDataAnalysis::readDriverGlobalStrucTypes()
 {
-  ifstream driver_global_struct_types("driver_global_struct_types");
+  ifstream driver_global_struct_types("boundaryFiles/driver_global_struct_types");
   for (std::string line; std::getline(driver_global_struct_types, line);)
   {
     _driver_global_struct_types.insert(line);
@@ -244,11 +241,7 @@ void pdg::SharedDataAnalysis::computeSharedStructDITypes()
       }
     }
   }
-  // errs() << " === driver side struct types ===\n";
-  // for (auto t : driver_struct_type_names)
-  // {
-  //   errs() << "\t" << t << "\n";
-  // }
+
   std::set<std::string> processed_struct_names;
   for (auto func : _kernelDomainFuncs)
   {

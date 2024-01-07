@@ -100,7 +100,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
 {
   // read shared struct type names if exist
   std::set<std::string> shared_struct_type_names;
-  std::ifstream shared_struct_name_file("shared_struct_types");
+  std::ifstream shared_struct_name_file("boundaryFiles/shared_struct_types");
   if (shared_struct_name_file.good())
   {
     // read shared data types
@@ -111,7 +111,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
   }
 
   // used to store driver global
-  std::ofstream driver_global_struct_types("driver_global_struct_types");
+  std::ofstream driver_global_struct_types("boundaryFiles/driver_global_struct_types");
   for (auto &global_var : M.getGlobalList())
   {
     SmallVector<DIGlobalVariableExpression *, 4> sv;
@@ -205,7 +205,7 @@ void pdg::BoundaryAnalysis::dumpToFiles()
   if (!sys::fs::exists(status) || !sys::fs::is_directory(status))
   {
     // Directory does not exist, create it
-    sys::fs::create_directory("boundaryFiles", sys::fs::perms::all_all);
+    sys::fs::create_directory("boundaryFiles", sys::fs::perms::all_perms);
   }
 
   // Dump data to files
