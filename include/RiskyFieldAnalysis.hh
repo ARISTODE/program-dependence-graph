@@ -14,28 +14,19 @@ namespace pdg
             void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
             llvm::StringRef getPassName() const override { return "Risky Field Analysis"; }
             bool runOnModule(llvm::Module &M) override;
+            void propagateTaints(std::set<llvm::Function *> &kernelInterfaceAPIs);
+            void classifyRiskySharedFields();
+            void classifyRiskyBoundaryParams(std::set<llvm::Function *> &kernelInterfaceAPIs);
+            void classifyDrvCallBackRetval();
+
             bool isDriverControlledField(TreeNode &tn);
             llvm::Function *canReachSensitiveOperations(Node &srcFuncNode);
             void classifyRiskyFieldDirectUse(TreeNode &tn);
             void classifyRiskyFieldTaint(TreeNode &tn);
-            void classifyRiskyField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
-            bool classifyRiskyPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
-            bool classifyRiskyNonPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs, unsigned &caseID);
-            // checks for atomic_t type field
-            bool isSharedAtomicField(TreeNode &tn);
-
-            // pointer field checks
-            bool checkPtrValUsedInPtrArithOp(Node &n);
-            // scalar field checks
-            bool checkValUsedAsArrayIndex(Node &n);
-            bool checkIsArrayAccess(llvm::Instruction &inst);
-            // generic field checks
-            static bool checkValUsedInPtrArithOp(Node &n);
-            bool checkValUsedInSenBranchCond(Node &n, llvm::raw_fd_ostream &OS, std::string &senTypeStr);
-            bool checkValInSecurityChecks(Node &n);
-            static bool checkValUsedInSensitiveOperations(Node &n, std::string &senOpName);
-            bool checkValUsedInInlineAsm(Node &n);
-            bool isSensitiveOperation(llvm::Function &F);
+            void classifyRiskyField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs);
+            bool classifyRiskyPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs);
+            bool classifyRiskyNonPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs);
+            // helper funcs
             bool hasUpdateInDrv(TreeNode &n);
             // print helpers
             void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
@@ -58,6 +49,7 @@ namespace pdg
             // store taint source/sink pair
             std::set<std::tuple<Node *, Node *, std::string, std::string>> _taintTuples;
             std::set<std::tuple<Node *, Node *, std::string, std::string>> _structTaintTuples; // used to store taint for struct field
+            unsigned _caseID = 0;
             // stats counting
             unsigned _numKernelReadDriverUpdatedFields = 0;
             unsigned _numSharedFields = 0;
@@ -72,7 +64,6 @@ namespace pdg
             std::unordered_map<RiskyDataType, int> totalRiskyFieldCounters;
             std::unordered_map<RiskyDataType, int> totalRiskyParamCounters;
             nlohmann::ordered_json taintTracesJson = nlohmann::ordered_json::array();
-            nlohmann::ordered_json taintTracesJsonNoConds = nlohmann::ordered_json::array();
             nlohmann::ordered_json unclassifiedFieldsJson = nlohmann::ordered_json::array();
     };
 }

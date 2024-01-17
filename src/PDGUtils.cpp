@@ -1,4 +1,5 @@
 #include "PDGUtils.hh"
+#include <string>
 
 using namespace llvm;
 
@@ -191,12 +192,35 @@ bool pdg::pdgutils::hasPtrDereference(Value &v)
   if (isa<AllocaInst>(&v))
     return false;
 
+  // gep computes an address, so the first load from it is the actual object
+  // need to query the second load on the user to check if the value is dereferenced
+  if (isa<GetElementPtrInst>(&v))
+    return hasDoubleLoad(v);
+
+  // other cases
   for (auto user : v.users())
   {
     if (isa<LoadInst>(user))
       return true;
   }
   return false;  
+}
+
+bool inline pdg::pdgutils::hasDoubleLoad(Value &v)
+{
+  for (User *user : v.users())
+  {
+    if (auto *load = dyn_cast<LoadInst>(user))
+    {
+      for (User *secUser : load->users())
+      {
+        if (isa<LoadInst>(secUser))
+          return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 // ==== inst iterator related funcs =====
@@ -769,16 +793,26 @@ void pdg::pdgutils::printSourceLocation(Instruction &I, llvm::raw_ostream &Outpu
   }
 }
 
+unsigned pdg::pdgutils::getSourceLineNo(Instruction &I)
+{
+  if (const DebugLoc &debugLoc = I.getDebugLoc())
+  {
+    unsigned line = debugLoc.getLine();
+    return line;
+  }
+  return -1;
+}
+
 std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
 {
   std::string outStr = "";
   std::string filePrefix = "https://github.com/ksplit/lvd-linux/tree/ksplit-latest/";
 
-  if (const llvm::DebugLoc &debugLoc = I.getDebugLoc())
+  if (const DebugLoc &debugLoc = I.getDebugLoc())
   {
     // default info from debug node
     unsigned line = debugLoc.getLine();
-    llvm::MDNode *scopeNode = debugLoc.getScope();
+    MDNode *scopeNode = debugLoc.getScope();
     // if this inst is inlined, need to find the original node
     auto inlinedDILoc = debugLoc.getInlinedAt();
     if (inlinedDILoc)
@@ -791,7 +825,7 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
       }
     }
 
-    if (auto *scope = llvm::dyn_cast<llvm::DIScope>(scopeNode))
+    if (auto *scope = dyn_cast<llvm::DIScope>(scopeNode))
     {
       std::string file = scope->getFilename().str();
       outStr = outStr + filePrefix + file + "#L" + std::to_string(line);
@@ -813,6 +847,14 @@ std::string pdg::pdgutils::getSourceLocationStr(Instruction &I)
   }
 
   return outStr;
+}
+
+std::string pdg::pdgutils::getInstructionString(Instruction &I)
+{
+  std::string instStr;
+  raw_string_ostream rso(instStr);
+  I.print(rso);
+  return rso.str();
 }
 
 DILocation *pdg::pdgutils::getTopDebugLocation(DILocation *DL)

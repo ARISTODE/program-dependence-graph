@@ -40,8 +40,10 @@ bool pdg::LockAttackAnalysis::runOnModule(Module &M)
   computeKernelInterfaceFuncCSUnderCondition();
   computeDrvCallBackCallSite();
   computeBugOnLoc();
-  computeRiskyDirectRefCount();
-  
+  nlohmann::ordered_json riskyRefCJsons;
+  computeRiskyDirectRefCount(riskyRefCJsons);
+  taintutils::printJsonToFile(riskyRefCJsons, "RiskyRefCount.json");
+
   return false;
 }
 
@@ -100,6 +102,9 @@ bool pdg::LockAttackAnalysis::isSharedLockCall(CallInst &lockCS)
     return false;
   
    auto lockNode = _PDG->getNode(*usedLock);
+   if (!lockNode)
+    return false;
+
    auto lockParamNode = lockNode->getAbstractTreeNode();
    if (lockParamNode)
    {
@@ -513,7 +518,6 @@ void pdg::LockAttackAnalysis::computeKernelInterfaceFuncCSUnderCondition()
     for (auto callSite : callSites)
     {
       auto callerFunc = callSite->getFunction();
-
       if (_SDA->isDriverFunc(*callerFunc))
         kernelFuncCSs.insert(callSite);
     }
@@ -547,6 +551,7 @@ void pdg::LockAttackAnalysis::computeKernelInterfaceFuncCSUnderCondition()
       if (!condLocStr.empty())
       {
         csJson["Drv func"] = CS->getFunction()->getName().str();
+        // TODO: add called kernel function
         csJson["Cond loc"] = condLocStr;
         csJson["Call site loc"] = pdgutils::getSourceLocationStr(*CS);
         atkJsons.push_back(csJson);
@@ -744,57 +749,187 @@ void pdg::LockAttackAnalysis::computeBugOnLoc()
   taintutils::printJsonToFile(atkJsons, "BugonLoc.json");
 }
 
-void pdg::LockAttackAnalysis::computeRiskyDirectRefCount()
+void pdg::LockAttackAnalysis::computeRiskyDirectRefCount(nlohmann::ordered_json &riskyRefCJsons)
 {
-  // step 1: iterate all the functions, and find inline assembly that perform 
+  // step 1: search direct ref count calls in the driver functions
   for (auto func : _SDA->getDriverFuncs())
   {
     auto funcWrapper = _PDG->getFuncWrapper(*func);
     for (auto CI : funcWrapper->getCallInsts())
     {
-      if (isAtomicRefCountCall(*CI))
+      if (isRefCountCall(*CI))
       {
-        errs() << "find atomic inc in func " << func->getName() << " - " << pdgutils::getSourceLocationStr(*CI) << "\n";
+        nlohmann::ordered_json riskyRefCJson;
+        riskyRefCJson["type"] = "direct";
+        riskyRefCJson["func"] = func->getName().str();
+        riskyRefCJson["src loc"] = pdgutils::getSourceLocationStr(*CI);
+        // find the reference counted object
+        auto refCntVal = CI->getOperand(0);
+        auto refCntValNode = _PDG->getNode(*refCntVal);
+        // check if this field is of a shared struct
+        // if so, then the API can be used to manipulate the refcount for the shared struct
+        if (refCntValNode->getAbstractTypeTreeNode())
+        {
+          TreeNode* paramTreeNode = dynamic_cast<TreeNode*>(refCntValNode->getAbstractTypeTreeNode());
+          // store the struct->field string
+          riskyRefCJson["access_path"] = paramTreeNode->getSrcHierarchyName(false);
+        }
+        riskyRefCJsons.push_back(riskyRefCJson);
+      }
+    }
+  }
+  // step2: search indirect ref count calls in the functions transitively called by driver
+  for (auto boundaryFunc : _SDA->getBoundaryFuncs())
+  {
+    if (!_SDA->isDriverFunc(*boundaryFunc))
+      continue;
+    // for each driver boundary function, obtain its transitive closure
+    auto drvFuncCallNode = _callGraph->getNode(*boundaryFunc);
+    auto transCalledNodes = _callGraph->computeTransitiveClosure(*drvFuncCallNode);
+    for (auto n : transCalledNodes) 
+    {
+      if (auto transFunc = dyn_cast<Function>(n->getValue()))
+      {
+        auto funcWrapper = _PDG->getFuncWrapper(*transFunc);
+        if (!funcWrapper) 
+          continue;
+
+        for (auto CI : funcWrapper->getCallInsts())
+        {
+          bool isRefCntCall = false;
+          if (!pdgutils::getCalledFunc(*CI))
+          {
+            if (isAtomicTRefCount(*CI)) 
+              isRefCntCall = true;
+          }
+          else
+          {
+            if (isRefCntTRefCount(*CI))
+              isRefCntCall = true;
+          }
+          // after confirming the Ref count call API
+          if (isRefCntCall)
+          {
+            nlohmann::ordered_json riskyRefCJson;
+            riskyRefCJson["type"] = "indirect";
+            riskyRefCJson["drv boundary func"] = boundaryFunc->getName().str();
+            riskyRefCJson["src loc"] = pdgutils::getSourceLocationStr(*CI);
+            // find the checks for the call
+            std::set<EdgeType> ctrlEdge = {EdgeType::CONTROL};
+            auto callInstNode = _PDG->getNode(*CI);
+            auto controlDepNodes = _PDG->findNodesReachedByEdges(*callInstNode, ctrlEdge, true);
+            if (controlDepNodes.size() > 0)
+            {
+              std::string controlDepLoc = "";
+              unsigned numCheck = 0;
+              for (auto cn : controlDepNodes)
+              {
+                if (cn == callInstNode)
+                  continue;
+                if (cn->getValue())
+                {
+                  if (auto i = dyn_cast<Instruction>(cn->getValue()))
+                  {
+                    controlDepLoc = controlDepLoc + pdgutils::getSourceLocationStr(*i) + " | ";
+                    numCheck++;
+                  }
+                }
+              }
+
+              std::string callPaths = "" ; // all the paths
+              std::string callPathStr = ""; // single path
+
+              std::vector<Node *> path;
+              std::unordered_set<Node *> visited;
+              auto transFuncNode = _callGraph->getNode(*transFunc);
+              if (_callGraph->findPathDFS(drvFuncCallNode, transFuncNode, path, visited))
+              {
+                for (size_t i = 0; i < path.size(); ++i)
+                {
+                  Node *node = path[i];
+
+                  // Print the node's function name
+                  if (Function *f = dyn_cast<Function>(node->getValue()))
+                    callPathStr = callPathStr + f->getName().str();
+
+                  if (i < path.size() - 1)
+                    callPathStr = callPathStr + "->";
+                }
+
+                // here, we only consider one valid path
+                if (!callPathStr.empty())
+                {
+                  callPaths = callPaths + " [" + callPathStr + "] ";
+                }
+              }
+              riskyRefCJson["call path"] = callPaths;
+
+              riskyRefCJson["num condition checks"] = numCheck;
+              riskyRefCJson["condition checks"] = controlDepLoc;
+
+              if (numCheck == 0)
+                riskyRefCJson["is controlled"] = true;
+              else 
+                riskyRefCJson["is controlled"] = false;
+            }
+            riskyRefCJsons.push_back(riskyRefCJson);
+          }
+        }
       }
     }
   }
 }
 
-bool pdg::LockAttackAnalysis::isAtomicRefCountCall(CallInst &CI)
+bool pdg::LockAttackAnalysis::isAtomicTRefCount(CallInst &CI)
 {
-  if (!CI.getCalledFunction())
+  // Must be inline asm
+  if (CI.getNumArgOperands() != 2)
+    return false;
+  Value *firstArg = CI.getArgOperand(0);
+  Value *secondArg = CI.getArgOperand(1);
+  // Check if arguments are same pointer
+  if (firstArg != secondArg)
+    return false;
+
+  bool isAtomicIncDec = false;
+  if (InlineAsm *ia = dyn_cast<InlineAsm>(CI.getCalledOperand()))
   {
-    // Must be inline asm
-    if (CI.getNumArgOperands() != 2)
-      return false;
-
-    Value *firstArg = CI.getArgOperand(0);
-    Value *secondArg = CI.getArgOperand(1);
-
-    // Check if arguments are same pointer
-    if (firstArg != secondArg)
-      return false;
-
-    // Match inline asm
-    if (InlineAsm *ia = dyn_cast<InlineAsm>(CI.getCalledOperand()))
+    auto asmStr = ia->getAsmString();
+    // check if the call is atomic_inc or atomic_dec
+    if (asmStr.find("lock") != std::string::npos)
     {
-      auto asmStr = ia->getAsmString();
-      // check if the call is atomic_inc or atomic_dec
-      bool hasAtomicAddDec = false;
-      if (asmStr.find("lock") != std::string::npos)
-      {
-
-        if (asmStr.find("incl") != string::npos)
-        {
-          hasAtomicAddDec = true;
-        }
-        else if (asmStr.find("decl") != string::npos)
-        {
-          hasAtomicAddDec = true;
-        }
-      }
-      return hasAtomicAddDec;
+      if (asmStr.find("incl") != string::npos)
+        isAtomicIncDec = true;
+      else if (asmStr.find("decl") != string::npos)
+        isAtomicIncDec = true;
     }
+  }
+  return isAtomicIncDec;
+}
+
+bool pdg::LockAttackAnalysis::isRefCntTRefCount(CallInst &CI)
+{
+  // refcount_t has corresponding API
+  auto calledFunc = pdgutils::getCalledFunc(CI);
+  if (calledFunc)
+  {
+    auto calledFuncName = calledFunc->getName().str();
+    if (calledFuncName.find("refcount_inc") != std::string::npos || calledFuncName.find("refcount_dec") != std::string::npos)
+      return true;
+  }
+  return false;
+}
+
+bool pdg::LockAttackAnalysis::isRefCountCall(CallInst &CI)
+{
+  if (!pdgutils::getCalledFunc(CI))
+  {
+    // For atomic_t match inline asm
+    return isAtomicTRefCount(CI);
+  }
+  else
+  {
+    return isRefCntTRefCount(CI);
   }
 
   return false;

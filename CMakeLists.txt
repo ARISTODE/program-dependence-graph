@@ -33,7 +33,7 @@ endif()
 
 # Compiler flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall\
-    -fdiagnostics-color=always -Wno-everything")
+    -fdiagnostics-color=always")
 
 include_directories("include")
 include_directories("src")

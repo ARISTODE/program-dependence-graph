@@ -53,8 +53,10 @@ namespace pdg
     void computeCorruptedCallBackRetVal();
     // semantic violation
     void computeBugOnLoc();
-    void computeRiskyDirectRefCount();
-    bool isAtomicRefCountCall(llvm::CallInst &CI);
+    void computeRiskyDirectRefCount(nlohmann::ordered_json &riskyRefCJsons);
+    bool isRefCountCall(llvm::CallInst &CI);
+    bool isAtomicTRefCount(llvm::CallInst &CI);
+    bool isRefCntTRefCount(llvm::CallInst &CI);
 
   private:
     llvm::Module *_module;
