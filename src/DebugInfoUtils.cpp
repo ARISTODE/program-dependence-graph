@@ -353,8 +353,17 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool isRaw)
     if (!base_type)
       return "";
     if (base_type->getName().str().empty())
-      return dt.getName().str();
-    return getSourceLevelTypeName(*getBaseDIType(dt), isRaw);
+    {
+      auto lowest_base_type = getLowestDIType(dt);
+      if (!lowest_base_type || lowest_base_type->getName().str().empty())
+        return dt.getName().str(); //cannot find lowest base type
+      if (typeSwitchMap.find(lowest_base_type->getName().str()) != typeSwitchMap.end())
+        return lowest_base_type->getName().str(); //one of the dt from typeSwitchMap
+      if (base_type->getTag() == dwarf::DW_TAG_pointer_type)
+        return getSourceLevelTypeName(*base_type, isRaw); //first pickup the pointer tag
+      return getSourceLevelTypeName(*lowest_base_type, isRaw); //recurse on the lowest base type
+    }
+    return getSourceLevelTypeName(*getBaseDIType(dt), isRaw); //ideally won't reach?
   }
   case dwarf::DW_TAG_enumeration_type:
   {
