@@ -10,11 +10,14 @@ void pdg::FunctionWrapper::addInst(Instruction &i)
     _store_insts.push_back(si);
   if (LoadInst *li = dyn_cast<LoadInst>(&i))
     _load_insts.push_back(li);
-  if (DbgDeclareInst *dbi = dyn_cast<DbgDeclareInst>(&i))
-    _dbg_declare_insts.push_back(dbi);
+  if (auto *dbi = dyn_cast<DbgVariableIntrinsic>(&i))
+  {
+    if (dbi->isAddressOfVariable())
+      _dbg_declare_insts.push_back(dbi);
+  }
   if (CallInst *ci = dyn_cast<CallInst>(&i))
   {
-    if (!isa<DbgDeclareInst>(&i))
+    if (!isa<DbgVariableIntrinsic>(&i))
       _call_insts.push_back(ci);
   }
   if (ReturnInst *reti = dyn_cast<ReturnInst>(&i))
@@ -121,8 +124,11 @@ AllocaInst *pdg::FunctionWrapper::getArgAllocaInst(Argument &arg)
       continue;
     if (di_local_var->getArg() == arg.getArgNo() + 1 && !di_local_var->getName().empty() && di_local_var->getScope()->getSubprogram() == _func->getSubprogram())
     {
-      if (AllocaInst* ai = dyn_cast<AllocaInst>(dbg_declare_inst->getVariableLocation()))
-        return ai;
+      if (Value* val = dbg_declare_inst->getVariableLocationOp(0))
+      {
+        if (AllocaInst* ai = dyn_cast<AllocaInst>(val))
+          return ai;
+      }
     }
   }
   return nullptr;

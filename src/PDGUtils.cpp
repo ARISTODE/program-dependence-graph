@@ -4,12 +4,9 @@ using namespace llvm;
 
 StructType *pdg::pdgutils::getStructTypeFromGEP(GetElementPtrInst &gep)
 {
-  Value *baseAddr = gep.getPointerOperand();
-  if (baseAddr->getType()->isPointerTy())
-  {
-    if (StructType *struct_type = dyn_cast<StructType>(baseAddr->getType()->getPointerElementType()))
-      return struct_type;
-  }
+  // In LLVM 19+ with opaque pointers, we need to get the source element type
+  if (StructType *struct_type = dyn_cast<StructType>(gep.getSourceElementType()))
+    return struct_type;
   return nullptr;
 }
 

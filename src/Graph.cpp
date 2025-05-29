@@ -1,4 +1,5 @@
 #include "PDGCallGraph.hh"
+#include <stack>
 
 using namespace llvm;
 
@@ -92,7 +93,7 @@ bool pdg::GenericGraph::canReach(pdg::Node &src, pdg::Node &dst, std::set<EdgeTy
 void pdg::ProgramGraph::build(Module &M)
 {
   // build node for global variables
-  for (auto &global_var : M.getGlobalList())
+  for (auto &global_var : M.globals())
   {
     auto global_var_type = global_var.getType();
     // if (!global_var_type->isPointerTy() && !global_var_type->isStructTy())
@@ -200,7 +201,7 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
     // bind ditype to the top-level pointer (alloca)
     for (auto dbg_declare_inst : dbg_declare_insts)
     {
-      auto addr = dbg_declare_inst->getVariableLocation();
+      auto addr = dbg_declare_inst->getVariableLocationOp(0);
       Node *addr_node = getNode(*addr);
       if (!addr_node)
         continue;
@@ -222,7 +223,7 @@ void pdg::ProgramGraph::bindDITypeToNodes(Module &M)
     }
   }
 
-  for (auto &global_var : M.getGlobalList())
+  for (auto &global_var : M.globals())
   {
     Node *global_node = getNode(global_var);
     if (global_node != nullptr)

@@ -1,14 +1,15 @@
 #include "ControlDependencyGraph.hh"
+#include "llvm/Analysis/PostDominators.h"
 
-char pdg::ControlDependencyGraph::ID = 0;
+llvm::AnalysisKey pdg::ControlDependencyGraph::Key;
 
 using namespace llvm;
-bool pdg::ControlDependencyGraph::runOnFunction(Function &F)
+pdg::ControlDependencyGraph::Result pdg::ControlDependencyGraph::run(Function &F, FunctionAnalysisManager &FAM)
 {
-  _PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
+  _PDT = &FAM.getResult<PostDominatorTreeAnalysis>(F);
   addControlDepFromEntryNodeToInsts(F);
   addControlDepFromDominatedBlockToDominator(F);
-  return false;
+  return Result{true};
 }
 
 void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock &BB, EdgeType edge_type)
@@ -70,11 +71,3 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
   }
 }
 
-void pdg::ControlDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const
-{
-  AU.addRequired<PostDominatorTreeWrapperPass>();
-  AU.setPreservesAll();
-}
-
-static RegisterPass<pdg::ControlDependencyGraph>
-    CDG("cdg", "Control Dependency Graph Construction", false, true);

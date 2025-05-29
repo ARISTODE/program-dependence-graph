@@ -3,6 +3,8 @@
 #include "LLVMEssentials.hh"
 #include "Tree.hh"
 #include "PDGUtils.hh"
+#include <map>
+#include <vector>
 
 namespace pdg
 {
@@ -34,7 +36,7 @@ namespace pdg
     std::map<llvm::Argument *, Tree *> &getArgFormalInTreeMap() { return _arg_formal_in_tree_map; }
     std::map<llvm::Argument *, Tree *> &getArgFormalOutTreeMap() { return _arg_formal_out_tree_map; }
     std::vector<llvm::AllocaInst *> &getAllocInsts() { return _alloca_insts; }
-    std::vector<llvm::DbgDeclareInst *> &getDbgDeclareInsts() { return _dbg_declare_insts; }
+    std::vector<llvm::DbgVariableIntrinsic *> &getDbgDeclareInsts() { return _dbg_declare_insts; }
     std::vector<llvm::LoadInst *> &getLoadInsts() { return _load_insts; }
     std::vector<llvm::StoreInst *> &getStoreInsts() { return _store_insts; }
     std::vector<llvm::CallInst *> &getCallInsts() { return _call_insts; }
@@ -46,7 +48,7 @@ namespace pdg
     Node *_entry_node;
     llvm::Function *_func;
     std::vector<llvm::AllocaInst *> _alloca_insts;
-    std::vector<llvm::DbgDeclareInst *> _dbg_declare_insts;
+    std::vector<llvm::DbgVariableIntrinsic *> _dbg_declare_insts;
     std::vector<llvm::LoadInst *> _load_insts;
     std::vector<llvm::StoreInst *> _store_insts;
     std::vector<llvm::CallInst *> _call_insts;

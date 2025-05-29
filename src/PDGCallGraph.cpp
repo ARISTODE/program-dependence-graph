@@ -53,7 +53,7 @@ bool pdg::PDGCallGraph::isFuncSignatureMatch(CallInst &ci, llvm::Function &f)
 {
   if (f.isVarArg())
     return false;
-  auto actual_arg_list_size = ci.getNumArgOperands();
+  auto actual_arg_list_size = ci.arg_size();
   auto formal_arg_list_size = f.arg_size();
   if (actual_arg_list_size != formal_arg_list_size)
     return false;
@@ -77,20 +77,9 @@ bool pdg::PDGCallGraph::isTypeEqual(Type& t1, Type &t2)
 {
   if (&t1 == &t2)
     return true;
-  // need to compare name for sturct, due to llvm-link duplicate struct types
-  if (!t1.isPointerTy() || !t2.isPointerTy())
-    return false;
-
-  auto t1_pointed_ty = t1.getPointerElementType();
-  auto t2_pointed_ty = t2.getPointerElementType();
-
-  if (!t1_pointed_ty->isStructTy() || !t2_pointed_ty->isStructTy())
-    return false;
-  
-  auto t1_name = pdgutils::stripVersionTag(t1_pointed_ty->getStructName().str());
-  auto t2_name = pdgutils::stripVersionTag(t2_pointed_ty->getStructName().str());
-
-  return (t1_name == t2_name);
+  // With opaque pointers in LLVM 19+, we can't determine pointee types
+  // Type comparison for pointers is now based on the pointer type itself
+  return &t1 == &t2;
 }
 
 std::set<Function *> pdg::PDGCallGraph::getIndirectCallCandidates(CallInst &ci, Module &M)

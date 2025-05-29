@@ -4,6 +4,8 @@
 #include "Tree.hh"
 #include "PDGUtils.hh"
 #include "FunctionWrapper.hh"
+#include <map>
+#include <vector>
 
 namespace pdg
 {

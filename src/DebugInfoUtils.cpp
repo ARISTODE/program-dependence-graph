@@ -1,4 +1,5 @@
 #include "DebugInfoUtils.hh"
+#include "llvm/BinaryFormat/Dwarf.h"
 
 using namespace llvm;
 

@@ -7,14 +7,20 @@
 
 namespace pdg
 {
-  class DataDependencyGraph : public llvm::ModulePass
+  class DataDependencyGraph : public llvm::AnalysisInfoMixin<DataDependencyGraph>
   {
   public:
-    static char ID;
-    DataDependencyGraph() : llvm::ModulePass(ID) {};
-    void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
-    llvm::StringRef getPassName() const override { return "Data Dependency Graph"; }
-    bool runOnModule(llvm::Module &M) override;
+    struct Result {
+      bool value;
+      bool invalidate(llvm::Module &, const llvm::PreservedAnalyses &,
+                     llvm::ModuleAnalysisManager::Invalidator &) {
+        return false;
+      }
+    };
+    static llvm::AnalysisKey Key;
+    
+    static llvm::StringRef name() { return "Data Dependency Graph"; }
+    Result run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
     void addDefUseEdges(llvm::Instruction &inst);
     void addRAWEdges(llvm::Instruction &inst);
     void addRAWEdgesUnderapproximate(llvm::Instruction &inst);

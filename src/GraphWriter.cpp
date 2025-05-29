@@ -10,8 +10,4 @@ cl::opt<bool, true> DOTDDG("dot-only-ddg", cl::desc("Only print ddg dependencies
 
 cl::opt<bool, true> DOTCDG("dot-only-cdg", cl::desc("Only print cdg dependencies"), cl::value_desc("dot print cdg deps"), cl::location(pdg::DOTONLYCDG), cl::init(false));
 
-static RegisterPass<pdg::ProgramDependencyPrinter>
-    PDGPrinter("dot-pdg",
-               "Print instruction-level program dependency graph of "
-               "function to 'dot' file",
-               false, false);
+// Legacy pass registration is removed in favor of new pass manager

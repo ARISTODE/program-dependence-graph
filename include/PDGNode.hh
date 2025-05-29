@@ -5,6 +5,7 @@
 #include "PDGEnums.hh"
 #include <set>
 #include <iterator>
+#include <queue>
 
 namespace pdg
 {

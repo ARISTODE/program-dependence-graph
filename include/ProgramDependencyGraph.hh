@@ -8,22 +8,28 @@
 
 namespace pdg
 {
-  class ProgramDependencyGraph : public llvm::ModulePass
+  class ProgramDependencyGraph : public llvm::AnalysisInfoMixin<ProgramDependencyGraph>
   {
     public:
-      static char ID;
-      ProgramDependencyGraph() : llvm::ModulePass(ID) {};
-      bool runOnModule(llvm::Module &M) override;
-      void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+      struct Result {
+        ProgramGraph* PDG;
+        bool invalidate(llvm::Module &, const llvm::PreservedAnalyses &,
+                       llvm::ModuleAnalysisManager::Invalidator &) {
+          return false;
+        }
+      };
+      static llvm::AnalysisKey Key;
+      
+      Result run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
       ProgramGraph *getPDG() { return _PDG; }
-      llvm::StringRef getPassName() const override { return "Program Dependency Graph"; }
+      static llvm::StringRef name() { return "Program Dependency Graph"; }
       FunctionWrapper *getFuncWrapper(llvm::Function &F) { return _PDG->getFuncWrapperMap()[&F]; }
       CallWrapper *getCallWrapper(llvm::CallInst &call_inst) { return _PDG->getCallWrapperMap()[&call_inst]; }
       void connectGlobalVarWithUses();
       void connectInTrees(Tree *src_tree, Tree *dst_tree, EdgeType edge_type);
       void connectOutTrees(Tree *src_tree, Tree *dst_tree, EdgeType edge_type);
       void connectCallerAndCallee(CallWrapper &cw, FunctionWrapper &fw);
-      void connectIntraprocDependencies(llvm::Function &F);
+      void connectIntraprocDependencies(llvm::Function &F, llvm::ModuleAnalysisManager &MAM);
       void connectInterprocDependencies(llvm::Function &F);
       void connectFormalInTreeWithAddrVars(Tree &formal_in_tree);
       void connectFormalOutTreeWithAddrVars(Tree &formal_out_tree);

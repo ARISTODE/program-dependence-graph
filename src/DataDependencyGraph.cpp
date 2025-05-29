@@ -1,11 +1,12 @@
 #include "DataDependencyGraph.hh"
 #include "PDGUtils.hh"
+#include "llvm/Analysis/MemoryDependenceAnalysis.h"
 
-char pdg::DataDependencyGraph::ID = 0;
+llvm::AnalysisKey pdg::DataDependencyGraph::Key;
 
 using namespace llvm;
 
-bool pdg::DataDependencyGraph::runOnModule(Module &M)
+pdg::DataDependencyGraph::Result pdg::DataDependencyGraph::run(Module &M, ModuleAnalysisManager &MAM)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   if (!g.isBuild())
@@ -20,7 +21,8 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
     if (F.isDeclaration() || F.empty())
       continue;
     
-    _mem_dep_res = &getAnalysis<MemoryDependenceWrapperPass>(F).getMemDep();
+    auto &FAM = MAM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+    _mem_dep_res = &FAM.getResult<MemoryDependenceAnalysis>(F);
     // setup alias query interface for each function
     for (auto inst_iter = inst_begin(F); inst_iter != inst_end(F); inst_iter++)
     {
@@ -31,7 +33,7 @@ bool pdg::DataDependencyGraph::runOnModule(Module &M)
       addRAWEdgesUnderapproximate(*inst_iter);
     }
   }
-  return false;
+  return Result{true};
 }
 
 
@@ -45,7 +47,7 @@ void pdg::DataDependencyGraph::addAliasEdges(Instruction &inst)
       continue;
     
     auto alias_result = queryAliasUnderApproximate(inst, *inst_iter);
-    if (alias_result != NoAlias)
+    if (alias_result != AliasResult::NoAlias)
     {
       Node* src = g.getNode(inst);
       Node* dst = g.getNode(*inst_iter);
@@ -134,12 +136,12 @@ void pdg::DataDependencyGraph::addRAWEdgesUnderapproximate(Instruction &inst) {
 AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Value &v2)
 {
   if (!v1.getType()->isPointerTy() || !v2.getType()->isPointerTy())
-    return NoAlias;
+    return AliasResult::NoAlias;
   // check bit cast
   if (BitCastInst *bci = dyn_cast<BitCastInst>(&v1))
   {
     if (bci->getOperand(0) == &v2)
-      return MustAlias;
+      return AliasResult::MustAlias;
   }
   // handle load instruction
   if (LoadInst *li = dyn_cast<LoadInst>(&v1))
@@ -152,19 +154,11 @@ AliasResult pdg::DataDependencyGraph::queryAliasUnderApproximate(Value &v1, Valu
         if (si->getPointerOperand() == load_addr)
         {
           if (si->getValueOperand() == &v2)
-            return MustAlias;
+            return AliasResult::MustAlias;
         }
       }
     }
   }
-  return NoAlias;
+  return AliasResult::NoAlias;
 }
 
-  void pdg::DataDependencyGraph::getAnalysisUsage(AnalysisUsage & AU) const
-  {
-    AU.addRequired<MemoryDependenceWrapperPass>();
-    AU.setPreservesAll();
-  }
-
-  static RegisterPass<pdg::DataDependencyGraph>
-      DDG("ddg", "Data Dependency Graph Construction", false, true);

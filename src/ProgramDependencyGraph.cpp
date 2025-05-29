@@ -6,15 +6,9 @@
 
 using namespace llvm;
 
-char pdg::ProgramDependencyGraph::ID = 0;
+llvm::AnalysisKey pdg::ProgramDependencyGraph::Key;
 
-void pdg::ProgramDependencyGraph::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<DataDependencyGraph>();
-  AU.addRequired<ControlDependencyGraph>();
-  AU.setPreservesAll();
-}
-
-bool pdg::ProgramDependencyGraph::runOnModule(Module &M) {
+pdg::ProgramDependencyGraph::Result pdg::ProgramDependencyGraph::run(Module &M, ModuleAnalysisManager &MAM) {
   auto start = std::chrono::high_resolution_clock::now();
   _module = &M;
   _PDG = &ProgramGraph::getInstance();
@@ -33,7 +27,7 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M) {
   for (auto &F : M) {
     if (F.isDeclaration())
       continue;
-    connectIntraprocDependencies(F);
+    connectIntraprocDependencies(F, MAM);
     connectInterprocDependencies(F);
     func_size++;
   }
@@ -45,11 +39,11 @@ bool pdg::ProgramDependencyGraph::runOnModule(Module &M) {
       std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
   errs() << "building PDG takes: " << duration.count() << "\n";
   errs() << "PDG Node size: " << _PDG->numNode() << "\n";
-  return false;
+  return Result{_PDG};
 }
 
 void pdg::ProgramDependencyGraph::connectGlobalVarWithUses() {
-  for (auto &global_var : _module->getGlobalList()) {
+  for (auto &global_var : _module->globals()) {
     Node *n = _PDG->getNode(global_var);
     if (n == nullptr)
       continue;
@@ -180,10 +174,11 @@ void pdg::ProgramDependencyGraph::connectCallerAndCallee(CallWrapper &cw,
 }
 
 // ===== connect dependencies =====
-void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F) {
+void pdg::ProgramDependencyGraph::connectIntraprocDependencies(Function &F, ModuleAnalysisManager &MAM) {
   // add control dependency edges
-  getAnalysis<ControlDependencyGraph>(
-      F); // add control dependencies for nodes in F
+  // Control dependencies are handled by ControlDependencyGraph analysis
+  auto &FAM = MAM.getResult<FunctionAnalysisManagerModuleProxy>(*_module).getManager();
+  FAM.getResult<ControlDependencyGraph>(F);
   // connect formal tree with address variables
   FunctionWrapper *func_w = getFuncWrapper(F);
   Node *entry_node = func_w->getEntryNode();
@@ -387,5 +382,3 @@ void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(
   }
 }
 
-static RegisterPass<pdg::ProgramDependencyGraph>
-    PDG("pdg", "Program Dependency Graph Construction", false, true);
