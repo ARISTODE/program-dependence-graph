@@ -2,6 +2,7 @@
 #define SHARED_DATA_ANALYSIS_H_ 
 #include "LLVMEssentials.hh"
 #include "ProgramDependencyGraph.hh"
+#include "KSplitStatsCollector.hh"
 #include <set>
 #include <unordered_set>
 #include <fstream> 
@@ -86,6 +87,10 @@ namespace pdg
     ProgramGraph *_PDG;
     llvm::Module* _module;
     PDGCallGraph* _callGraph;
+<<<<<<< HEAD
+=======
+    KSplitStats* _ksplitStats;
+>>>>>>> origin/ebpf_eval
     std::set<llvm::GlobalVariable *> _shared_global_vars;
     std::set<llvm::DIType *> _shared_struct_di_types;
     std::set<llvm::Function *> _driverDomainFuncs;

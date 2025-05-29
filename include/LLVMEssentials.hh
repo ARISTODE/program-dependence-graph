@@ -18,4 +18,17 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/GraphTraits.h"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/IR/Operator.h"
+
+// opt option shared among passes
+namespace pdg
+{
+  extern bool EnableAnalysisStats;
+  extern bool OnlyControlledPath;
+  extern bool DEBUG;
+  extern bool SingleFuncAnalysis;
+  extern std::string TargetFuncNameStr;
+  extern llvm::cl::opt<std::string> TargetFuncName;
+}
 #endif

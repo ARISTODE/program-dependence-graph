@@ -26,7 +26,11 @@ namespace pdg
     void setupPTA(llvm::Module &M);
     bool hasPTASetup() { return (_ander_pta != nullptr); }
     llvm::AliasResult queryAlias(llvm::Value &v1, llvm::Value &v2);
+<<<<<<< HEAD
     void *_ander_pta; // SVF::AndersenWaveDiff *_ander_pta;
+=======
+    SVF::AndersenWaveDiff *_ander_pta;
+>>>>>>> origin/ebpf_eval
     
   };
 } // namespace pdg

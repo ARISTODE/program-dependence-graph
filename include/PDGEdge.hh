@@ -15,11 +15,11 @@ namespace pdg
 
   public:
     Edge() = delete;
-    Edge(Node *source, Node *dst, EdgeType edge_type)
+    Edge(Node *source, Node *dst, EdgeType edgeTy)
     {
       _source = source;
       _dst = dst;
-      _edge_type = edge_type;
+      _edge_type = edgeTy;
     }
     Edge(const Edge &e) // copy constructor
     {

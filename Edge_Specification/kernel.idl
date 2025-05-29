@@ -1,0 +1,6 @@
+module kernel {
+rpc void greeter( s32*[out] s ) {
+}
+rpc s32 main(  ) {
+}
+}

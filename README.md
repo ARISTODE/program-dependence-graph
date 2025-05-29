@@ -1,8 +1,9 @@
-# PDG Document
+# Program Dependence Graph (PDG)
 
 ## Introduction
+This project builds a modular inter-procedural program dependence graph (PDG) for practical use. Our program dependence graph is field sensitive, context-insensitive and flow-insensitive. This is a key component of our PtrSplit and Program-mandering works.
 
-This project is a key component of our PtrSplit and Program-mandering works. It aims at building a modular inter-procedural program dependence graph (PDG) for practical use. Our program dependence graph is field senstive, context-insensitive and flow-insensitive. For more details, welcome to read our CCS'17 paper about PtrSplit: \[[http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf\]](http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf%5D) If you find this tool useful, please cite the PtrSplit and Program Mandering papers in your publication. Here's the bibtex entries:
+For more details, welcome to read our CCS'17 paper about PtrSplit: [http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf](http://www.cse.psu.edu/~gxt29/papers/ptrsplit.pdf) If you find this tool useful, please cite the PtrSplit and Program Mandering papers in your publication. Here's the bibtex entries:
 
 @inproceedings{LiuTJ17Ptrsplit,
   author = {Shen Liu and Gang Tan and Trent Jaeger},
@@ -20,32 +21,44 @@ This project is a key component of our PtrSplit and Program-mandering works. It 
   year={2019}
 }
 
-
-We have upgraded the implementation to LLVM 12.0.0. Currently, we only support building PDGs for C programs.
-
-A PDG example looks like this (the blue part corresponds to the parameter tree):
+We have upgraded the implementation to LLVM 19. Currently, we support building PDGs for C programs.
 
 
 ## Getting Started
+To replicate all KSplit experiments, please refer to our artifact page: https://github.com/mars-research/ksplit-artifacts
+
+To experiment with the KSplit static analyses part, follow the instructions below.
+
+Step 1: Build PDG
+```bash
+# build pdg
+# Clone pdg repos
+git clone https://github.com/ARISTODE/program-dependence-graph.git pdg --recursive --branch dev_ksplit
+# build SVF, the key component of reasoning pointer alias in PDG
+pushd ./pdg/SVF
+mkdir -p build && cd build;
+cmake .. && make -j $(nproc)
+popd
+# build PDG
+mkdir -p build && cd build;
+cmake .. && make -j $(nproc)
 ```
-mkdir build
-cd build
-cmake ..
-make
-opt -load libpdg.so -dot-pdg < test.bc
-```
+
+Step 2: 
+Run different passes to obtain results from different stages. See [#available-passes] for more details.
+
 
 ### Available Passes
 
 **\-pdg:** generate the program dependence graph (inter-procedural)
 
-**\-cdg:** generate the control dependence graph (intra-procedural)
+**\-output-boundary-info:** generate fields that desribe the isolation boundary
 
-**\-ddg:** generate the data dependence graph (intra-procedural)
+**\-shared-data:** compute shared struct fields
 
-**\-dot-\*:** for visualization. (dot)
+**\-daa:** comopute data accessed through references passed in cross-domain function calls
 
-For those large software, generating a visualizable PDG is not easy. Graphviz often fails to generate the .dot file for a program with more than 1000 lines of C code. Fortunately, we rarely need such a large .dot file but only do kinds of analyses on the PDG, which is always in memory.
+**\-atomic-region:** comopute atomic regions
 
 ## LLVM IR compilation
 For simple C programs(e.g., test.c), do
@@ -67,27 +80,20 @@ We can use the current PDG as a required pass through following steps:
 ### Compile PDG
 
 1. download PDG repo: git clone https://github.com/ARISTODE/program-dependence-graph.git
-2. cd program-dependence-graph
-3. make
+2. cd program-dependence-graph  
+3. mkdir build && cd build
+4. cmake .. && make -j8
 
-### Use PDG as a required Pass
-Using cmake, add 
+### Use PDG with New Pass Manager
+```bash
+opt -load-pass-plugin=./libpdg.so -passes="pdg" input.ll -o output.ll
 ```
-include_directories(program_dependence_graph/include)
-add_subdirectory(program_dependence_graph)
-```
-
-Then, add 
-```
-AU.addRequired<ProgramDependencyGraph>();
-```
-in your pass's **getAnalysisUsage** method (legacy pass manager).
 
 ### Useful APIs
 
 **Query the reachability of two nodes:**
 
-```
+```cpp
 ProgramGraph *g = getAnalysis<ProgramDependencyGraph>()->getPDG();
 
 Value* src;
@@ -100,14 +106,12 @@ if (g->canReach(src_node, dst_node))
 {
   // do something...
 }
-
 ```
-
 
 **Traverse the PDG with path constrains**
 This method is useful to traverse the graph through certain edge types. In the example, we put the edge types we want to exclude in the set **exclude_edges**. Then, pass that as an argument to the **canReach** function.
 
-```
+```cpp
 ProgramGraph *g = getAnalysis<ProgramDependencyGraph>()->getPDG();
 
 Value* src;

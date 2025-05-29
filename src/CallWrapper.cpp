@@ -9,13 +9,14 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
   if (called_func->isVarArg())
     return;
   // construct actual tree based on the type signature of callee
+  Function *callingFunc = _call_inst->getFunction();
   auto formal_arg_list = callee_fw.getArgList();
-  assert(_arg_list.size() == formal_arg_list.size() && "actual/formal arg size don't match!");
+  assert(_argList.size() == formal_arg_list.size() && "actual/formal arg size don't match!");
   // iterate through actual param list and construct actual tree by copying formal tree
-  auto actual_arg_iter = _arg_list.begin();
+  auto actual_arg_iter = _argList.begin();
   auto formal_arg_iter = formal_arg_list.begin();
   
-  while (actual_arg_iter != _arg_list.end())
+  while (actual_arg_iter != _argList.end())
   {
     Tree* arg_formal_in_tree = callee_fw.getArgFormalInTree(**formal_arg_iter);
     if (!arg_formal_in_tree) 
@@ -31,6 +32,7 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
     arg_actual_in_tree->setTreeNodeType(GraphNodeType::PARAM_ACTUALIN);
     TreeNode* actual_in_root_node = arg_actual_in_tree->getRootNode();
     actual_in_root_node->addAddrVar(**actual_arg_iter);
+    actual_in_root_node->setFunc(*callingFunc);
     arg_actual_in_tree->build();
     _arg_actual_in_tree_map.insert(std::make_pair(*actual_arg_iter, arg_actual_in_tree));
     // build actual out tree
@@ -39,6 +41,7 @@ void pdg::CallWrapper::buildActualTreeForArgs(FunctionWrapper &callee_fw)
     arg_actual_out_tree->setTreeNodeType(GraphNodeType::PARAM_ACTUALOUT);
     TreeNode* actual_out_root_node = arg_actual_out_tree->getRootNode();
     actual_out_root_node->addAddrVar(**actual_arg_iter);
+    actual_out_root_node->setFunc(*callingFunc);
     arg_actual_out_tree->build();
     _arg_actual_out_tree_map.insert(std::make_pair(*actual_arg_iter, arg_actual_out_tree));
     actual_arg_iter++;
@@ -82,4 +85,12 @@ pdg::Tree *pdg::CallWrapper::getArgActualOutTree(Value &actual_arg)
   if (iter == _arg_actual_out_tree_map.end())
     return nullptr;
   return _arg_actual_out_tree_map[&actual_arg];
+}
+
+int pdg::CallWrapper::getArgIdxByVal(Value& val)
+{
+  auto it = std::find(_argList.begin(), _argList.end(), &val);
+  if (it == _argList.end())
+    return -1;
+  return std::distance(_argList.begin(), it);
 }

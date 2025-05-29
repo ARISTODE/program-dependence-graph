@@ -3,6 +3,17 @@
 
 namespace pdg
 {
+  enum class RiskyDataType {
+    PTR_READ,
+    PTR_WRTIE,
+    ARR_IDX,
+    DIV_BY_ZERO,
+    NUM_ARITH,
+    CONTROL_VAR,
+    RISKY_KERNEL_FUNC,
+    OTHER
+  };
+
   enum class EdgeType
   {
     IND_CALL,
@@ -13,10 +24,18 @@ namespace pdg
     CONTROLDEP_IND_BR,
     DATA_DEF_USE,
     DATA_RAW,
-    DATA_READ,
+    DATA_DEF_USE_LOAD,
+    DATA_DEF_USE_GEP,
+    DATA_DEF_USE_CAST,
+    DATA_DEF_USE_ARITH,
+    DATA_MAY_ALIAS,
+    DATA_MUST_ALIAS,
     DATA_ALIAS,
     DATA_RET,
+    DATA_STORE_TO,
+    DATA_EQUL_OBJ,
     PARAMETER_IN,
+    PARAMETER_IN_REV,
     PARAMETER_OUT,
     PARAMETER_FIELD,
     GLOBAL_DEP,
@@ -52,6 +71,13 @@ namespace pdg
   {
     DATA_READ,
     DATA_WRITE
+  };
+
+  enum class DomainTag
+  {
+    KERNEL_DOMAIN,
+    DRIVER_DOMAIN,
+    NO_DOMAIN
   };
 }
 

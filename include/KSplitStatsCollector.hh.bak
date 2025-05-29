@@ -9,9 +9,12 @@
 #include <tuple>
 #include <iomanip>
 
+<<<<<<< HEAD
 // Global flag for enabling analysis stats
 extern bool EnableAnalysisStats;
 
+=======
+>>>>>>> origin/ebpf_eval
 namespace pdg
 {
   class KSplitStats
@@ -28,6 +31,10 @@ namespace pdg
       return ks;
     }
     void collectTotalPointerStats(llvm::DIType &dt);
+<<<<<<< HEAD
+=======
+    // void collectSharedPointerStats(llvm::DIType &dt, std::string var_name, std::string funcName);
+>>>>>>> origin/ebpf_eval
     void collectDataStats(TreeNode &treeNode, std::string nescheck_ptr_type, llvm::Function &func, int paramIdx = -1, bool is_driver_func = false);
     void collectSharedPointerStats(TreeNode &treeNode, std::string nescheck_ptr_type);
     void collectInferredStringStats(std::set<std::string> &annotations);
@@ -44,6 +51,7 @@ namespace pdg
     std::unordered_map<llvm::Function*, std::tuple<unsigned, unsigned, unsigned>> _drv_api_acc_map;
     // record function ptr (read, write, read/write)
     std::unordered_map<llvm::Function*, std::tuple<unsigned, unsigned, unsigned>> _drv_api_ptr_acc_map;
+<<<<<<< HEAD
     
     // Interface complexity stats
     unsigned _driver_to_kernel_func_call = 0;
@@ -51,35 +59,71 @@ namespace pdg
     unsigned _total_func_size = 0;
     
     // Basic field stats
+=======
+    // 1.a complexity
+    unsigned _driver_to_kernel_func_call = 0;
+    unsigned _kernel_to_driver_func_call = 0;
+    unsigned _total_func_size = 0;
+    // 1.b fields analysis stats
+>>>>>>> origin/ebpf_eval
     int _fieldsDeepCopyNum = 0;
     int _fields_field_analysis = 0;
     int _fields_shared_analysis = 0;
     int _fields_removed_boundary_opt = 0;
+<<<<<<< HEAD
     
     // Data classification stats
     unsigned _primitive_fields = 0;
     unsigned _shared_bitfield = 0;
     unsigned _totalPtrNum = 0;
     unsigned _shared_ptr_num = 0;
+=======
+    // 1.c data classification
+    // primitive types
+    unsigned _primitive_fields = 0;
+    // unsigned _total_bitfield = 0;
+    unsigned _shared_bitfield = 0;
+    // pointers
+    unsigned _totalPtrNum = 0;
+    unsigned _shared_ptr_num = 0;
+    // safe pointers (singleton)
+>>>>>>> origin/ebpf_eval
     unsigned _safe_ptr_num = 0;
     unsigned _void_ptr_num = 0;
     unsigned _no_cast_void_pointer = 0;
     unsigned _func_ptr_num = 0;
     unsigned _shared_ioremap_num = 0;
     unsigned _shared_user_num = 0;
+<<<<<<< HEAD
     
     // Pointers
     unsigned _dyn_sized_arr_num = 0;
     unsigned _dyn_sized_sentinel_num = 0;
     unsigned _dyn_sized_string_num = 0;
     unsigned _dyn_ptr_num = 0;
+=======
+    // seq pointers
+    // array sized/dyn
+    unsigned _dyn_sized_arr_num = 0;
+    unsigned _dyn_sized_sentinel_num = 0;
+    unsigned _dyn_sized_string_num = 0;
+    // dyn pointers
+    unsigned _dyn_ptr_num;
+>>>>>>> origin/ebpf_eval
     unsigned _cast_void_ptr_num = 0;
     unsigned _single_cast_shared_void_ptr_num = 0;
     unsigned _multi_cast_shared_void_ptr_num = 0;
     unsigned _non_void_wild_ptr_num = 0;
+<<<<<<< HEAD
     unsigned _unknwon_ptr_num = 0;
 
     // Complex types
+=======
+    // unknown pointers    
+    unsigned _unknwon_ptr_num = 0;
+
+    // complex types
+>>>>>>> origin/ebpf_eval
     unsigned _shared_struct_num = 0;
     unsigned _recursive_struct_num = 0;
     unsigned _total_union_num = 0;
@@ -91,11 +135,19 @@ namespace pdg
     unsigned _sized_string_num = 0;
     unsigned _sized_array_collocated_num = 0;
 
+<<<<<<< HEAD
     // Synchronization
+=======
+    // atomic region
+>>>>>>> origin/ebpf_eval
     unsigned _total_CS = 0;
     unsigned _shared_CS = 0;
     unsigned _total_atomic_op = 0;
     unsigned _shared_atomic_op = 0;
+<<<<<<< HEAD
+=======
+    // unsigned _total_union_ptr_num = 0;
+>>>>>>> origin/ebpf_eval
     unsigned _shared_union_ptr_num = 0;
     unsigned _ptr_arith_num = 0;
     unsigned _ptr_gep_arith_daa = 0;
@@ -115,7 +167,11 @@ namespace pdg
     unsigned _shared_sentinel_array = 0;
     unsigned _shared_other = 0;
 
+<<<<<<< HEAD
     // Access patterns
+=======
+    // classify shared data passed from driver to kernel
+>>>>>>> origin/ebpf_eval
     unsigned _union_read = 0;
     unsigned _union_write = 0;
     unsigned _union_rw = 0;
@@ -129,7 +185,11 @@ namespace pdg
     unsigned _other_write = 0;
     unsigned _other_rw = 0;
 
+<<<<<<< HEAD
     // Pointer access patterns
+=======
+    // pointer shared data passed from driver to kernel
+>>>>>>> origin/ebpf_eval
     unsigned _singleton_read = 0;
     unsigned _singleton_write = 0;
     unsigned _singleton_rw = 0;
@@ -143,11 +203,20 @@ namespace pdg
     unsigned _unknown_write = 0;
     unsigned _unknown_rw = 0;
 
+<<<<<<< HEAD
     // Allocators
     unsigned _driverSharedAllocators = 0;
     unsigned _kernelSharedAllocators = 0;
 
     // Driver-specific stats
+=======
+    // allocator stats
+    unsigned _driverSharedAllocators = 0;
+    unsigned _kernelSharedAllocators = 0;
+
+    // kernel driver specific access data
+    // per instance
+>>>>>>> origin/ebpf_eval
     unsigned accessedSharedFields = 0;
     unsigned _driver_read_fields = 0;
     unsigned _driver_write_fields = 0;
@@ -163,8 +232,12 @@ namespace pdg
     unsigned kernelRAWDriverSharedPtrFields = 0;
     unsigned kernelReadDriverUpdateSharedFields = 0;
     unsigned kernelReadDriverUpdateSharedPtrFields = 0;
+<<<<<<< HEAD
 
     // Per-type stats
+=======
+    // per shared struct type 
+>>>>>>> origin/ebpf_eval
     unsigned numSharedStructType = 0;
     unsigned kernelReadableFieldsPerTy = 0;
     unsigned kernelReadablePtrFieldsPerTy = 0;
@@ -180,8 +253,11 @@ namespace pdg
     unsigned numRWNonPtrCondVar = 0;
     unsigned numRWPtrInPtrArith = 0;
     unsigned numRWNonPtrInPtrArith = 0;
+<<<<<<< HEAD
     
     // Risk analysis
+=======
+>>>>>>> origin/ebpf_eval
     unsigned riskyFieldUsedInSensitiveAPI = 0;
     unsigned riskyFieldUsedInSensitiveAPITaint = 0;
     unsigned riskyPtrArithField = 0;
@@ -195,12 +271,20 @@ namespace pdg
     unsigned riskyCondFuncField = 0;
     unsigned riskyLockField = 0;
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/ebpf_eval
     unsigned kernelAllocAPI = 0;
     unsigned kernelRAWAllocAPI = 0;
     unsigned kernelDeallocAPI = 0;
     unsigned kernelRAWDeallocAPI = 0;
 
+<<<<<<< HEAD
     // Field classification
+=======
+    // classify shared fields
+>>>>>>> origin/ebpf_eval
     unsigned funcPtrNum = 0;
     unsigned DCFuncPtrNum = 0;
     unsigned DLFuncPtrNum = 0;
@@ -208,8 +292,13 @@ namespace pdg
     unsigned DCDataPtrNum = 0;
     unsigned DLDataPtrNum = 0;
 
+<<<<<<< HEAD
     // Legacy/other
     unsigned _unhandled_array_num = 0;
+=======
+    // outdated
+    unsigned _unhandled_array_num = 0; // for some dyn size arr, we could try infer it's size
+>>>>>>> origin/ebpf_eval
     unsigned _unhandled_void_ptr_num = 0;
     unsigned _unhandled_void_ptr_sd_num = 0;
     unsigned _handled_void_ptr_num = 0;
@@ -219,6 +308,11 @@ namespace pdg
     unsigned _char_array_num = 0;
     unsigned _struct_array_num = 0;
     unsigned _unknown_ptr_num = 0;
+<<<<<<< HEAD
+=======
+
+    // SoK related
+>>>>>>> origin/ebpf_eval
     unsigned _drv_read_fields = 0;
   };
 }

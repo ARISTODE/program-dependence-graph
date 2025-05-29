@@ -31,16 +31,23 @@ namespace pdg
       void connectCallerAndCallee(CallWrapper &cw, FunctionWrapper &fw);
       void connectIntraprocDependencies(llvm::Function &F, llvm::ModuleAnalysisManager &MAM);
       void connectInterprocDependencies(llvm::Function &F);
-      void connectFormalInTreeWithAddrVars(Tree &formal_in_tree);
-      void connectFormalOutTreeWithAddrVars(Tree &formal_out_tree);
-      void connectActualInTreeWithAddrVars(Tree &actual_in_tree, llvm::CallInst &ci);
-      void connectActualOutTreeWithAddrVars(Tree &actual_out_tree, llvm::CallInst &ci);
-      bool canReach(Node &src, Node &dst);
-      bool canReach(Node &src, Node &dst, std::set<EdgeType> exclude_edge_types);
+      void connectFormalInTreeWithAddrVars(Tree &formalInTree);
+      void connectFormalOutTreeWithAddrVars(Tree &formalOutTree);
+      void connectActualInTreeWithAddrVars(Tree &actualInTree, llvm::CallInst &ci);
+      void connectActualOutTreeWithAddrVars(Tree &actualOutTree, llvm::CallInst &ci);
+      void connectTreeNode(TreeNode &src_node, TreeNode &dstNode, EdgeType edgeTy);
+      void connectFormalInTreeWithActualTree(llvm::Function &F);
+      void connectAddrVarsReachableFromInterprocFlow(llvm::Function &F);
+      void connectFormalInTreeWithCallActualNode(Tree &formalInTree);
+      void conntectFormalInTreeWithInterprocReachableAddrVars(Tree &formalInTree);
+      void connectGlobalTreeWithAddrVars(Tree &globalVarTree);
+      std::set<Node*> getAliasNodes(Node &n);
 
     private:
       llvm::Module *_module;
       ProgramGraph *_PDG;
   };
 }
+
+
 #endif

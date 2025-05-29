@@ -13,7 +13,17 @@ std::set<std::string> remove_ops = {
     "ixgbe_mbx_operations",
     "ixgbe_phy_opeations"};
 
+<<<<<<< HEAD
 pdg::BoundaryAnalysis::Result pdg::BoundaryAnalysis::run(Module &M, ModuleAnalysisManager &MAM)
+=======
+std::set<std::string> remove_ops = {
+    "ixgbe_eeprom_operations",
+    "ixgbe_mac_operations",
+    "ixgbe_mbx_operations",
+    "ixgbe_phy_opeations"};
+
+bool pdg::BoundaryAnalysis::runOnModule(Module &M)
+>>>>>>> origin/ebpf_eval
 {
   setupBlackListFuncNames();
   computeDriverImportedFuncs(M);
@@ -50,9 +60,14 @@ void pdg::BoundaryAnalysis::computeDriverImportedFuncs(Module &M)
   {
     if (F.isDeclaration())
       continue;
+<<<<<<< HEAD
     // Skip header-defined functions (simplified check)
     // if (pdgutils::isFuncDefinedInHeaderFile(F))
     //   continue;
+=======
+    if (pdgutils::isFuncDefinedInHeaderFile(F))
+      continue;
+>>>>>>> origin/ebpf_eval
     for (auto iIter = inst_begin(F); iIter != inst_end(F); ++iIter)
     {
       if (auto CI = dyn_cast<CallInst>(&*iIter))
@@ -109,7 +124,11 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
 
   // used to store driver global
   std::ofstream driver_global_struct_types("boundaryFiles/driver_global_struct_types");
+<<<<<<< HEAD
   for (auto &global_var : M.globals())
+=======
+  for (auto &global_var : M.getGlobalList())
+>>>>>>> origin/ebpf_eval
   {
     SmallVector<DIGlobalVariableExpression *, 4> sv;
     if (!global_var.hasInitializer())
@@ -129,7 +148,11 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
     auto gv_lowest_di_type = dbgutils::getLowestDIType(*gv_di_type);
     if (!gv_lowest_di_type || gv_lowest_di_type->getTag() != dwarf::DW_TAG_structure_type)
       continue;
+<<<<<<< HEAD
     auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type);
+=======
+    auto gv_di_type_name = dbgutils::getSourceLevelTypeName(*gv_lowest_di_type, true);
+>>>>>>> origin/ebpf_eval
     auto gv_name = global_var.getName().str();
     gv_di_type_name = pdgutils::stripVersionTag(gv_di_type_name);
     // if (!shared_struct_type_names.empty() && shared_struct_type_names.find(gv_di_type_name) == shared_struct_type_names.end())
@@ -140,10 +163,15 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
 
     const auto &typeArrRef = dyn_cast<DICompositeType>(gv_lowest_di_type)->getElements();
     Type *global_type = global_var.getType();
+<<<<<<< HEAD
     // In LLVM 19+, global variables have opaque pointer types
     // We need to get the source element type
     if (auto pt = dyn_cast<PointerType>(global_type))
       global_type = global_var.getValueType();
+=======
+    if (auto t = dyn_cast<PointerType>(global_type))
+      global_type = t->getPointerElementType();
+>>>>>>> origin/ebpf_eval
     if (!global_type->isStructTy())
       continue;
     if (global_type->getStructNumElements() != typeArrRef.size())
@@ -182,6 +210,7 @@ void pdg::BoundaryAnalysis::computeExportedFuncs(Module &M)
 }
 
 void pdg::BoundaryAnalysis::computeExportedFuncSymbols(Module &M)
+<<<<<<< HEAD
 {
   for (auto &gv : M.globals())
   {
@@ -199,6 +228,25 @@ void pdg::BoundaryAnalysis::computeExportedFuncSymbols(Module &M)
 
 void pdg::BoundaryAnalysis::dumpToFiles()
 {
+=======
+{
+  for (auto &gv : M.getGlobalList())
+  {
+    auto name = gv.getName().str();
+    // look for global name starts with __ksymtab or __kstrtab
+    if (name.find("__ksymtab_") == 0 || name.find("__kstrtab_") == 0)
+    {
+      std::string funcName = name.erase(0, 10);
+      Function *f = M.getFunction(StringRef(funcName));
+      if (f != nullptr)
+        _exportedFuncSymbols.insert(funcName);
+    }
+  }
+}
+
+void pdg::BoundaryAnalysis::dumpToFiles()
+{
+>>>>>>> origin/ebpf_eval
   sys::fs::file_status status;
   sys::fs::status("boundaryFiles", status);
   if (!sys::fs::exists(status) || !sys::fs::is_directory(status))
@@ -220,6 +268,19 @@ void pdg::BoundaryAnalysis::dumpToFiles()
 
   std::vector<std::string> global_op_struct_names(_globalOpStructNames.begin(), _globalOpStructNames.end());
   dumpToFile("boundaryFiles/global_op_struct_names", global_op_struct_names);
+<<<<<<< HEAD
+=======
+}
+
+void pdg::BoundaryAnalysis::dumpToFile(std::string fileName, std::vector<std::string> &names)
+{
+  std::ofstream outputFile(fileName);
+  for (auto name : names)
+  {
+    outputFile << name << "\n";
+  }
+  outputFile.close();
+>>>>>>> origin/ebpf_eval
 }
 
 void pdg::BoundaryAnalysis::dumpToFile(std::string fileName, std::vector<std::string> &names)

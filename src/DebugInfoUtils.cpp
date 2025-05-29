@@ -1,17 +1,91 @@
 #include "DebugInfoUtils.hh"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include <unordered_map>
 
 using namespace llvm;
+
+static std::unordered_map<std::string, std::string> typeSwitchMap = {
+    {"_Bool", "bool"},
+    {"char", "s8"},
+    {"signed char", "s8"},
+    {"unsigned char", "u8"},
+    {"short", "u16"},
+    {"short int", "s16"},
+    {"signed short", "s16"},
+    {"unsigned short", "u16"},
+    {"signed short int", "s16"},
+    {"unsigned short int", "u16"},
+    {"int", "s32"},
+    {"signed", "s32"},
+    {"unsigned int", "u32"},
+    {"long", "s32"},
+    {"long int", "s32"},
+    {"signed long", "s32"},
+    {"signed long int", "s32"},
+    {"unsigned long", "u32"},
+    {"unsigned long int", "u32"},
+    {"long long unsigned int", "u64"},
+    {"long long", "s64"},
+    {"long long int", "s64"},
+    {"signed long long", "s64"},
+    {"signed long long int", "s64"},
+    {"unsigned long long", "u64"},
+    {"unsigned long long int", "u64"},
+    {"long unsigned int", "u64"},
+};
 
 // ===== check types =====
 bool pdg::dbgutils::isPointerType(DIType &dt)
 {
-  return (dt.getTag() == dwarf::DW_TAG_pointer_type);
+  auto d = stripMemberTagAndAttributes(dt);
+  if (d == nullptr)
+    return false;
+  return (d->getTag() == dwarf::DW_TAG_pointer_type);
+}
+
+bool pdg::dbgutils::isPrimitiveType(DIType &dt)
+{
+  return isa<DIBasicType>(&dt);
+}
+
+bool pdg::dbgutils::isCompositeType(DIType &dt)
+{
+  return (isStructType(dt) || isArrayType(dt) || isUnionType(dt));
+}
+
+bool pdg::dbgutils::isCompositePointerType(DIType &dt)
+{
+  if (!isPointerType(dt))
+    return false;
+
+  auto d = getBaseDIType(dt);
+  while (d != nullptr)
+  {
+    if (isCompositeType(*d))
+      return true;
+    d = getBaseDIType(*d);
+  }
+  return false;
 }
 
 bool pdg::dbgutils::isStructType(DIType &dt)
 {
   return (dt.getTag() == dwarf::DW_TAG_structure_type);
+}
+
+bool pdg::dbgutils::isUnionPointerType(DIType& dt)
+{
+  auto d = stripMemberTag(dt);
+  d = stripAttributes(*d);
+  if (isPointerType(*d))
+  {
+    DIType *lowest_di_type = getLowestDIType(*d);
+    if (lowest_di_type == nullptr)
+      return false;
+    if (isUnionType(*lowest_di_type))
+      return true;
+  }
+  return false;
 }
 
 bool pdg::dbgutils::isUnionType(DIType& dt)
@@ -34,9 +108,11 @@ bool pdg::dbgutils::isStructPointerType(DIType &dt)
 
 bool pdg::dbgutils::isFuncPointerType(DIType &dt)
 {
-  DIType* di = stripMemberTag(dt);
-  if (di->getTag() == dwarf::DW_TAG_subroutine_type || isa<DISubroutineType>(di) || isa<DISubprogram>(di))
-    return true;
+  DIType* di = stripMemberTag(*stripAttributes(dt));
+  if (!isPointerType(*di))
+    return false;
+  // if (di->getTag() == dwarf::DW_TAG_subroutine_type || isa<DISubroutineType>(di) || isa<DISubprogram>(di))
+  //   return true;
   auto lowest_di_type = getLowestDIType(*di);
   if (lowest_di_type != nullptr)
     return (lowest_di_type->getTag() == dwarf::DW_TAG_subroutine_type) || isa<DISubroutineType>(lowest_di_type) || isa<DISubprogram>(lowest_di_type);
@@ -45,13 +121,78 @@ bool pdg::dbgutils::isFuncPointerType(DIType &dt)
 
 bool pdg::dbgutils::isProjectableType(DIType &dt)
 {
+  // DIType *di = stripMemberTag(*stripAttributes(dt));
+  // if (di == nullptr)
+  //   return false;
   return (isStructType(dt) || isUnionType(dt));
 }
 
-bool pdg::dbgutils::hasSameDIName(DIType &d1, DIType &d2)
+bool pdg::dbgutils::isVoidPointerType(DIType &dt)
+{
+  DIType *d1 = stripMemberTag(dt);
+  if (d1->getTag() == dwarf::DW_TAG_pointer_type)
+  {
+    auto baseTy = getBaseDIType(*d1);
+    if (!baseTy)
+      return true;
+  }
+  return false;
+}
+
+bool pdg::dbgutils::isArrayType(DIType &dt)
+{
+  DIType* d = stripMemberTag(dt);
+  d = stripAttributes(*d);
+  if (d != nullptr)
+    return (d->getTag() == dwarf::DW_TAG_array_type);
+  return false;
+  // return (dt.getTag() == dwarf::DW_TAG_array_type);
+}
+
+bool pdg::dbgutils::isRecursiveType(DIType &dt)
+{
+  if (!isStructType(dt))
+    return false;
+
+  std::string struct_name = getSourceLevelTypeName(dt, true);
+  // check child fields
+  auto di_node_arr = dyn_cast<DICompositeType>(&dt)->getElements();
+  for (unsigned i = 0; i < di_node_arr.size(); ++i)
+  {
+    DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
+    DIType *field_lowest_di_type = getLowestDIType(*field_di_type);
+    if (!field_lowest_di_type)
+      continue;
+    std::string field_type_name = getSourceLevelTypeName(*field_lowest_di_type, true);
+    if (field_type_name == struct_name)
+      return true;
+  }
+  return false;
+}
+
+bool pdg::dbgutils::isAllocableObjType(DIType &dt)
+{
+  return (isArrayType(dt) || isCompositePointerType(dt) || isCompositeType(dt));
+}
+
+bool pdg::dbgutils::isCharPointer(DIType &dt)
+{
+  DIType* d = stripMemberTag(dt);
+  d = stripAttributes(*d);
+  if (!isPointerType(*d))
+    return false;
+  auto base_type = getLowestDIType(*d); // new lowest to skip violatile node
+  if (base_type == nullptr)
+    return false;
+  return (base_type->getName().str() == "char");
+}
+
+bool pdg::dbgutils::hasSameDITypeName(DIType &d1, DIType &d2)
 {
   std::string d1_name = dbgutils::getSourceLevelTypeName(d1);
   std::string d2_name = dbgutils::getSourceLevelTypeName(d2);
+  if (d1_name.empty()  || d2_name.empty())
+    return false;
   return (d1_name == d2_name);
 }
 
@@ -60,20 +201,40 @@ DIType *pdg::dbgutils::getBaseDIType(DIType &dt)
 {
   if (DIDerivedType *derived_ty = dyn_cast<DIDerivedType>(&dt))
     return derived_ty->getBaseType();
+  if (DICompositeType *dct = dyn_cast<DICompositeType>(&dt))
+    return dct->getBaseType();
   return nullptr;
 }
 
-DIType *pdg::dbgutils::getLowestDIType(DIType &dt)
-{
+DIType *pdg::dbgutils::getLowestDIType(DIType &dt) {
   DIType *current_dt = &dt;
+  
+  // If the passed DIType reference is invalid, return nullptr.
   if (!current_dt)
     return nullptr;
-  while (DIDerivedType *derived_dt = dyn_cast<DIDerivedType>(current_dt))
+    
+  // Loop while the DIType is a DIDerivedType or DICompositeType.
+  while (isa<DIDerivedType>(current_dt) || isa<DICompositeType>(current_dt))
   {
-    current_dt = derived_dt->getBaseType();
-    if (!current_dt) // could happen for a pointer to void pointer etc
+    if (auto derived_dt = dyn_cast<DIDerivedType>(current_dt))
+    {
+      current_dt = derived_dt->getBaseType();
+    }
+    else if (auto composite_dt = dyn_cast<DICompositeType>(current_dt))
+    {
+      // For a DICompositeType, if there's no base type, break the loop.
+      if (composite_dt->getBaseType() == nullptr)
+        break;
+
+      current_dt = composite_dt->getBaseType();
+    }
+
+    // If there's no base type (which might happen for pointers), break the loop.
+    if (!current_dt)
       break;
   }
+
+  // Return the DIType found.
   return current_dt;
 }
 
@@ -90,7 +251,7 @@ DIType *pdg::dbgutils::stripAttributes(DIType &dt)
     {
       DIType *baseTy = didt->getBaseType();
       if (baseTy == nullptr)
-        return nullptr;
+        return current_dt;
       current_dt = baseTy;
       type_tag = current_dt->getTag();
     }
@@ -106,13 +267,20 @@ DIType *pdg::dbgutils::stripMemberTag(DIType &dt)
   return &dt;
 }
 
+DIType *pdg::dbgutils::stripMemberTagAndAttributes(DIType &dt)
+{
+  return stripAttributes(*stripMemberTag(dt));
+}
+
 // ===== get the source level naming information for variable or types ===== 
 std::string pdg::dbgutils::getSourceLevelVariableName(DINode &di_node)
 {
+  DINode* node_ptr = &di_node;
+  if (!node_ptr)
+    return "";
+
   if (DILocalVariable *di_var = dyn_cast<DILocalVariable>(&di_node))
-  {
     return di_var->getName().str();
-  }
 
   // get field name
   if (DIType *dt = dyn_cast<DIType>(&di_node))
@@ -135,7 +303,7 @@ std::string pdg::dbgutils::getSourceLevelVariableName(DINode &di_node)
   return "";
 }
 
-std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt)
+std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt, bool isRaw, std::string fieldName)
 {
   auto type_tag = dt.getTag();
   if (!type_tag)
@@ -144,63 +312,154 @@ std::string pdg::dbgutils::getSourceLevelTypeName(DIType &dt)
   {
   case dwarf::DW_TAG_pointer_type:
   {
-    // errs() << "1\n";
     auto base_type = getBaseDIType(dt);
     if (!base_type)
-      return "nullptr";
-    return getSourceLevelTypeName(*base_type) + "*";
+      return "void*";
+    return getSourceLevelTypeName(*base_type, isRaw) + "*";
   }
   case dwarf::DW_TAG_member:
   {
-    // errs() << "2\n";
     auto base_type = getBaseDIType(dt);
     if (!base_type)
-      return "null";
-    std::string base_type_name = getSourceLevelTypeName(*base_type);
-    if (base_type_name == "struct")
-      base_type_name = "struct " + dt.getName().str();
+      return "void";
+    std::string base_type_name = getSourceLevelTypeName(*base_type, isRaw);
+    if (base_type_name == "struct" || (base_type_name == "union" && !isRaw))
+      base_type_name = base_type_name + dt.getName().str();
     return base_type_name;
   }
   // assert(!type_name.empty() && !var_name.empty() && "cannot generation idl from empty var/type name!");
   case dwarf::DW_TAG_structure_type:
   {
-    // errs() << "3\n";
-    if (dt.getName().empty())
-      return "struct";
-    return "struct " + dt.getName().str();
+    if (dt.getName().str().empty())
+      return isRaw ? "" : "struct";
+    return isRaw ? dt.getName().str() : "struct " + dt.getName().str();
   }
   case dwarf::DW_TAG_array_type:
   {
-    // DICompositeType *dct = cast<DICompositeType>(&dt);
-    // auto elements = dct->getElements();
-    // if (elements.size() == 1)
-    // {
-    //   // TODO: compute the array size based on new api
-    //   DISubrange *di_subr = cast<DISubrange>(elements[0]);
-    //   int count = di_subr->getCount().first->getSExtValue();
-    //   auto lowest_di_type = getLowestDIType(dt);
-    //   if (!lowest_di_type) 
-    //     return "";
-    //   std::string base_type_name = getSourceLevelTypeName(*lowest_di_type);
-    //   return "array<" + base_type_name + ", " + "0" + ">";
-    // }
-    return "array";
+    return getRawArrayTypeStr(dt, fieldName);
   }
   case dwarf::DW_TAG_const_type:
   {
-    // errs() << "4" << "\n";
     auto base_type = getBaseDIType(dt);
     if (!base_type)
-      return "const nullptr";
-    return "const " + getSourceLevelTypeName(*base_type);
+      // return "const nullptr";
+      return "const void";
+    if (isRaw)
+      return getSourceLevelTypeName(*base_type, isRaw);
+    else
+      return "const " + getSourceLevelTypeName(*base_type, isRaw);
+  }
+  case dwarf::DW_TAG_typedef:
+  {
+    auto base_type = getBaseDIType(dt);
+    if (!base_type)
+      return "";
+    if (base_type->getName().str().empty())
+    {
+      auto lowest_base_type = getLowestDIType(dt);
+      auto lbt_name = lowest_base_type? lowest_base_type->getName().str() : "";
+      if (lbt_name.empty())
+        return dt.getName().str(); // cannot find lowest base type
+      if (typeSwitchMap.find(lbt_name) != typeSwitchMap.end())
+        return lbt_name; // type is from map
+      if (base_type->getTag() == dwarf::DW_TAG_pointer_type)
+        return getSourceLevelTypeName(*base_type, isRaw); // detect a pointer
+      //return dt.getName().str();
+      return getSourceLevelTypeName(*lowest_base_type, isRaw); // recurse on lowest base type
+    }
+    return getSourceLevelTypeName(*getBaseDIType(dt), isRaw); // ideally won't reach?
+  }
+  case dwarf::DW_TAG_enumeration_type:
+  {
+    auto base_type = getBaseDIType(dt);
+    if (!base_type)
+      return "s32";
+    return getSourceLevelTypeName(*getBaseDIType(dt), isRaw);
+  }
+  case dwarf::DW_TAG_union_type:
+  {
+    if (dt.getName().str().empty())
+      return isRaw ? "" : "union";
+    return isRaw ? dt.getName().str() : "union " + dt.getName().str();
   }
   default:
   {
-    // errs() << "5\n";
+    // if (typeSwitchMap.find(dt.getName().str()) != typeSwitchMap.end())
+    //   return typeSwitchMap[dt.getName().str()];
+    if (dt.getName().str() == "_Bool") {
+	return "bool";
+    }
     return dt.getName().str();
   }
   }
   return "";
+}
+
+std::string pdg::dbgutils::getRawArrayTypeStr(DIType &dt, std::string fieldName)
+{
+  DICompositeType *dct = cast<DICompositeType>(&dt);
+  auto elements = dct->getElements();
+  // check element size
+  if (elements.size() == 1)
+  {
+    auto element_dt = getLowestDIType(*dct);
+    if (element_dt != nullptr)
+    {
+      auto total_size = dct->getSizeInBits();
+      auto element_size = element_dt->getSizeInBits();
+      auto element_type_name = getSourceLevelTypeName(*element_dt, true);
+      if (isStructPointerType(*element_dt))
+        element_type_name = element_type_name + "*";
+      else if (isStructType(*element_dt))
+        element_type_name = element_type_name;
+
+      if (total_size != 0 && element_size != 0)
+      {
+        auto element_count = total_size / element_size;
+        std::string arr_field_str = element_type_name + " " + fieldName+ "[" + std::to_string(element_count) + "]";
+        return arr_field_str;
+      }
+      else if (total_size == 0)
+      {
+        std::string arr_field_str = element_type_name + " " +fieldName + "[0]";
+        return arr_field_str;
+      }
+    }
+  }
+  return "array";
+}
+
+std::string pdg::dbgutils::getArrayTypeStr(DIType &dt)
+{
+  DICompositeType *dct = cast<DICompositeType>(&dt);
+  auto elements = dct->getElements();
+  if (elements.size() == 1)
+  {
+    auto element_dt = getLowestDIType(*dct);
+    if (element_dt != nullptr)
+    {
+      auto total_size = dct->getSizeInBits();
+      auto element_size = element_dt->getSizeInBits();
+      auto element_type_name = getSourceLevelTypeName(*element_dt, true);
+      if (isStructPointerType(*element_dt))
+        element_type_name = "projection " + element_type_name + "*";
+      else if (isStructType(*element_dt))
+        element_type_name = "projection " + element_type_name;
+
+      if (total_size != 0 && element_size != 0)
+      {
+        auto element_count = total_size / element_size;
+        std::string arr_field_str = "array< " + element_type_name + ", " + std::to_string(element_count) + ">";
+        return arr_field_str;
+      }
+      else if (total_size == 0)
+      {
+        std::string arr_field_str = "array<" + element_type_name + ", 0>";
+        return arr_field_str;
+      }
+    }
+  }
+  return "array";
 }
 
 // compute di type for value
@@ -229,6 +488,7 @@ DIType *pdg::dbgutils::getFuncRetDIType(Function &F)
     {
       auto *sub_routine = subprogram->getType();
       const auto &type_ref = sub_routine->getTypeArray();
+      // if return value is contain, type_ref is 1 element larger than F arg size.
       if (F.arg_size() >= type_ref.size())
         break;
       // const auto &ArgTypeRef = TypeRef[0];
@@ -242,10 +502,10 @@ DIType *pdg::dbgutils::getFuncRetDIType(Function &F)
 
 std::set<DIType *> pdg::dbgutils::computeContainedStructTypes(DIType &dt)
 {
-  std::set<DIType* > contained_struct_di_types;
+  std::set<DIType *> contained_struct_di_types;
   if (!isStructType(dt))
     return contained_struct_di_types;
-  std::queue<DIType*> type_queue;
+  std::queue<DIType *> type_queue;
   type_queue.push(&dt);
   int current_tree_height = 0;
   int max_tree_height = 5;
@@ -269,7 +529,7 @@ std::set<DIType *> pdg::dbgutils::computeContainedStructTypes(DIType &dt)
       for (unsigned i = 0; i < di_node_arr.size(); i++)
       {
         DIType *field_di_type = dyn_cast<DIType>(di_node_arr[i]);
-        DIType* field_lowest_di_type = getLowestDIType(*field_di_type);
+        DIType *field_lowest_di_type = getLowestDIType(*field_di_type);
         if (!field_lowest_di_type)
           continue;
         if (isStructType(*field_lowest_di_type))
@@ -278,4 +538,213 @@ std::set<DIType *> pdg::dbgutils::computeContainedStructTypes(DIType &dt)
     }
   }
   return contained_struct_di_types;
+}
+
+std::string pdg::dbgutils::getFuncSigName(DIType &dt, Function &F, std::string funcPtrName)
+{
+  std::string func_type_str = "";
+  auto lowest_di_type = getLowestDIType(dt);
+  if (lowest_di_type == nullptr)
+    return "void";
+  if (DISubroutineType *subRoutine = dyn_cast<DISubroutineType>(lowest_di_type))
+  {
+    const auto &type_ref_arr = subRoutine->getTypeArray();
+    // generate name string for return value
+    DIType *ret_di_ty = type_ref_arr[0];
+    if (ret_di_ty == nullptr)
+      func_type_str += "void ";
+    else
+      func_type_str += getSourceLevelTypeName(*ret_di_ty);
+
+    // generate name string for function pointer
+    func_type_str += " (";
+    if (!funcPtrName.empty())
+      func_type_str += "*";
+    func_type_str += funcPtrName;
+    // if (!funcName.empty())
+    //   func_type_str = func_type_str + "_" + funcName;
+    func_type_str += ")";
+    // generate name string for arguments in fucntion pointer signature
+    func_type_str += "(";
+    for (int i = 1; i < type_ref_arr.size(); ++i)
+    {
+      DIType *d = type_ref_arr[i];
+      // retrieve naming info from debugging information for each argument
+      std::string arg_name = getSourceLevelVariableName(*d);
+
+      unsigned argNum = i - 1;
+      unsigned count = 0;
+      for (auto argI = F.arg_begin(); argI != F.arg_end(); ++argI)
+      {
+        if (count == argNum)
+        {
+          arg_name = getArgumentName(*argI);
+          break;
+        }
+        count++;
+      }
+
+      if (d == nullptr) // void type
+        func_type_str += "void ";
+      else // normal types
+      {
+        if (DIDerivedType *dit = dyn_cast<DIDerivedType>(d))
+        {
+          auto baseType = dit->getBaseType();
+          if (!baseType)
+          {
+            // if a DIderived type has a null base type, this normally
+            // represent a void pointer
+            func_type_str += "void* ";
+          }
+          else if (baseType->getTag() == dwarf::DW_TAG_structure_type)
+          {
+            std::string argTyName = getSourceLevelTypeName(*d);
+            // if (F != nullptr && actualArgHasAllocator(*F, i - 1))
+            //   argTyName = "alloc[callee] " + argTyName;
+            if (argTyName.back() == '*')
+            {
+              argTyName.pop_back();
+              argTyName = argTyName + "_" + funcPtrName + "*";
+            }
+            else
+            {
+              argTyName = argTyName + "_" + funcPtrName;
+            }
+
+            std::string struct_name = argTyName + " " + arg_name;
+            if (struct_name != " ")
+              func_type_str = func_type_str + "projection " + struct_name;
+          }
+          else
+            func_type_str = func_type_str + getSourceLevelTypeName(*d) + " " + arg_name;
+        }
+        else
+          func_type_str = func_type_str + getSourceLevelTypeName(*d);
+      }
+
+      if (i < type_ref_arr.size() - 1 && !getSourceLevelTypeName(*d).empty())
+        func_type_str += ", ";
+    }
+    func_type_str += ")";
+    return func_type_str;
+  }
+  return "void";
+}
+
+std::string pdg::dbgutils::getArgumentName(llvm::Argument &arg)
+{
+  Function *F = arg.getParent();
+  auto dbg_insts = collectDbgInstInFunc(*F);
+  std::vector<DbgInfoIntrinsic *> dbgInstList(dbg_insts.begin(), dbg_insts.end());
+  SmallVector<std::pair<unsigned, MDNode *>, 20> func_MDs;
+  for (auto dbgInst : dbgInstList)
+  {
+    DILocalVariable *DLV = nullptr;
+    if (auto declareInst = dyn_cast<DbgDeclareInst>(dbgInst))
+      DLV = declareInst->getVariable();
+    if (auto valueInst = dyn_cast<DbgValueInst>(dbgInst))
+      DLV = valueInst->getVariable();
+    if (!DLV)
+      continue;
+    if (DLV->getArg() == arg.getArgNo() + 1 && !DLV->getName().str().empty() && DLV->getScope()->getSubprogram() == F->getSubprogram())
+      return DLV->getName().str();
+  }
+
+  return "";
+}
+
+unsigned pdg::dbgutils::computeFieldOffsetInBytes(DIType &dt)
+{
+  return dt.getOffsetInBits() / 8;
+}
+
+std::set<DbgInfoIntrinsic *> pdg::dbgutils::collectDbgInstInFunc(Function &F)
+{
+  std::set<DbgInfoIntrinsic *> ret;
+  for (auto instI = inst_begin(&F); instI != inst_end(&F); ++instI)
+  {
+    if (DbgInfoIntrinsic *dbi = dyn_cast<DbgInfoIntrinsic>(&*instI))
+      ret.insert(dbi);
+  }
+  return ret;
+}
+
+unsigned pdg::dbgutils::computeDeepCopyFields(DIType &dt, bool onlyCountPointer)
+{
+  std::queue<DIType *> typeQueue;
+  std::unordered_set<DIType *> seenTypes;
+  unsigned fieldNum = isPointerType(dt) ? 1 : 0;
+  typeQueue.push(&dt);
+
+  while (!typeQueue.empty())
+  {
+    DIType *curDt = typeQueue.front();
+    typeQueue.pop();
+    DIType *lowestDt = getLowestDIType(*curDt);
+
+    if (lowestDt == nullptr || !isStructType(*lowestDt))
+      continue;
+
+    if (!seenTypes.emplace(lowestDt).second)
+      continue;
+
+    auto diNodeArr = dyn_cast<DICompositeType>(lowestDt)->getElements();
+    for (const auto &node : diNodeArr)
+    {
+      auto *fieldDiType = dyn_cast<DIType>(node);
+      if (onlyCountPointer)
+      {
+        if (isPointerType(*fieldDiType))
+          fieldNum++;
+      }
+      else
+        fieldNum++;
+
+      auto *fieldLowestDiType = getLowestDIType(*fieldDiType);
+      if (fieldLowestDiType && isStructType(*fieldLowestDiType))
+        typeQueue.push(fieldLowestDiType);
+    }
+  }
+  return fieldNum;
+}
+
+unsigned pdg::dbgutils::computeStructTypeStorageSize(DIType &dt, unsigned depth)
+{
+  std::queue<DIType *> typeQueue;
+  std::unordered_set<DIType *> seenTypes;
+  unsigned storageSize = 0;
+  typeQueue.push(&dt);
+
+  while (!typeQueue.empty() && depth > 0)
+  {
+    depth--;
+    DIType *curDt = typeQueue.front();
+    typeQueue.pop();
+    DIType *lowestDt = getLowestDIType(*curDt);
+    if (lowestDt == nullptr || !isStructType(*lowestDt))
+      continue;
+    // prevent recursive type
+    if (!seenTypes.emplace(lowestDt).second)
+      continue;
+    storageSize += lowestDt->getSizeInBits();
+
+    auto diNodeArr = dyn_cast<DICompositeType>(lowestDt)->getElements();
+    for (const auto &node : diNodeArr)
+    {
+      auto *fieldDiType = dyn_cast<DIType>(node);
+      auto *fieldLowestDiType = getLowestDIType(*fieldDiType);
+      if (fieldLowestDiType && isStructType(*fieldLowestDiType))
+        typeQueue.push(fieldLowestDiType);
+    }
+  }
+  return storageSize;
+}
+
+unsigned pdg::dbgutils::computeStructFieldNum(llvm::DIType &dt)
+{
+  if (!isStructType(dt))
+    return -1;
+  auto diNodeArr = dyn_cast<DICompositeType>(&dt)->getElements();
+  return diNodeArr.size();
 }

@@ -2,6 +2,7 @@
 #define DATADEPENDENCYGRAPH_H_
 #include "Graph.hh"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "PDGCallGraph.hh"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 
@@ -25,10 +26,13 @@ namespace pdg
     void addRAWEdges(llvm::Instruction &inst);
     void addRAWEdgesUnderapproximate(llvm::Instruction &inst);
     void addAliasEdges(llvm::Instruction &inst);
-    llvm::AliasResult queryAliasUnderApproximate(llvm::Value &v1, llvm::Value &v2);
+    void addStoreToEdge(llvm::StoreInst &si);
+    void addEqualObjEdge(llvm::LoadInst &li);
+    llvm::AliasResult queryMustAlias(llvm::Value &v1, llvm::Value &v2);
 
   private:
     llvm::MemoryDependenceResults *_mem_dep_res;
+    llvm::Module *_module;
   };
 } // namespace pdg
 #endif

@@ -4,6 +4,7 @@
 #include "PDGEdge.hh"
 #include "PDGEnums.hh"
 #include <set>
+#include <unordered_set>
 #include <iterator>
 #include <queue>
 
@@ -20,59 +21,69 @@ namespace pdg
     using iterator = EdgeIterator<Node>;
     using const_iterator = EdgeIterator<Node>;
 
-    Node(GraphNodeType node_type)
+    Node(GraphNodeType nodeTy)
     {
       _val = nullptr;
-      _node_type = node_type;
+      _nodeType = nodeTy;
       _is_visited = false;
       _func = nullptr;
-      _node_di_type = nullptr;
+      _nodeDt = nullptr;
     }
-    Node(llvm::Value &v, GraphNodeType node_type)
+    Node(llvm::Value &v, GraphNodeType nodeTy)
     {
       _val = &v;
       if (auto inst = llvm::dyn_cast<llvm::Instruction>(&v))
         _func = inst->getFunction();
+      else if (auto func = llvm::dyn_cast<llvm::Function>(&v))
+        _func = func;
       else
         _func = nullptr;
-      _node_type = node_type;
+      _nodeType = nodeTy;
       _is_visited = false;
-      _node_di_type = nullptr;
+      _nodeDt = nullptr;
     }
     
     void addInEdge(Edge &e) { _in_edge_set.insert(&e); }
     void addOutEdge(Edge &e) { _out_edge_set.insert(&e); }
     EdgeSet &getInEdgeSet() { return _in_edge_set; }
     EdgeSet &getOutEdgeSet() { return _out_edge_set; }
-    void setNodeType(GraphNodeType node_type) { _node_type = node_type; }
-    GraphNodeType getNodeType() const { return _node_type; }
+    void setNodeType(GraphNodeType nodeTy) { _nodeType = nodeTy; }
+    GraphNodeType getNodeType() const { return _nodeType; }
     bool isVisited() { return _is_visited; }
     llvm::Function *getFunc() const { return _func; }
     void setFunc(llvm::Function &f) { _func = &f; }
     llvm::Value *getValue() { return _val; }
-    llvm::DIType *getDIType() const { return _node_di_type; }
-    void setDIType(llvm::DIType &di_type) { _node_di_type = &di_type; }
-    void addNeighbor(Node &neighbor, EdgeType edge_type);
+    llvm::DIType *getDIType() const { return _nodeDt; }
+    void setDIType(llvm::DIType &di_type) { _nodeDt = &di_type; }
+    void addNeighbor(Node &neighbor, EdgeType edgeTy);
     EdgeSet::iterator begin() { return _out_edge_set.begin(); }
     EdgeSet::iterator end() { return _out_edge_set.end(); }
     EdgeSet::const_iterator begin() const { return _out_edge_set.begin(); }
     EdgeSet::const_iterator end() const { return _out_edge_set.end(); }
     std::set<Node *> getInNeighbors();
-    std::set<Node *> getInNeighborsWithDepType(EdgeType edge_type);
+    std::set<Node *> getInNeighborsWithDepType(EdgeType edgeTy);
     std::set<Node *> getOutNeighbors();
     std::set<Node *> getOutNeighborsWithDepType(EdgeType edge_type);
     bool hasInNeighborWithEdgeType(Node &n, EdgeType edge_type);
     bool hasOutNeighborWithEdgeType(Node &n, EdgeType edge_type);
+    std::set<Node *> getNeighborsWithDepType(std::set<EdgeType> edgeTypes);
+    bool isAddrVarNode();
+    bool isTaint() { return _isTainted; }
+    void setTaint() { _isTainted = true; }
+    Node* getAbstractTreeNode();
+    Node* getAbstractTypeTreeNode(); // shared field nodes is connected to global type tree with VAL_DEP
     virtual ~Node() = default;
+    virtual void dump() { llvm::errs() << _func->getName() << " - " << *_val << "\n"; }
 
   protected:
     llvm::Value *_val;
     llvm::Function *_func;
     bool _is_visited;
+    bool _isTainted = false;
     EdgeSet _in_edge_set;
     EdgeSet _out_edge_set;
-    GraphNodeType _node_type;
-    llvm::DIType *_node_di_type;
+    GraphNodeType _nodeType;
+    llvm::DIType *_nodeDt;
   };
 
   // used to iterate through all neighbors (used in dot pdg printer)

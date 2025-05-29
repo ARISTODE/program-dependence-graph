@@ -31,7 +31,24 @@ namespace llvm
       std::string str;
       raw_string_ostream OS(str);
 
-
+      switch (node_type)
+      {
+      case pdg::GraphNodeType::FUNC_ENTRY:
+        return "<<ENTRY>> " + func->getName().str();
+      case pdg::GraphNodeType::INST_OTHER:
+      case pdg::GraphNodeType::INST_FUNCALL:
+      case pdg::GraphNodeType::INST_RET:
+      case pdg::GraphNodeType::INST_BR:
+      {
+        if (Instruction *i = dyn_cast<Instruction>(node_val))
+        {
+          OS << *i;
+          return OS.str();
+        }
+      }
+      default:
+        break;
+      }
       return "";
     }
 
@@ -212,13 +229,17 @@ namespace llvm
 
     std::string getDDGEdgeAttributes(pdg::Node::iterator edge_iter)
     {
-      pdg::EdgeType edge_type = edge_iter.getEdgeType();
-      switch (edge_type)
+      pdg::EdgeType edgeTy = edge_iter.getEdgeType();
+      switch (edgeTy)
       {
       case pdg::EdgeType::DATA_DEF_USE:
         return "style=dotted,label = \"{D_DEF_USE}\" ";
       case pdg::EdgeType::DATA_ALIAS:
         return "style=dotted,label = \"{D_ALIAS}\" ";
+      case pdg::EdgeType::PARAMETER_IN:
+        return "style=dashed, color=\"blue\", label = \" {p_i} \"";
+      case pdg::EdgeType::PARAMETER_OUT:
+        return "style=dashed, color=\"blue\"";
       case pdg::EdgeType::DATA_RAW:
         return "style=dotted,label = \"{D_RAW}\" ";
       case pdg::EdgeType::DATA_RET:
