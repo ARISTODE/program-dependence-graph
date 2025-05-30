@@ -5,6 +5,7 @@
 #include "PDGCallGraph.hh"
 #include "DataDependencyGraph.hh"
 #include "ControlDependencyGraph.hh"
+#include "PTAWrapper.hh"
 
 namespace pdg
 {

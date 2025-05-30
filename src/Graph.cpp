@@ -278,10 +278,12 @@ void pdg::ProgramGraph::buildFunctionInstructions(Function &F, FunctionWrapper *
     func_w->addInst(*instIter);
     addNode(*n);
     if (CallInst *ci = dyn_cast<CallInst>(&*instIter)) {
-      auto called_func = pdgutils::getCalledFunc(*ci);
+      // Minimal replacement for pdgutils::getCalledFunc
+      auto called_func = ci->getCalledFunction(); // pdgutils::getCalledFunc(*ci);
       if (called_func != nullptr) {
         std::string calleeName = called_func->getName().str();
-        calleeName = pdgutils::stripFuncNameVersionNumber(calleeName);
+        // Minimal replacement for pdgutils::stripFuncNameVersionNumber - just use the name as-is
+        // calleeName = pdgutils::stripFuncNameVersionNumber(calleeName);
       }
     }
   }
@@ -302,7 +304,8 @@ void pdg::ProgramGraph::buildCallGraphAndCallSites(Module &M) {
 
 void pdg::ProgramGraph::handleCallSites(Module &M, CallInst *ci) {
   auto &call_g = PDGCallGraph::getInstance();
-  auto called_func = pdgutils::getCalledFunc(*ci);
+  // Minimal replacement for pdgutils::getCalledFunc
+  auto called_func = ci->getCalledFunction(); // pdgutils::getCalledFunc(*ci);
   if (called_func == nullptr) {
     auto ind_call_candidates = call_g.getIndirectCallCandidates(*ci, M);
     if (ind_call_candidates.size() > 0)
@@ -634,7 +637,8 @@ void pdg::GenericGraph::computePathsHelper(pdg::GenericGraph::PathVecs &path_vec
 
 bool pdg::ProgramGraph::isAnnotationCallInst(Instruction &inst) {
   if (CallInst *ci = dyn_cast<CallInst>(&inst)) {
-    Function* f = pdgutils::getCalledFunc(*ci);
+    // Minimal replacement for pdgutils::getCalledFunc
+    Function* f = ci->getCalledFunction(); // pdgutils::getCalledFunc(*ci);
     if (f == nullptr)
       return false;
     std::string called_func_name = f->getName().str();

@@ -24,7 +24,8 @@ namespace pdg
       CallWrapper(llvm::CallInst& ci)
       {
         _call_inst = &ci;
-        _called_func = pdgutils::getCalledFunc(ci);
+        // Minimal replacement for pdgutils::getCalledFunc
+        _called_func = ci.getCalledFunction(); // pdgutils::getCalledFunc(ci);
         for (auto arg_iter = ci.arg_begin(); arg_iter != ci.arg_end(); arg_iter++)
         {
           _argList.push_back(*arg_iter);

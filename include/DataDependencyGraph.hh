@@ -3,6 +3,7 @@
 #include "Graph.hh"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "PDGCallGraph.hh"
+#include "PTAWrapper.hh"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 

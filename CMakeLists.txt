@@ -44,6 +44,7 @@ include_directories("src")
 # include_directories("sea-dsa/include")
 
 file(GLOB SOURCES "src/*.cpp")
+list(APPEND SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/PDGGlobals.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/NesCheck.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/BoundaryPolicyGeneration.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/AtomicRegionAnalysis.cpp")
@@ -68,9 +69,13 @@ list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/FunctionWrapper_backup
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/Graph_backup.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ProgramDependencyGraph_backup.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/DataAccessAnalysis.cpp")
-list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/DataDependencyGraph.cpp")
-list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/PTAWrapper.cpp")
-list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ProgramDependencyGraph.cpp")
+# Re-enable DataDependencyGraph.cpp for data dependency analysis
+# list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/DataDependencyGraph.cpp")
+# Re-enable PTAWrapper.cpp with stub implementation
+# list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/PTAWrapper.cpp")
+# Re-enable ProgramDependencyGraph.cpp for PDG analysis
+# list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ProgramDependencyGraph.cpp")
+# Temporarily disable PDGUtils.cpp due to LLVM 19 compatibility issues
 list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/PDGUtils.cpp")
 
 file(GLOB HEADERS "include/*.hh")

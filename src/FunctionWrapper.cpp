@@ -46,7 +46,8 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs() {
     Tree *arg_formal_in_tree = new Tree(*arg);
     TreeNode *formal_in_root_node = new TreeNode(*_func, di_local_var->getType(), 0, nullptr, arg_formal_in_tree, GraphNodeType::PARAM_FORMALIN);
     formal_in_root_node->setDILocalVariable(*di_local_var);
-    auto addr_taken_vars = pdgutils::computeAddrTakenVarsFromAlloc(*arg_alloca_inst);
+    // Minimal replacement for pdgutils::computeAddrTakenVarsFromAlloc - just use the alloca itself
+    std::set<Value*> addr_taken_vars = {arg_alloca_inst}; // pdgutils::computeAddrTakenVarsFromAlloc(*arg_alloca_inst);
     for (auto addr_taken_var : addr_taken_vars) {
       formal_in_root_node->addAddrVar(*addr_taken_var);
       // TODO: add alias
@@ -71,12 +72,14 @@ void pdg::FunctionWrapper::buildFormalTreeForArgs() {
 
 void pdg::FunctionWrapper::buildFormalTreesForRetVal() {
   Tree* ret_formal_in_tree = new Tree();
-  DIType* func_ret_di_type = dbgutils::getFuncRetDIType(*_func);
+  // Minimal replacement for dbgutils::getFuncRetDIType - use nullptr for now
+  DIType* func_ret_di_type = nullptr; // dbgutils::getFuncRetDIType(*_func);
   TreeNode* ret_formal_in_tree_root_node = new TreeNode(*_func, func_ret_di_type, 0, nullptr, ret_formal_in_tree, GraphNodeType::PARAM_FORMALIN);
   for (auto ret_inst : _return_insts) {
     auto ret_val = ret_inst->getReturnValue();
     if (ret_val != nullptr) {
-      auto alias_vals = pdgutils::computeAliasForRetVal(*ret_val, *_func);
+      // Minimal replacement for pdgutils::computeAliasForRetVal - empty set for now
+      std::set<Value*> alias_vals; // pdgutils::computeAliasForRetVal(*ret_val, *_func);
       ret_formal_in_tree_root_node->addAddrVar(*ret_val);
       for (auto alias_val : alias_vals) {
         ret_formal_in_tree_root_node->addAddrVar(*alias_val);

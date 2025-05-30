@@ -27,7 +27,8 @@ void pdg::PDGCallGraph::build(Module &M)
     {
       if (CallInst *ci = dyn_cast<CallInst>(&*inst_i))
       {
-        auto called_func = pdgutils::getCalledFunc(*ci);
+        // Minimal replacement for pdgutils::getCalledFunc when PDGUtils is disabled
+        Function *called_func = ci->getCalledFunction();
         // direct calls
         if (called_func != nullptr)
         {
@@ -327,21 +328,21 @@ void pdg::PDGCallGraph::setupDriverFuncs()
 bool pdg::PDGCallGraph::isExcludeFunc(Function &F)
 {
   auto funcName = F.getName().str();
-  funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+  // Minimal replacement for pdgutils::stripFuncNameVersionNumber - just use the name as-is
   return (_exclude_func_names.find(funcName) != _exclude_func_names.end());
 }
 
 bool pdg::PDGCallGraph::isExportedFunc(Function &F)
 {
   auto funcName = F.getName().str();
-  funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+  // Minimal replacement for pdgutils::stripFuncNameVersionNumber - just use the name as-is
   return (_exported_func_names.find(funcName) != _exported_func_names.end());
 }
 
 bool pdg::PDGCallGraph::isDriverFunc(Function &F)
 {
   auto funcName = F.getName().str();
-  funcName = pdgutils::stripFuncNameVersionNumber(funcName);
+  // Minimal replacement for pdgutils::stripFuncNameVersionNumber - just use the name as-is
   return (_driver_func_names.find(funcName) != _driver_func_names.end()); }
 
 bool pdg::PDGCallGraph::findPathDFS(Node *src, Node *dst, std::vector<Node *> &path, std::unordered_set<Node *> &visited)
@@ -417,7 +418,8 @@ std::string pdg::PDGCallGraph::generatePathStr(const std::vector<Node *> &path)
     // Print the node's function name
     if (Function *f = dyn_cast<Function>(node->getValue()))
     {
-      callPathStr = callPathStr + f->getName().str() + " ( " + pdgutils::getFuncSourceLocStr(*f) + " )";
+      // Minimal replacement for pdgutils::getFuncSourceLocStr - just use function name
+      callPathStr = callPathStr + f->getName().str() + " ( " + f->getName().str() + " )";
     }
 
     // If it's not the last node in the path, add an arrow (->)
@@ -433,7 +435,8 @@ void pdg::PDGCallGraph::setupBuildFuncNodes(Module &M)
 {
   // setup white list functions required for PDG construction
   std::set<std::string> whiteListFuncNames;
-  pdgutils::readLinesFromFile(whiteListFuncNames, "boundaryAPI");
+  // Minimal replacement for pdgutils::readLinesFromFile - empty for now
+  // pdgutils::readLinesFromFile(whiteListFuncNames, "boundaryAPI");
   for (auto funcName : whiteListFuncNames)
   {
     auto func = M.getFunction(StringRef(funcName));

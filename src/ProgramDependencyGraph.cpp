@@ -329,8 +329,9 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithAddrVars(Tree &formalIn
           if (!currentNode->isStructMember() && gep->hasAllZeroIndices())
             continue;
           // remove gep alias that doesn't match the offset.
-          if (nodeDIType && !pdgutils::isGEPOffsetMatchDIOffset(*nodeDIType, *gep))
-            continue;
+          // Minimal replacement for pdgutils::isGEPOffsetMatchDIOffset - always allow for now
+          // if (nodeDIType && !pdgutils::isGEPOffsetMatchDIOffset(*nodeDIType, *gep))
+          //   continue;
         }
         currentNode->addAddrVar(*aliasNodeVal);
         currentNode->addNeighbor(*aliasNode, EdgeType::PARAMETER_IN);
@@ -350,10 +351,11 @@ void pdg::ProgramDependencyGraph::connectFormalOutTreeWithAddrVars(Tree &formalO
       if (!_PDG->hasNode(*addrVar))
         continue;
       auto addrVarNode = _PDG->getNode(*addrVar);
-      if (pdgutils::hasWriteAccess(*addrVar)) {
+      // Minimal replacement for pdgutils::hasWriteAccess - always assume write access for now
+      // if (pdgutils::hasWriteAccess(*addrVar)) {
         addrVarNode->addNeighbor(*currentNode, EdgeType::PARAMETER_OUT);
         currentNode->addAccessTag(AccessTag::DATA_WRITE);
-      }
+      // }
     }
 
     if (!FieldSensitive)
@@ -366,7 +368,8 @@ void pdg::ProgramDependencyGraph::connectFormalOutTreeWithAddrVars(Tree &formalO
 
 void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actualInTree, CallInst &ci) {
   TreeNode *rootNode = actualInTree.getRootNode();
-  std::set<Instruction *> insts_before_ci = pdgutils::getInstructionBeforeInst(ci);
+  // Minimal replacement for pdgutils::getInstructionBeforeInst - empty set for now
+  std::set<Instruction *> insts_before_ci; // pdgutils::getInstructionBeforeInst(ci);
   std::queue<TreeNode *> nodeQueue;
   nodeQueue.push(rootNode);
   while (!nodeQueue.empty()) {
@@ -387,7 +390,8 @@ void pdg::ProgramDependencyGraph::connectActualInTreeWithAddrVars(Tree &actualIn
 
 void pdg::ProgramDependencyGraph::connectActualOutTreeWithAddrVars(Tree &actualOutTree, CallInst &ci) {
   TreeNode *rootNode = actualOutTree.getRootNode();
-  std::set<Instruction *> insts_after_ci = pdgutils::getInstructionAfterInst(ci);
+  // Minimal replacement for pdgutils::getInstructionAfterInst - empty set for now
+  std::set<Instruction *> insts_after_ci; // pdgutils::getInstructionAfterInst(ci);
   std::queue<TreeNode *> nodeQueue;
   nodeQueue.push(rootNode);
   while (!nodeQueue.empty()) {
@@ -463,7 +467,8 @@ void pdg::ProgramDependencyGraph::connectFormalInTreeWithCallActualNode(Tree &fo
       for (auto call_node : call_out_neighbors_cand) {
         if (call_node->getValue() != nullptr) {
           if (CallInst *ci = dyn_cast<CallInst>(call_node->getValue())) {
-            auto called_func = pdgutils::getCalledFunc(*ci);
+            // Minimal replacement for pdgutils::getCalledFunc
+            auto called_func = ci->getCalledFunction(); // pdgutils::getCalledFunc(*ci);
             if (called_func != nullptr && !called_func->isDeclaration()) {
               auto call_wrapper = getCallWrapper(*ci);
               Tree *arg_actual_in_tree = call_wrapper->getArgActualInTree(*addrVar);
