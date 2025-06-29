@@ -159,9 +159,9 @@ namespace pdg
     void addAccessForAllNodes(AccessTag accTag);
 
   private:
-    llvm::Value *_baseVal;
-    TreeNode *_rootNode;
-    int _size;
+    llvm::Value *_baseVal = nullptr;
+    TreeNode *_rootNode = nullptr;
+    int _size = 0;
   };
 } // namespace pdg
 
