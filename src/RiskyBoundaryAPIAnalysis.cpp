@@ -51,12 +51,82 @@ bool pdg::RiskyBoundaryAPIAnalysis::runOnModule(Module &M)
   // analyze the risky kernel boundary APIs
   nlohmann::ordered_json riskyAPIJsonObjs = nlohmann::json::array();
   analyzeRiskyBoundaryKernelAPIs(riskyAPIJsonObjs);
+  std::set<Function *> riskyInterfaces;
+  countSACViolations(riskyInterfaces);
+  nlohmann::ordered_json SACRiskyJsonObj;
+  std::string riskyInterfaceNameStr = "";
+  for (auto riskyI : riskyInterfaces)
+  {
+    riskyInterfaceNameStr = riskyInterfaceNameStr + " | "  + riskyI->getName().str();
+  }
+  SACRiskyJsonObj["sac interface num"] = riskyInterfaces.size();
+  SACRiskyJsonObj["sac interface str"] = riskyInterfaceNameStr;
+  errs() << SACRiskyJsonObj.dump(2) << "\n";
   taintutils::printJsonToFile(riskyAPIJsonObjs, "RiskyBoundaryAPI.json");
   auto classificationJson = countRiskyAPIClasses(riskyAPIJsonObjs);
   taintutils::printJsonToFile(classificationJson, "BoundaryAPICounts.json");
 
   return false;
 }
+
+// ---------------- Detect protocol violation -------------------
+
+void pdg::RiskyBoundaryAPIAnalysis::countSACViolations(std::set<Function *> &riskyInterfaces)
+{
+  for (auto boundaryFunc : _SDA->getBoundaryFuncs())
+  {
+    // only check for kernel functions
+    if (_SDA->isDriverFunc(*boundaryFunc))
+      continue;
+
+    // check if any spin_lock holding interfaces are invoked
+    if (isSpinlockInterface(*boundaryFunc))
+      riskyInterfaces.insert(boundaryFunc);
+
+    // check if any sleeapable functions are invoked
+    if (isSleepableInterface(*boundaryFunc))
+      riskyInterfaces.insert(boundaryFunc);
+  }
+}
+
+bool pdg::RiskyBoundaryAPIAnalysis::isSpinlockInterface(Function &F)
+{
+  static std::set<std::string> spinLockFuncs =
+      {
+          "_raw_spin_lock",
+          "_raw_spin_lock_irq"
+          "_raw_spin_lock_irqsave"};
+
+  std::string funcName = F.getName().str();
+  return (spinLockFuncs.find(funcName) != spinLockFuncs.end());
+}
+
+bool pdg::RiskyBoundaryAPIAnalysis::isSleepableInterface(Function &F)
+{
+  static std::set<std::string> sleepFuncs = {
+      "kmalloc",
+      "kzalloc"};
+  // check if the interface function can invoke kmalloc, kzalloc, with incorrect flag
+  auto &callGraph = PDGCallGraph::getInstance();
+  auto funcNode = callGraph.getNode(F);
+  if (!funcNode)
+    return false;
+  
+  auto transFuncNodes = callGraph.computeTransitiveClosure(*funcNode);
+  for (auto fNode : transFuncNodes)
+  {
+    if (auto f = dyn_cast<Function>(fNode->getValue()))
+    {
+      auto fName = f->getName().str();
+      if (sleepFuncs.find(fName) != sleepFuncs.end())
+        return true;
+    }
+  }
+
+  return false;
+}
+
+// ------------------------------------------------
 
 // propagate taints through parameters passed across isolation boundary
 // this allowuing us to track the path conditions that are controlled by the attacker
@@ -526,7 +596,6 @@ nlohmann::ordered_json pdg::RiskyBoundaryAPIAnalysis::countRiskyAPIClasses(const
 
   return outputJson;
 }
-
 
 static RegisterPass<pdg::RiskyBoundaryAPIAnalysis>
     RiskyFieldAnalysis("risky-boundary", "KSplit Taint Analysis", false, true);

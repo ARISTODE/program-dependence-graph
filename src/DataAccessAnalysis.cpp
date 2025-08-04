@@ -48,7 +48,7 @@ bool pdg::DataAccessAnalysis::runOnModule(Module &M)
   unsigned total_num_funcs = 0;
   // intra-procedural analysis
   nlohmann::json moduleJsonObj;
-  for (auto f : _PDG->interfaceFuncs)
+  for (auto f : _SDA->getBoundaryFuncs())
   {
     Function &F = *f;
     if (F.isDeclaration())
@@ -463,14 +463,8 @@ void pdg::DataAccessAnalysis::computeDataAccessTagsForArrayVal(Value &val, std::
 void pdg::DataAccessAnalysis::computeDataAccessForTreeNode(TreeNode &treeNode, bool isGlobalTreeNode, bool isRet)
 {
   auto func = treeNode.getFunc();
-  // if (_transitiveBoundaryFuncs.find(func) == _transitiveBoundaryFuncs.end())
-  //   return;
   if (!treeNode.getDIType())
   {
-    // errs() << "[Warning]: processing tree node with null DIType in func " <<
-    // func->getName().str() << " - depth " << treeNode.getDepth()
-    // << " - isRet " << isRet
-    // << " parent var name " << treeNode.getParentNode()->getSrcHierarchyName() << "\n";
     return;
   }
 

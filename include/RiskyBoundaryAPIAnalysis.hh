@@ -45,6 +45,9 @@ namespace pdg
     void analyzeRiskyBoundaryKernelAPIs(nlohmann::ordered_json &riskyAPIJsonObjs);
     void handleDirectRiskyAPI(llvm::Function *boundaryFunc, nlohmann::ordered_json &riskyAPIJsonObjs, unsigned &caseID);
     void handleTransitiveRiskyAPI(llvm::Function *boundaryFunc, nlohmann::ordered_json &riskyAPIJsonObjs, unsigned &caseID);
+    void countSACViolations(std::set<llvm::Function *> &riskyInterfaces);
+    bool isSpinlockInterface(llvm::Function &F);
+    bool isSleepableInterface(llvm::Function &F);
 
     // counting related methods
     nlohmann::ordered_json countRiskyAPIClasses(const nlohmann::ordered_json &riskyAPIJsonObjs);

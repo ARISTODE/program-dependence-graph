@@ -3,21 +3,19 @@ using namespace llvm;
 
 void pdg::KSplitStats::printDataStats()
 {
-  _stats_file.open("logs/KSplitStats");
-  _stats_file << "Driver interface read fields: " << _drv_read_fields << "\n";
-  _stats_file << "Num fields deep copying: " << _fieldsDeepCopyNum << "\n";
-  _stats_file << "Filtered Fields: " << (_fieldsDeepCopyNum - _drv_read_fields) << "\n";
+  _stats_file.open("logs/SoK_table1");
   // // table 1.a
   // _stats_file << "=============== Interface Calls ================\n";
-  // _stats_file << "driver to kernel call: " << _driver_to_kernel_func_call << "\n";
-  // _stats_file << "kernel to driver call: " << _kernel_to_driver_func_call << "\n";
-  // _stats_file << "total funcs size: " << _total_func_size << "\n";
+  _stats_file << "driver to kernel call: " << _driver_to_kernel_func_call << "\n";
+  _stats_file << "kernel to driver call: " << _kernel_to_driver_func_call << "\n";
+  _stats_file << "total funcs size: " << _total_func_size << "\n";
   // // table 1.b
-  // _stats_file << "=============== Fields Marshaled Through ================\n";
-  // _stats_file << "num fields deep copying: " << _fieldsDeepCopyNum << "\n";
-  // _stats_file << "num fields field access analysis: " << _fields_field_analysis << "\n";
-  // _stats_file << "num fields shared_analysis: " << _fields_shared_analysis << "\n";
-  // _stats_file << "num fields removed by boundary opt: " << (_fields_shared_analysis - _fields_removed_boundary_opt) << "\n";
+  _stats_file << "=============== Fields Marshaled Through ================\n";
+  _stats_file << "num fields deep copying: " << _fieldsDeepCopyNum << "\n";
+  _stats_file << "num fields field access analysis: " << _fields_field_analysis << "\n";
+  _stats_file << "num fields shared_analysis: " << _fields_shared_analysis << "\n";
+  _stats_file << "num fields removed by boundary opt: " << (_fields_shared_analysis - _fields_removed_boundary_opt) << "\n";
+  _stats_file << "num drv read-only fields: " << _drv_read_fields << "\n";
 
   // _stats_file << "======================================================\n";
   // _stats_file << "\t Union: " << (_total_union_num - _shared_union_num) << " / " << _shared_union_num << "\n";
@@ -519,7 +517,7 @@ void pdg::KSplitStats::printRiskyPatterns()
       {"Risky index taint field num", riskyIndexFieldTaint},
       {"Risky cond taint field num", riskyCondFieldTaint},
       {"Risky sensitive API taint field num", riskyFieldUsedInSensitiveAPITaint}
-      };
+  };
 
   for (const auto &pattern : patterns) {
     std::ostringstream oss;

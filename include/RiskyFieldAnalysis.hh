@@ -1,6 +1,6 @@
 #ifndef RISKY_FIELD_ANALYSIS_H_
 #define RISKY_FIELD_ANALYSIS_H_
-#include "SharedDataAnalysis.hh"
+#include "DataAccessAnalysis.hh"
 #include "ControlDependencyGraph.hh"
 #include "TaintUtils.hh"
 #include "json.hpp"
@@ -15,52 +15,90 @@ namespace pdg
             void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
             llvm::StringRef getPassName() const override { return "Risky Field Analysis"; }
             bool runOnModule(llvm::Module &M) override;
-            void propagateTaints(std::set<llvm::Function *> &kernelInterfaceAPIs);
-            void classifyRiskySharedFields();
-            void classifyRiskyBoundaryParams(std::set<llvm::Function *> &kernelInterfaceAPIs);
-            void classifyDrvCallBackRetval();
 
-            bool isDriverControlledField(TreeNode &tn, bool &hasDrvRead);
-            llvm::Function *canReachSensitiveOperations(Node &srcFuncNode);
-            void classifyRiskyFieldDirectUse(TreeNode &tn);
-            void classifyRiskyFieldTaint(TreeNode &tn);
+            // Core analysis functions
+            void propagateTaints(std::set<llvm::Function *> &kernelInterfaceAPIs);
+            void propagateTaintsFromSharedStructs();
+            void propagateTaintsFromKernelInterfaces(std::set<llvm::Function *> &kernelInterfaceAPIs);
+            void classifyRiskyBoundaryParams(std::set<llvm::Function *> &kernelInterfaceAPIs);
+            void classifyRetErrorCode(std::set<llvm::Function *> &kernelInterfaceAPIs);
+
+            // Classification helpers
             void classifyRiskyField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs);
             bool classifyRiskyPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs);
             bool classifyRiskyNonPtrField(TreeNode &tn, std::set<RiskyDataType> &riskyClassifications, nlohmann::ordered_json &taintJsonObjs);
-            // helper funcs
-            bool hasUpdateInDrv(TreeNode &n);
-            std::unordered_set<Node *> findNodesTaintedByEdges(Node &src, std::set<EdgeType> &edgeTypes, bool isBackward = false);
-            bool canParamReachRetVal(FunctionWrapper &fw);
-            // print helpers
-            void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category, TreeNode &treeNode, llvm::Function &func, llvm::Instruction &inst);
-            void printTaintTrace(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_fd_ostream &OS);
-            void printJsonToFile(nlohmann::ordered_json& json, std::string logFileName);
-            void getTraceStr(llvm::Instruction &source, llvm::Instruction &sink, std::string fieldHierarchyName, std::string flowType, llvm::raw_string_ostream &OS);
-            void printFieldDirectUseClassification(llvm::raw_fd_ostream &OS);
-            void printFieldClassificationTaint();
-            void printTaintFieldInfo();
-            // functions for generating the trace object
+            
+            // Analysis helpers
+            bool isDriverControlledField(TreeNode &tn, bool &hasDrvRead);
+            bool isUsedInSensitiveContext(Node &node, std::string &senOpName);
             bool isDstInstPrecedeOfSrcInst(Node& srcNode, Node &dstNode);
-            void populateInterfaceParamTraceInfo(Node &paramTreeNode, nlohmann::ordered_json &traceJsonObj, llvm::Instruction &sinkInst);
-            void populateDrvUpdateLocations(TreeNode &treeNode, nlohmann::ordered_json &traceJsonObj, llvm::Instruction &sinkInst);
-            void populatePathChecksInfo(std::vector<std::pair<Node *, Edge *>> &taintPath, nlohmann::ordered_json &traceJsonObj);
-            void populateDirectPathChecksInfo(std::vector<std::pair<Node *, Edge *>> &taintPath, Node &srcNode, Node &dstNode, nlohmann::ordered_json &traceObj);
-            nlohmann::ordered_json generateTraceJsonObj(Node &srcNode, Node &dstNode, std::string accessPathStr, std::string taintType, unsigned caseId, std::set<EdgeType> &taintEdges, TreeNode *typeTreeNode = nullptr);
+            bool hasUpdateInDrv(TreeNode &n);
+            bool canParamReachRetVal(FunctionWrapper &fw);
+            llvm::Function *canReachSensitiveOperations(Node &srcFuncNode);
+            std::unordered_set<Node *> findNodesTaintedByEdges(Node &src, const std::set<EdgeType> &edgeTypes, bool isBackward = false);
+
+            // Processing helpers
+            void handleDirectRiskyAPI(llvm::Function &func, FunctionWrapper &funcWrapper);
+            void processArgumentTree(Tree &argTree, llvm::StringRef funcName);
+            void recordUnclassifiedField(TreeNode &tn);
+            void addClassification(RiskyDataType type, std::set<RiskyDataType> &classifications,
+                                 nlohmann::ordered_json &jsonObj, const std::string &accessPath,
+                                 const std::string &details, Node &srcNode, Node &dstNode,
+                                 const std::set<EdgeType> &edges);
+
+            // Error code analysis
+            bool analyzeReturnValueUsage(TreeNode &retRootNode, llvm::Function &func,
+                                       const std::set<EdgeType> &taintEdges,
+                                       nlohmann::ordered_json &retTaintJsonObjs,
+                                       unsigned &numOfDrvIFuncRetEC,
+                                       unsigned &numOfMissingEC);
+            void recordMissingErrorCheck(llvm::Function &func, TreeNode &retRootNode,
+                                       nlohmann::ordered_json &retTaintJsonObjs);
+
+            // Statistics and trace generation
             void updateRiskyFieldCounters(std::set<RiskyDataType> &riskyDataTypes);
             void updateRiskyParamCounters(std::set<RiskyDataType> &riskyDataTypes);
+            void updateClassificationStats(TreeNode &node, const std::set<RiskyDataType> &classifications,
+                                        const std::string &structTypeName);
+            void updateStructStats(const std::string &structTypeName, unsigned numFields,
+                                 unsigned numKRDUFields);
+            void populateInterfaceParamTraceInfo(Node &paramTreeNode, nlohmann::ordered_json &traceJsonObj,
+                                               llvm::Instruction &sinkInst);
+            void populateDrvUpdateLocations(TreeNode &treeNode, nlohmann::ordered_json &traceJsonObj,
+                                          llvm::Instruction &sinkInst);
+            void populatePathChecksInfo(std::vector<std::pair<Node *, Edge *>> &taintPath,
+                                      nlohmann::ordered_json &traceJsonObj);
+            void populateDirectPathChecksInfo(std::vector<std::pair<Node *, Edge *>> &taintPath,
+                                            Node &srcNode, Node &dstNode,
+                                            nlohmann::ordered_json &traceObj);
+            nlohmann::ordered_json generateTraceJsonObj(Node &srcNode, Node &dstNode,
+                                                       std::string accessPathStr, std::string taintType,
+                                                       unsigned caseId, const std::set<EdgeType> &taintEdges,
+                                                       TreeNode *typeTreeNode = nullptr);
+
+            // Output functions
+            void printFieldClassificationTaint();
             void printBoundaryStructFieldsClassificationStats();
+            void printRiskyFieldInfo(llvm::raw_ostream &os, const std::string &category,
+                                   TreeNode &treeNode, llvm::Function &func,
+                                   llvm::Instruction &inst);
+
+            // Accessors
             SharedDataAnalysis *getSDA() { return _SDA; }
 
         private:
             llvm::Module *_module;
             ProgramGraph *_PDG;
+            DataAccessAnalysis *_DAA;
             SharedDataAnalysis *_SDA;
             PDGCallGraph *_callGraph;
-            // store taint source/sink pair
+
+            // Taint tracking
             std::set<std::tuple<Node *, Node *, std::string, std::string>> _taintTuples;
-            std::set<std::tuple<Node *, Node *, std::string, std::string>> _structTaintTuples; // used to store taint for struct field
+            std::set<std::tuple<Node *, Node *, std::string, std::string>> _structTaintTuples;
             unsigned _caseID = 0;
-            // stats counting
+
+            // Statistics
             unsigned _numKernelReadDriverUpdatedFields = 0;
             unsigned _numSharedFields = 0;
             unsigned _numBoundaryArg = 0;
@@ -75,7 +113,8 @@ namespace pdg
             unsigned _numControlTaintTrace = 0;
             unsigned _numDirectControlTaintTrace = 0;
             unsigned _numTotalTaintTrace = 0;
-            // output file
+
+            // Output tracking
             std::unordered_map<RiskyDataType, int> totalRiskyFieldCounters;
             std::unordered_map<RiskyDataType, int> totalRiskyParamCounters;
             nlohmann::ordered_json taintTracesJson = nlohmann::ordered_json::array();
@@ -84,7 +123,6 @@ namespace pdg
             std::unordered_map<std::string, nlohmann::ordered_json> _sharedStructTypeRiskyCounts;
             std::unordered_map<std::string, std::set<std::string>> _sharedStructClassifiedFields;
             std::unordered_map<std::string, std::map<RiskyDataType, std::set<std::string>>> _fieldRiskyTypeMap;
-            // mapping struct, to risky classification, and the fields in those risky classification
     };
 }
 

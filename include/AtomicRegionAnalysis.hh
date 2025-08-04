@@ -1,11 +1,10 @@
 #ifndef ATOMICREGIONANALYSIS_H_
 #define ATOMICREGIONANALYSIS_H_
-#include "LLVMEssentials.hh"
-#include "llvm/Analysis/CallGraph.h"
 #include "PDGUtils.hh"
 #include "DataAccessAnalysis.hh"
 #include "PDGCallGraph.hh"
 #include "KSplitCFG.hh"
+#include "json.hpp"
 #include <map>
 #include <unordered_set>
 
@@ -33,6 +32,10 @@ namespace pdg
     void setupLockInstanceMap();
     void setupFenceNames();
     void computeBoundaryObjects(llvm::Module &M);
+    llvm::ConstantInt *getMemAllocFlags(llvm::CallInst *callInst);
+    bool isSleepableMemAllocFunction(llvm::CallInst* callInst);
+    void addSACRecord(nlohmann::ordered_json& SACJson, llvm::CallInst &sleepFuncCI);
+    void computeSACRegions(nlohmann::ordered_json& json);
     BoundaryArgNodeSet getBoundaryArgNodes() { return _boundary_arg_nodes; }
     void computeCriticalSections(llvm::Module &M);
     void computeAtomicOperations(llvm::Module &M);

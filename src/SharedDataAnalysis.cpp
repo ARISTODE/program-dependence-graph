@@ -420,6 +420,8 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode)
   auto dt = treeNode.getDIType();
   bool accessed_in_driver = false;
   bool accessed_in_kernel = false;
+  bool hasDrvUpdate = false;
+  bool hasKernelRead = false;
 
   // the assumption is that driver updates the call back exported by it at initialization phase
   if (dt && dbgutils::isFuncPointerType(*dt) && isDriverCallBackFuncPtrFieldNode(treeNode))
@@ -436,13 +438,21 @@ bool pdg::SharedDataAnalysis::isTreeNodeShared(TreeNode &treeNode)
       if (_driverDomainFuncs.find(f) != _driverDomainFuncs.end())
       {
         accessed_in_driver = true;
+        if (pdgutils::hasWriteAccess(*i))
+          hasDrvUpdate = true;
       }
       if (_kernelDomainFuncs.find(f) != _kernelDomainFuncs.end())
       {
         accessed_in_kernel = true;
+        if (pdgutils::hasReadAccess(*i))
+          hasKernelRead = true;
       }
     }
   }
+
+  // means the driver update a field that can be used by the kernel, regardless the ordering
+  if (hasDrvUpdate && hasKernelRead)
+    treeNode.drvUpdateKernelRead = true;
 
   if (accessed_in_driver && accessed_in_kernel)
     return true;

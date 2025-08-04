@@ -5,8 +5,8 @@ using namespace llvm;
 char pdg::EbpfGeneration::ID = 0;
 
 cl::opt<std::string> InterfaceFuncsPath("ifuncs",
-                                cl::desc("Specify the path of the instrumented binary"),
-                                cl::value_desc("target bin path to instrument"),
+                                cl::desc("Specify the path to the interface functions"),
+                                cl::value_desc("path to file contain interface functions"),
                                 cl::init(""));
 
 cl::opt<std::string> TargetBinPath("binpath",
@@ -21,7 +21,6 @@ bool pdg::EbpfGeneration::runOnModule(Module &M)
   PDG = DAA->getPDG();
   
   // step 2: using the access information to generate policy
-
   std::string eBPFKernelFileName = "prog.ebpf.c"; // this is the source code
   std::string eBPFUserspaceFileName = "prog.py"; // this is the userspace code that loads the ebpf program
   EbpfKernelFile.open(eBPFKernelFileName);
@@ -719,7 +718,6 @@ void pdg::EbpfGeneration::generateEbpfKernelEntryProgOnArg(Tree &argTree, unsign
       {
         std::string fieldAddrStr = "&" + fieldHierarchyName;
         EbpfKernelFile << "\tstore_value(tmpFieldId, " << fieldAddrStr << ", " << fieldAddrStr << ", " << getEnumTypeString(mapTypeStr) << ");\n";
-        // updateMap(fieldHierarchyName, mapTypeStr);
       }
 
       // if a field is non-readable by the callee domain, we should just ensure this field contain random info, instead of leaking things.

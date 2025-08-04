@@ -64,6 +64,7 @@ namespace pdg
       bool is_sentinel = false;
       bool isString = false;
       bool is_seq_ptr = false;
+      bool drvUpdateKernelRead = false;
       std::set<std::string> annotations;
 
     private:

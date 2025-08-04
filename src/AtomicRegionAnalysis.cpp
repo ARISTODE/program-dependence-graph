@@ -1,4 +1,6 @@
 #include "AtomicRegionAnalysis.hh"
+#include "TaintUtils.hh"
+#include <optional>
 
 char pdg::AtomicRegionAnalysis::ID = 0;
 
@@ -24,15 +26,118 @@ bool pdg::AtomicRegionAnalysis::runOnModule(Module &M)
   setupFenceNames();
   setupLockMap();
   setupLockInstanceMap();
-  computeBoundaryObjects(M);
+  nlohmann::ordered_json SACJsons;
   computeCriticalSections(M);
-  computeAtomicOperations(M);
-  computeWarningCS();
-  computeWarningAtomicOps();
+  computeSACRegions(SACJsons);
+  // computeBoundaryObjects(M);
+  // computeAtomicOperations(M);
+  // computeWarningCS();
+  // computeWarningAtomicOps();
   errs() << "CS Warning: " << _warning_cs_count << " / " << _critical_sections.size() << "\n";
   errs() << "Atomic Operations Warning: " << _warning_atomic_op_count << " / " << _atomic_operations.size() << "\n";
   return false;
 }
+
+// ------------------- SCA region computation ------------------------
+bool pdg::AtomicRegionAnalysis::isSleepableMemAllocFunction(CallInst *callInst)
+{
+  Function *calledFunc = callInst->getCalledFunction();
+  if (!calledFunc)
+    return false;
+
+  std::string funcName = calledFunc->getName().str();
+  if (funcName == "vmalloc")
+    return true;
+
+  if (funcName == "kmalloc" || funcName == "alloc_pages")
+  {
+    // ConstantInt *flagsCI = getMemAllocFlags(callInst);
+    // if (!flagsCI)
+    //   return false;
+
+    // APInt flagsValue = flagsCI->getValue();
+    // if (flagsValue == 0x20 || flagsValue == 0x40000u)
+      return true;
+  }
+
+  return false;
+}
+
+ConstantInt *pdg::AtomicRegionAnalysis::getMemAllocFlags(CallInst *callInst)
+{
+  Function *calledFunc = callInst->getCalledFunction();
+  if (!calledFunc)
+    return nullptr;
+
+  std::string funcName = calledFunc->getName().str();
+  if (funcName == "kmalloc")
+  {
+    if (callInst->getNumArgOperands() >= 2)
+    {
+      Value *flagsArg = callInst->getArgOperand(1);
+      if (ConstantInt *flagsCI = dyn_cast<ConstantInt>(flagsArg))
+        return flagsCI;
+    }
+  }
+  else if (funcName == "alloc_pages")
+  {
+    if (callInst->getNumArgOperands() >= 2)
+    {
+      Value *flagsArg = callInst->getArgOperand(0);
+      if (ConstantInt *flagsCI = dyn_cast<ConstantInt>(flagsArg))
+        return flagsCI;
+    }
+  }
+
+  return nullptr;
+}
+
+void pdg::AtomicRegionAnalysis::addSACRecord(nlohmann::ordered_json &SACJson, CallInst &sleepFuncCI)
+{
+  // create a new json record
+  nlohmann::ordered_json recordJson;
+  // calling func name and location
+  Function *callingFunc = sleepFuncCI.getFunction();
+  recordJson["Calling Func Name"] = callingFunc->getName().str();
+  recordJson["Src Loc"] = pdgutils::getSourceLocationStr(sleepFuncCI);
+  SACJson.push_back(recordJson);
+}
+
+// compute all possible code regions that leads to SAC
+void pdg::AtomicRegionAnalysis::computeSACRegions(nlohmann::ordered_json &SACJsons)
+{
+  // compute code region that can cause sleep in atomic context in kernel extensions
+  // 1. identify all the atomic contexts, spin_lock and interrupt handlers
+  // find spin_lock critical sections
+  for (auto csPair : _critical_sections)
+  {
+    // obtain all the instructions in the critical section
+    auto instsInCS = computeInstsInCS(csPair);
+    for (auto inst : instsInCS)
+    {
+      // find call inst
+      if (auto callInst = dyn_cast<CallInst>(inst))
+      {
+        auto calledFunc = pdgutils::getCalledFunc(*callInst);
+        // if call inst can invoke kernel func
+        if (calledFunc && _SDA->isKernelFunc(*calledFunc))
+        {
+          // check if the the invoked kernel func can sleep
+          if (isSleepableMemAllocFunction(callInst))
+            addSACRecord(SACJsons, *callInst);
+        }
+      }
+    }
+  }
+
+  nlohmann::ordered_json statJson;
+  statJson["record size"] = SACJsons.size();
+  SACJsons.push_back(statJson);
+  taintutils::printJsonToFile(SACJsons, "SAC.json");
+  // TODO: handle interrupt handler
+}
+
+// ---------------------------------------------------------------
 
 void pdg::AtomicRegionAnalysis::generateSyncStubsForAtomicRegions()
 {
@@ -77,9 +182,8 @@ void pdg::AtomicRegionAnalysis::generateSyncStubsForAtomicRegions()
   {
     /*
     1. generate lock/unlock
-    2. generate 
+    2. generate
     */
-
   }
 
   _sync_stub_file.close();
@@ -93,16 +197,16 @@ void pdg::AtomicRegionAnalysis::setupFenceNames()
 
 void pdg::AtomicRegionAnalysis::setupLockMap()
 {
-  _lock_map.insert(std::make_pair("rtnl_lock", "__rtnl_unlock"));
-  _lock_map.insert(std::make_pair("mutex_lock", "mutex_unlock"));
+  // _lock_map.insert(std::make_pair("rtnl_lock", "__rtnl_unlock"));
+  // _lock_map.insert(std::make_pair("mutex_lock", "mutex_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock", "_raw_spin_unlock"));
   _lock_map.insert(std::make_pair("_raw_spin_lock_irq", "_raw_spin_unlock_irq"));
-  _lock_map.insert(std::make_pair("rcu_read_lock", "rcu_read_unlock"));
-  _lock_map.insert(std::make_pair("rcu_read_lock_bh", "rcu_read_unlock_bh"));
-  _lock_map.insert(std::make_pair("kfree_rcu", "kfree_rcu_end")); // this is dummy pair for rcu
-  _lock_map.insert(std::make_pair("rcu_assign_pointer", "dummy"));
-  _lock_map.insert(std::make_pair("read_seqcount_begin", "read_seqcount_retry"));
-  _lock_map.insert(std::make_pair("write_seqcount_begin", "write_seqcount_end"));
+  // _lock_map.insert(std::make_pair("rcu_read_lock", "rcu_read_unlock"));
+  // _lock_map.insert(std::make_pair("rcu_read_lock_bh", "rcu_read_unlock_bh"));
+  // _lock_map.insert(std::make_pair("kfree_rcu", "kfree_rcu_end")); // this is dummy pair for rcu
+  // _lock_map.insert(std::make_pair("rcu_assign_pointer", "dummy"));
+  // _lock_map.insert(std::make_pair("read_seqcount_begin", "read_seqcount_retry"));
+  // _lock_map.insert(std::make_pair("write_seqcount_begin", "write_seqcount_end"));
 }
 
 void pdg::AtomicRegionAnalysis::setupLockInstanceMap()
@@ -177,7 +281,7 @@ pdg::AtomicRegionAnalysis::CSMap pdg::AtomicRegionAnalysis::computeCSInFunc(Func
 
 void pdg::AtomicRegionAnalysis::computeCriticalSections(Module &M)
 {
-  for (auto F : _funcs_need_sync_stub_gen)
+  for (auto F : _SDA->getDriverFuncs())
   {
     if (F->isDeclaration())
       continue;
@@ -261,7 +365,6 @@ std::set<Instruction *> pdg::AtomicRegionAnalysis::computeInstsInCS(pdg::AtomicR
 
 void pdg::AtomicRegionAnalysis::generateWarningCallInstsInCS(pdg::AtomicRegionAnalysis::CSPair cs_pair)
 {
-
 
   std::set<CallInst *> ret;
   auto instsInCS = computeInstsInCS(cs_pair);
