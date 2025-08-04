@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  sok-analysis:
+    build: .
+    container_name: sok-experiment
+    volumes:
+      # Mount results directory for persistent storage
+      - ./results:/workspace/results
+      # Mount logs for analysis output
+      - ./pdg/logs:/workspace/pdg/logs
+    environment:
+      - LLVM_DIR=/usr/lib/llvm-12
+      - PDG_HOME=/workspace/pdg
+      - BC_FILES_DIR=/workspace/bc-files-12
+    working_dir: /workspace
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+    
+  sok-jupyter:
+    build: .
+    container_name: sok-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./results:/workspace/results
+      - ./pdg/logs:/workspace/pdg/logs
+      - ./notebooks:/workspace/notebooks
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    working_dir: /workspace
+    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''"]
+
+networks:
+  default:
+    name: sok-network

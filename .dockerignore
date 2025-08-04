@@ -1,0 +1,35 @@
+# Git files
+.git
+.gitignore
+
+# Build artifacts that will be rebuilt
+pdg/build
+pdg/SVF/build
+pdg/SVF/Release-build
+
+# Temporary files
+*.tmp
+*.log
+*~
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+
+# Results that should be generated fresh
+results/
+notebooks/
+
+# Large files that aren't needed for build
+*.tar.gz
+*.zip
+*.pdf
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo

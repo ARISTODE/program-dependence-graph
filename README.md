@@ -1,55 +1,198 @@
-# KSplit
+# SoK Experiment: Driver Isolation Analysis Framework
 
-## Introduction
-This repository contains the key static analyses implementations for the KSplit project. KSplit is a driver isolation framework that helps developers to 
-isolate driver with automatic supports. The main static analyses in KSplit are described below. Note that the analyses need to run aspect to the listed order.
+This repository contains the static analysis framework for the research paper "SoK: Understanding the Attack Surface in Device Driver Isolation Frameworks". The framework analyzes Linux kernel drivers to identify security vulnerabilities in driver isolation systems.
 
-1. Boundary analysis -> computes the boundary between kernel and the isolated driver using common driver-kernel communication idiom.
-2. Shared fields analysis -> computes the shared struct fields that are accessed on both driver and kernel sides. This set of fields are used in later analyses to eliminate the private fields required synchronization and improve communication performance.
-3. Field access analysis -> computes the struct fields that are accessed through references passed across islation boundary. 
-4. Concurrency data synchronization analysis -> computes all the atomic regions, e.g, critical sections and atomic operations, and the shared data accessed in these regions. 
-5. Nescheck analysis -> classify the pointers passed across isolation boundary into three categories: singleton, seq, wild. These classes are used in the IDL generation to correctly generate marshaling requirement for the pointers.
-6. IDL generation -> takes information computed in steps 3, 4 and 5, and generate the final IDL that will be used to compile the communication code.
+## Overview
 
-This picture below shows the overrall workflow:
-- [  ] Add workflow diagram
+The analysis framework consists of:
+- **PDG (Program Dependence Graph)** analysis passes built on LLVM 12.0.1
+- **SVF (Static Value-Flow)** framework for pointer analysis
+- **474 kernel driver bitcode files** from various subsystems
+- **Comprehensive analysis results** and paper table generation
 
+## Quick Start with Docker
 
-## Getting Started
-To replicate all KSplit experiments, please refer to our artifact page: https://github.com/mars-research/ksplit-artifacts
+### Prerequisites
+- Docker and Docker Compose installed
+- At least 8GB RAM and 20GB disk space
 
-To experiment with the KSplit static analyses part, follow the instructions below.
+### Build and Run
 
-Step 1: Build PDG
+1. **Build the container:**
+   ```bash
+   docker-compose build sok-analysis
+   ```
+
+2. **Run interactive analysis:**
+   ```bash
+   docker-compose run --rm sok-analysis
+   ```
+
+3. **Start Jupyter notebook (optional):**
+   ```bash
+   docker-compose up sok-jupyter
+   # Access at http://localhost:8888
+   ```
+
+## Analysis Commands
+
+Once inside the container, you can use these commands:
+
+### Basic Analysis
 ```bash
-# build pdg
-# Clone pdg repos
-git clone https://github.com/ARISTODE/program-dependence-graph.git pdg --recursive --branch dev_ksplit
-# build SVF, the key component of reasoning pointer alias in PDG
-pushd ./pdg/SVF
-mkdir -p build && cd build;
-cmake .. && make -j $(nproc)
-popd
-# build PDG
-mkdir -p build && cd build;
-cmake .. && make -j $(nproc)
+# Get system information
+sok-info
+
+# Run analysis on a specific driver
+run-analysis coretemp risky-field
+run-analysis i7core_edac risky-boundary
+
+# Available analysis types:
+# - risky-field: Analyze security-sensitive struct fields
+# - risky-boundary: Analyze risky kernel API usage
+# - shared-data: Identify shared data structures
+# - boundary-info: Compute isolation boundaries
 ```
 
-Step 2: 
-Run different passes to obtain results from different stages. See [#available-passes] for more details.
+### Batch Analysis
+```bash
+# Run batch analysis on a subsystem
+run-batch-analysis hwmon risky-field
+run-batch-analysis edac risky-boundary
 
+# Available subsystems:
+# hwmon, edac, net_ethernet, usb, block, sound, gpu, arch_x86, md
+```
 
-### Available Passes
+### Results Analysis
+```bash
+# View comprehensive analysis summary
+cat /workspace/pdg/ANALYSIS_SUMMARY.md
 
-**\-pdg:** generate the program dependence graph (inter-procedural)
+# View paper tables
+cat /workspace/pdg/SOK_PAPER_TABLES.md
 
-**\-output-boundary-info:** generate fields that desribe the isolation boundary
+# Check analysis logs
+ls /workspace/pdg/logs/
+```
 
-**\-shared-data:** compute shared struct fields
+## Project Structure
 
-**\-daa:** comopute data accessed through references passed in cross-domain function calls
+```
+/workspace/
+├── pdg/                      # PDG analysis framework
+│   ├── src/                  # Source code for analysis passes
+│   ├── include/              # Header files
+│   ├── build/                # Compiled binaries
+│   ├── SVF/                  # SVF framework
+│   └── logs/                 # Analysis output
+├── bc-files-12/              # Driver bitcode files
+│   ├── hwmon/                # Hardware monitoring drivers
+│   ├── edac/                 # Error detection drivers
+│   ├── net_ethernet/         # Network drivers
+│   └── ...                   # Other subsystems
+├── llvm-12-reference/        # LLVM 12 reference code
+└── results/                  # Persistent analysis results
+```
 
-**\-atomic-region:** comopute atomic regions
+## Key Analysis Passes
 
-**\-nescheck*:** run nescheck on pointers passed across isolation boundary
+### RiskyFieldAnalysis (`-risky-field`)
+Identifies security-sensitive struct fields that could be exploited:
+- Pointer fields (function pointers, data pointers)
+- Control variables
+- Memory management fields
+- Reference counting fields
 
+### RiskyBoundaryAPIAnalysis (`-risky-boundary`)
+Analyzes risky kernel API usage across driver-kernel boundaries:
+- Memory management APIs (kfree, kmalloc)
+- Concurrency APIs (mutex_lock, spinlock)
+- Bus operations (PCI, USB)
+- Reference counting (kobject_get/put)
+
+## Analysis Results
+
+The framework generates JSON output files:
+- `GeneralRiskyDataStat.json`: Overall statistics
+- `RiskyBoundaryAPI.json`: Detailed risky API analysis
+- `BoundaryStructFieldsStats.json`: Field classification
+- `BoundaryParamTaint.json`: Parameter taint analysis
+
+## Development
+
+### Building Manually
+```bash
+# Build SVF framework
+cd pdg/SVF
+./build.sh
+
+# Build PDG passes
+cd ../build
+cmake ..
+make -j$(nproc)
+```
+
+### Running Tests
+```bash
+# Test on simple drivers
+opt-12 -load build/libpdg.so -risky-field < ../bc-files-12/net_ethernet/dummy/dummy.bc
+
+# Verify output
+ls logs/
+```
+
+## Research Paper Integration
+
+This framework generates data for the following paper tables:
+- **Table 1**: Driver vulnerability statistics by subsystem
+- **Table 2**: Risky field classification results  
+- **Table 3**: Boundary API vulnerability analysis
+- **Table 4**: Overall security metrics across drivers
+
+View the complete analysis summary:
+```bash
+cat /workspace/pdg/ANALYSIS_SUMMARY.md
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **LLVM version mismatch**: Ensure LLVM 12.0.1 is used
+2. **SVF build fails**: Check C++14 compiler compatibility
+3. **Analysis crashes**: Increase container memory limits
+4. **Missing drivers**: Verify BC file paths in bc-files-12/
+
+### Debug Commands
+```bash
+# Check LLVM version
+opt-12 --version
+
+# Verify PDG library
+ls -la /workspace/pdg/build/libpdg.so
+
+# Test simple analysis
+echo | opt-12 -load /workspace/pdg/build/libpdg.so -help | grep risky
+```
+
+## Citation
+
+If you use this framework in your research, please cite:
+
+```bibtex
+@article{huang2024sok,
+  title={SoK: Understanding the Attack Surface in Device Driver Isolation Frameworks},
+  author={Huang, Yongzhe and Huang, Kaiming and Ennis, Matthew and Narayanan, Vikram and Burtsev, Anton and Jaeger, Trent and Tan, Gang},
+  journal={arXiv preprint arXiv:2412.16754},
+  year={2024}
+}
+```
+
+## License
+
+This project is released under the terms specified in the original research.
+
+## Contact
+
+For questions about the analysis framework or research methodology, please refer to the paper or create an issue in this repository.
