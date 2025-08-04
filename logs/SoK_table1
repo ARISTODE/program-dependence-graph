@@ -1,0 +1,9 @@
+driver to kernel call: 0
+kernel to driver call: 0
+total funcs size: 0
+=============== Fields Marshaled Through ================
+num fields deep copying: 0
+num fields field access analysis: 0
+num fields shared_analysis: 0
+num fields removed by boundary opt: 0
+num drv read-only fields: 0

@@ -5,7 +5,7 @@ namespace pdg
 {
   enum class RiskyDataType {
     PTR_READ,
-    PTR_WRTIE,
+    PTR_WRITE,
     ARR_IDX,
     DIV_BY_ZERO,
     NUM_ARITH,

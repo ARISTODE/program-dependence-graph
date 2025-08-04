@@ -331,10 +331,10 @@ bool pdg::RiskyFieldAnalysis::classifyRiskyPtrField(
         }
 
         // Check for pointer write operations
-        if (riskyClassifications.find(RiskyDataType::PTR_WRTIE) == riskyClassifications.end() && 
+        if (riskyClassifications.find(RiskyDataType::PTR_WRITE) == riskyClassifications.end() && 
             taintutils::isPointeeModified(*taintNode)) {
             addClassification(
-                RiskyDataType::PTR_WRTIE,
+                RiskyDataType::PTR_WRITE,
                 riskyClassifications,
                 taintJsonObjs,
                 accessPathStr,
@@ -964,6 +964,18 @@ void pdg::RiskyFieldAnalysis::printBoundaryStructFieldsClassificationStats() {
     }
     
     taintutils::printJsonToFile(overallStatObj, "BoundaryStructFieldsStats.json");
+}
+
+void pdg::RiskyFieldAnalysis::updateRiskyFieldCounters(std::set<RiskyDataType> &riskyDataTypes) {
+    for (auto riskyType : riskyDataTypes) {
+        totalRiskyFieldCounters[riskyType]++;
+    }
+}
+
+void pdg::RiskyFieldAnalysis::updateRiskyParamCounters(std::set<RiskyDataType> &riskyDataTypes) {
+    for (auto riskyType : riskyDataTypes) {
+        totalRiskyParamCounters[riskyType]++;
+    }
 }
 
 static RegisterPass<pdg::RiskyFieldAnalysis>

@@ -497,7 +497,7 @@ std::string pdg::taintutils::riskyDataTypeToString(pdg::RiskyDataType type)
   {
   case RiskyDataType::PTR_READ:
     return "PTR_READ";
-  case RiskyDataType::PTR_WRTIE:
+  case RiskyDataType::PTR_WRITE:
     return "PTR_WRITE";
   case RiskyDataType::ARR_IDX:
     return "ARR_IDX";

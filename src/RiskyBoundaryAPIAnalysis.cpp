@@ -39,7 +39,7 @@ bool pdg::RiskyBoundaryAPIAnalysis::runOnModule(Module &M)
     _CFG->build(M);
 
   // analyze private states update
-  // analyzeKernelPrivateStatesUpdate();
+  analyzeKernelPrivateStatesUpdate();
   for (auto boundaryFunc : _SDA->getBoundaryFuncs())
   {
     // only propagate through kernel boundary func
@@ -94,7 +94,7 @@ bool pdg::RiskyBoundaryAPIAnalysis::isSpinlockInterface(Function &F)
   static std::set<std::string> spinLockFuncs =
       {
           "_raw_spin_lock",
-          "_raw_spin_lock_irq"
+          "_raw_spin_lock_irq",
           "_raw_spin_lock_irqsave"};
 
   std::string funcName = F.getName().str();
