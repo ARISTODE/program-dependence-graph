@@ -11,7 +11,7 @@ bool pdg::ControlDependencyGraph::runOnFunction(Function &F)
   return false;
 }
 
-void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock &BB, EdgeType edge_type)
+void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock &BB, EdgeType edge_type, bool is_true = false)
 {
   ProgramGraph &g = ProgramGraph::getInstance();
   for (auto &inst : BB)
@@ -19,7 +19,7 @@ void pdg::ControlDependencyGraph::addControlDepFromNodeToBB(Node &n, BasicBlock 
     Node* inst_node = g.getNode(inst);
     // TODO: a special case when gep is used as a operand in load. Fix later
     if (inst_node != nullptr)
-      n.addNeighbor(*inst_node, edge_type);
+      n.addNeighbor(*inst_node, edge_type, is_true);
     // assert(inst_node != nullptr && "cannot find node for inst\n");
   }
 }
@@ -50,19 +50,17 @@ void pdg::ControlDependencyGraph::addControlDepFromDominatedBlockToDominator(Fun
         {
           if (!bi->isConditional() || !bi->getCondition())
             break;
-          // Node *cond_node = g.getNode(*bi->getCondition());
-          // if (!cond_node)
-          //   break;
+          bool is_true = (succ_bb == bi->getSuccessor(0));
           Node *branch_node = g.getNode(*bi);
           if (branch_node == nullptr)
             break;
           BasicBlock *nearestCommonDominator = _PDT->findNearestCommonDominator(&BB, succ_bb);
           if (nearestCommonDominator == &BB)
-            addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROLDEP_BR);
+            addControlDepFromNodeToBB(*branch_node, *succ_bb, EdgeType::CONTROLDEP_BR, is_true);
 
           for (auto *cur = _PDT->getNode(&*succ_bb); cur != _PDT->getNode(nearestCommonDominator); cur = cur->getIDom())
           {
-            addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROLDEP_BR);
+            addControlDepFromNodeToBB(*branch_node, *cur->getBlock(), EdgeType::CONTROLDEP_BR, is_true);
           }
         }
       }
